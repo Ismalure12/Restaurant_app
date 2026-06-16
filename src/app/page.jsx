@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import prisma from '@/lib/prisma';
-import MenuApp from '@/components/public/RoyalShell';
+import MenuApp from '@/components/menu/MenuApp';
 
 export const revalidate = 300;
 
