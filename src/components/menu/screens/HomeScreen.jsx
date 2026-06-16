@@ -13,14 +13,14 @@ export default function HomeScreen() {
   const {
     screen, screenBack, topbarRef, headerContact,
     searchQ, setSearchQ, searchMatches,
-    banner, ordered, allItems, pInfo,
-    catwrapHomeRef, catnavHomeRef, homeSectionsRef,
+    categories, ordered, pInfo,
+    catnavHomeRef, homeSectionsRef,
     footerLinks, openCategory, openDetail, quickAdd,
   } = useMenu();
 
   return (
     <section className={`screen ${screen === 'home' ? 'active' : ''} ${screen === 'home' && screenBack ? 'back' : ''}`}>
-      <div className="topbar" ref={topbarRef}>
+      <div className="topbar home-topbar" ref={topbarRef}>
         <Crest />
         {headerContact && (
           <a
@@ -39,9 +39,6 @@ export default function HomeScreen() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
           <input value={searchQ} onChange={(e) => setSearchQ(e.target.value)} placeholder="Search dishes, drinks, ingredients…" />
         </div>
-        <button className="filter-chip" type="button" aria-label="Filters">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="6" y1="12" x2="18" y2="12" /><line x1="9" y1="18" x2="15" y2="18" /></svg>
-        </button>
       </div>
 
       {/* Search results override banner & sections */}
@@ -57,51 +54,28 @@ export default function HomeScreen() {
         </div>
       ) : (
         <>
-          {banner && (
-            <div className="banner-wrap">
-              <div className="banner">
-                <div className="banner-img"><ImgWithFallback src={banner.imageUrl} alt="" /></div>
-                <div className="grain" />
-                <div>
-                  <span className="banner-tag">{banner.tagLabel}</span>
-                  <h2 dangerouslySetInnerHTML={{ __html: banner.headline }} />
-                  <p>{banner.body}</p>
-                </div>
-                <div>
-                  <div className="meta-row">
-                    {banner.meta1Value ? <div><b>{banner.meta1Value}</b>{banner.meta1Label}</div> : null}
-                    {banner.meta2Value ? <div><b>{banner.meta2Value}</b>{banner.meta2Label}</div> : null}
-                    {banner.meta3Value ? <div><b>{banner.meta3Value}</b>{banner.meta3Label}</div> : null}
-                  </div>
-                  <div className="cta-row">
-                    <button className="cta" onClick={() => banner.ctaCategorySlug && openCategory(banner.ctaCategorySlug)}>
-                      <span>{banner.ctaText}</span>
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-                    </button>
-                    <button className="cta-ghost" onClick={() => { catwrapHomeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>View full menu</button>
-                  </div>
-                </div>
-              </div>
+          <div className="menu-rail">
+            <div className="rail-head">
+              <h2>The <em>menu</em></h2>
+              <span className="meta">{categories.length} categories</span>
             </div>
-          )}
-
-          <div className="catnav-wrap" ref={catwrapHomeRef}>
-            <div className="catnav-handle" />
-            <nav className="catnav" ref={catnavHomeRef}>
-              <button className="cat active" data-cat="all" onClick={() => {
-                const first = ordered[0];
-                if (first) document.getElementById('menu-sec-' + first.slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}>
-                <span className="pill" />All<span className="count">{allItems.length}</span>
-                <span className="now" />
-              </button>
-              {ordered.map((c) => (
-                <button key={c.slug} className={`cat ${c.slug === pInfo.meal ? 'now-marker' : ''}`} data-cat={c.slug} onClick={() => openCategory(c.slug)}>
-                  <span className="pill" />{c.name}<span className="count">{c.items.length}</span>
-                  <span className="now" />
+            <div className="rail" ref={catnavHomeRef}>
+              {ordered.filter((c) => c.items.length).map((c) => (
+                <button className="cat-tile" key={c.slug} onClick={() => openCategory(c.slug)}>
+                  {c.slug === pInfo.meal && <span className="now-dot">Now</span>}
+                  <ImgWithFallback src={c.coverUrl} alt="" />
+                  <div className="info">
+                    <div>
+                      <div className="nm">{c.name}</div>
+                      <span className="ct">{c.items.length} dishes</span>
+                    </div>
+                    <span className="arr">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                    </span>
+                  </div>
                 </button>
               ))}
-            </nav>
+            </div>
           </div>
 
           <div id="homeSections" ref={homeSectionsRef}>

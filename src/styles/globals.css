@@ -76,30 +76,20 @@
   .topbar.dark { @apply bg-transparent; }
   .topbar.dark.solid { background: rgba(35,40,107,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: none; }
   .topbar.dark .crest { color: rgba(255,255,255,.7); }
+  /* Home header is static (non-sticky), flat — matches the Royal-Hotel reference */
+  .home-topbar { position: relative; top: auto; z-index: auto; background: transparent; box-shadow: none; pointer-events: auto; }
+  .home-topbar.solid { background: transparent; box-shadow: none; }
   .crest {
     @apply flex items-center gap-2.5 font-display font-semibold text-blue pointer-events-auto;
     letter-spacing: .02em;
   }
-  .crest .crest-name {
-    @apply flex flex-col font-display font-semibold;
-    font-size: 17px; line-height: 1.0; letter-spacing: .01em;
-  }
-  .crest .mk {
-    @apply w-[30px] h-9 rounded-[7px] flex items-center justify-center font-display font-bold text-[13px] relative;
-    border: 1.5px solid currentColor;
-  }
-  .crest .mk::before {
-    content: ""; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
-    width: 11px; height: 4px; background: currentColor;
-    clip-path: polygon(0 100%, 15% 0, 30% 100%, 50% 0, 70% 100%, 85% 0, 100% 100%);
-  }
-  .crest .mk span { @apply mt-[7px]; }
+  .crest .crest-logo { @apply h-11 w-auto; }
   .wa-btn {
-    @apply inline-flex items-center justify-center w-11 h-11 rounded-full text-white pointer-events-auto transition-[transform,box-shadow] duration-200;
-    background: var(--green);
-    box-shadow: 0 6px 16px -4px rgba(30,152,98,.5);
+    @apply inline-flex items-center justify-center w-11 h-11 rounded-full pointer-events-auto transition-[transform,box-shadow] duration-200;
+    background: #fff; border: 1px solid var(--line); color: var(--ink);
+    box-shadow: var(--shadow-card);
   }
-  .wa-btn:hover { transform: translateY(-1px) scale(1.04); box-shadow: 0 8px 20px -4px rgba(30,152,98,.55); }
+  .wa-btn:hover { transform: translateY(-1px) scale(1.04); box-shadow: var(--shadow-lift); }
   .wa-btn:active { transform: scale(.93); }
   .wa-btn svg { @apply w-5 h-5; }
   .topbar .back {
@@ -127,12 +117,76 @@
     font-size: 16px; /* iOS no-zoom */
   }
   .search input::placeholder { color: var(--muted); }
-  .filter-chip {
-    @apply inline-flex items-center justify-center w-12 h-12 rounded-[14px] bg-white shadow-card text-ink-2 transition-[background,color,transform] duration-200;
+
+  /* ====== CATEGORY CARD RAIL (home) ====== */
+  .menu-rail { padding: 24px 0 6px; }
+  .rail-head {
+    @apply flex items-baseline justify-between gap-3;
+    padding: 0 22px 14px;
   }
-  .filter-chip:hover { @apply text-ink; }
-  .filter-chip:active { transform: scale(.95); }
-  .filter-chip svg { @apply w-[17px] h-[17px]; }
+  .rail-head h2 {
+    @apply font-display font-medium m-0 text-ink;
+    font-size: 30px; line-height: 1; letter-spacing: -.015em;
+  }
+  .rail-head h2 em { font-style: italic; color: var(--green); font-weight: 500; }
+  .rail-head .meta {
+    @apply text-[11px] text-muted;
+    letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  }
+  .rail {
+    @apply flex gap-3 overflow-x-auto;
+    padding: 2px 22px 10px;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 22px;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .cat-tile {
+    @apply relative flex-shrink-0 overflow-hidden cursor-pointer text-left shadow-card transition-[transform,box-shadow] duration-500;
+    width: 152px; height: 200px;
+    border-radius: 18px;
+    background: var(--cream-2);
+    isolation: isolate;
+    scroll-snap-align: start;
+  }
+  .cat-tile:hover { @apply shadow-lift; transform: translateY(-3px); }
+  .cat-tile:active { transform: scale(.98); }
+  .cat-tile img {
+    @apply w-full h-full object-cover;
+    transition: transform .9s var(--ease-out);
+  }
+  .cat-tile:hover img { transform: scale(1.05); }
+  .cat-tile::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(21,23,43,0) 30%, rgba(21,23,43,.66) 100%);
+  }
+  .cat-tile .info {
+    @apply absolute z-[2] flex items-end justify-between gap-2 text-white;
+    left: 14px; right: 14px; bottom: 12px;
+  }
+  .cat-tile .info .nm {
+    @apply font-display font-medium;
+    font-size: 22px; line-height: 1.05; letter-spacing: -.005em;
+  }
+  .cat-tile .info .ct {
+    @apply block text-[10.5px] mt-[3px];
+    letter-spacing: .04em; color: rgba(255,255,255,.75);
+  }
+  .cat-tile .info .arr {
+    @apply w-[30px] h-[30px] rounded-full flex items-center justify-center flex-shrink-0 text-ink;
+    background: #fff;
+    transition: transform .35s var(--ease-out);
+  }
+  .cat-tile:hover .info .arr { transform: translate(2px,-2px); }
+  .cat-tile .info .arr svg { @apply w-[13px] h-[13px]; }
+  .cat-tile .now-dot {
+    @apply absolute z-[2] inline-flex items-center gap-1.5 text-white text-[9px] font-semibold uppercase;
+    top: 12px; left: 12px;
+    padding: 5px 9px 5px 8px; border-radius: 999px;
+    letter-spacing: .18em;
+    background: rgba(30,152,98,.95);
+  }
+  .cat-tile .now-dot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #fff; }
 
   /* ====== BANNER ====== */
   .banner-wrap { @apply px-[22px] pt-1.5 pb-4; }
@@ -917,12 +971,11 @@
 @media (max-width: 380px) {
   .topbar { padding: 12px 16px 8px; }
   .crest { gap: 7px; }
-  .crest .crest-name { font-size: 15px; }
-  .crest .mk { width: 26px; height: 32px; font-size: 11px; }
+  .crest .crest-logo { height: 40px; }
   .wa-btn { width: 42px; height: 42px; }
+  .cat-tile { width: 140px; height: 184px; }
   .search-row { padding: 8px 18px 12px; gap: 8px; }
   .search { padding: 11px 12px; min-height: 46px; }
-  .filter-chip { width: 46px; height: 46px; }
   .banner-wrap { padding: 6px 18px 14px; }
   .banner { padding: 18px; min-height: 280px; border-radius: 20px; }
   .banner h2 { font-size: 32px; margin: 16px 0 10px; }
@@ -1304,7 +1357,15 @@
     padding-top: 18px; padding-bottom: 14px;
     background: linear-gradient(180deg, var(--cream) 60%, rgba(250,250,248,0));
   }
-  .crest .crest-name { font-size: 20px; }
+  .crest .crest-logo { height: 52px; }
+
+  /* Category card rail */
+  .menu-rail { max-width: 1160px; margin: 0 auto; width: 100%; padding-top: 30px; }
+  .rail-head { padding: 0 22px 18px; }
+  .rail-head h2 { font-size: 34px; }
+  .rail { padding: 4px 22px 14px; gap: 20px; scroll-padding-left: 22px; }
+  .cat-tile { width: 200px; height: 264px; }
+  .cat-tile .info .nm { font-size: 26px; }
 
   /* HOME hero/header */
   .search-row {
