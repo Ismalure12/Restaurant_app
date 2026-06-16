@@ -112,13 +112,13 @@ export default function AdminLoginPage() {
     >
       <div className="adm-card adm-card-pad-lg" style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <div className="adm-brand-mark"><span>HJ</span></div>
+          <div className="adm-brand-mark"><span>KFG</span></div>
           <div>
             <div style={{
               fontFamily: 'var(--font-cormorant), serif',
               color: 'var(--blue)', fontSize: 22, fontWeight: 600, lineHeight: 1.05,
             }}>
-              Hotel Jazeera
+              KFG
             </div>
             <span className="adm-brand-sub">Staff dashboard</span>
           </div>
@@ -148,7 +148,7 @@ export default function AdminLoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="adm-input"
-                  placeholder="you@hoteljazeera.so"
+                  placeholder="you@kfggalkacyo.com"
                 />
               </div>
               <div>
@@ -190,7 +190,7 @@ export default function AdminLoginPage() {
                 onChange={(e) => setResetEmail(e.target.value)}
                 required
                 className="adm-input"
-                placeholder="you@hoteljazeera.so"
+                placeholder="you@kfggalkacyo.com"
               />
             </div>
             {resetError && <div className="adm-error-banner">{resetError}</div>}

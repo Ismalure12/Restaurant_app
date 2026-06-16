@@ -55,7 +55,7 @@ export async function waafiPreAuthorize({ accountNo, referenceId, amount, descri
       referenceId,
       amount,
       currency: 'USD',
-      description: description || 'Hotel Jazeera Order',
+      description: description || 'KFG Order',
     },
   });
   return callWaafi(body);

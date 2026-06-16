@@ -16,7 +16,7 @@ const PLATFORMS = [
   { value: 'website', label: 'Website', icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>) },
 ];
 const platformInfo = (p) => PLATFORMS.find((x) => x.value === p) || { value: p, label: p, icon: null };
-const placeholderFor = (p) => (p === 'phone' || p === 'whatsapp') ? '+252 70 000 0000' : 'https://hoteljazeera.so';
+const placeholderFor = (p) => (p === 'phone' || p === 'whatsapp') ? '+252 70 000 0000' : 'https://kfggalkacyo.com';
 const VARIANTS = [{ value: 'default', label: 'Blue', dot: 'var(--primary)' }, { value: 'green', label: 'Green', dot: 'var(--primary-2)' }, { value: 'spicy', label: 'Spicy', dot: 'var(--rose)' }];
 const variantDot = (v) => (VARIANTS.find((x) => x.value === v) || VARIANTS[0]).dot;
 const slugify = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

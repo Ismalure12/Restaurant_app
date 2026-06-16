@@ -118,10 +118,9 @@ function DashboardLayout({ children }) {
 
         <aside className="side">
           <div className="side-head">
-            <span className="brand-chip"><Image src="/logo-transparent.png" alt="Hotel Jazeera" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /></span>
+            <span className="brand-chip"><Image src="/logo-transparent.png" alt="KFG" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /></span>
             <div>
-              <div className="brand-name">Hotel Jazeera</div>
-              <div className="brand-sub">Restaurant POS</div>
+              <div className="brand-name">Restaurant management system</div>
             </div>
           </div>
 

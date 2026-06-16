@@ -1,4 +1,4 @@
-// Hotel Jazeera wordmark used in the home topbar, checkout, and confirmation headers.
+// KFG wordmark used in the home topbar, checkout, and confirmation headers.
 export default function Crest() {
   return (
     <div className="crest">

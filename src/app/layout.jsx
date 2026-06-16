@@ -32,8 +32,8 @@ const geistMono = localFont({
 });
 
 export const metadata = {
-  title: 'Hotel Jazeera — Menu',
-  description: 'Hotel Jazeera — dining menu. Browse, customise and order from your table.',
+  title: 'KFG — Menu',
+  description: 'KFG — dining menu. Browse, customise and order from your table.',
 };
 
 export default function RootLayout({ children }) {

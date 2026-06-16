@@ -124,9 +124,9 @@ export default function HomeScreen() {
           </div>
 
           <footer className="foot-info">
-            <div className="crest-lg">— Hotel Jazeera —</div>
-            <p className="foot-tag">Service that matters!</p>
-            <p className="foot-loc">Galkaio, Puntland — Somalia</p>
+            <div className="crest-lg">— KFG —</div>
+            <p className="foot-tag">Taste the difference</p>
+            <p className="foot-loc">Galkacyo, Puntland — Somalia</p>
             {footerLinks.length > 0 && (
               <div className="foot-social">
                 {footerLinks.map((l) => (

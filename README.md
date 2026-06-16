@@ -1,6 +1,6 @@
-# Hotel Jazeera — Digital Menu & Restaurant Ops
+# KFG — Digital Menu & Restaurant Ops
 
-A digital menu and restaurant-operations app for Hotel Jazeera. Customers scan a QR
+A digital menu and restaurant-operations app for KFG. Customers scan a QR
 code, browse the menu, build a cart, and pay via Waafi/EVC; staff manage the catalog,
 orders, inventory, finance, and a point-of-sale register through a protected admin
 dashboard.

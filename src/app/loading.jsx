@@ -10,23 +10,18 @@ export default function Loading() {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
         color: '#30378f',
       }}>
-        <div style={{
-          width: 44, height: 52,
-          border: '1.5px solid currentColor', borderRadius: 10,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: 'var(--font-cormorant), serif',
-          fontWeight: 700, fontSize: 18,
-          letterSpacing: '.02em',
-          position: 'relative',
-        }}>
-          <span style={{ marginTop: 10 }}>HJ</span>
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-transparent.png"
+          alt="KFG"
+          style={{ width: 'auto', height: 52, objectFit: 'contain' }}
+        />
         <div style={{
           fontSize: 11, letterSpacing: '.32em', textTransform: 'uppercase',
           color: '#8a8c9e', fontFamily: 'var(--font-inter), sans-serif',
           fontWeight: 600,
         }}>
-          Hotel Jazeera · setting the table…
+          KFG · setting the table…
         </div>
       </div>
     </div>
