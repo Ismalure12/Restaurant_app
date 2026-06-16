@@ -570,7 +570,7 @@ export default function useMenuController({ rawCategories, banners, socialLinks 
     // screen
     screen, currentCatSlug, screenBack,
     // cart
-    cart, cartCount, cartTotal, lineInc, lineDec, lineRemove,
+    cart, cartCount, cartTotal, lineInc, lineDec, lineRemove, cartOpen,
     // navigation + actions
     arm, goBack, goHome, openCategory, openDetail, closeDetail,
     openCart, closeCart, quickAdd, addDetailToCart,

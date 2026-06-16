@@ -1,7 +1,7 @@
 # Royal Hotel Menu App
 
 ## Stack
-Next.js 14 (App Router) · JavaScript (JSX, no TypeScript) · Tailwind CSS (public + admin) · Neon Postgres · Prisma ORM · Vercel
+Next.js 16 (App Router, Turbopack) · React 19 · JavaScript (JSX, no TypeScript) · Tailwind CSS (public + admin) · Neon Postgres · Prisma ORM · Vercel
 
 ## What This Is
 Digital menu for Royal Hotel. Customer scans a QR code → browses categories with option groups + extras + tags → builds a cart → checks out via Waafi/EVC payment → sees confirmation. Admins manage categories, items, option groups, extras, tags, banners, social links, and orders via a protected dashboard.
@@ -28,7 +28,7 @@ Digital menu for Royal Hotel. Customer scans a QR code → browses categories wi
 
 ## Workflow Orchestration
 - Enter plan mode for non-trivial work (3+ steps).
-- Run `npx next lint` after each meaningful change.
+- Run `npx eslint <changed files>` after each meaningful change. (Next 16 removed the `next lint` subcommand; the `npm run lint` script still points at the old command and fails — use `eslint` directly.)
 - Verify work end-to-end before marking done.
 - **Design-change loop:** After any UI/CSS change, launch the dev server and open the browser to manually test the affected pages. Check for bugs, responsiveness (mobile / tablet / desktop / in-between widths), missing design, and inconsistency. Iterate (fix → retest) until the result is 100% accurate before marking the task done.
 
