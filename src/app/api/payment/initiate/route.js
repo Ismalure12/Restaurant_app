@@ -23,7 +23,8 @@ export async function POST(request) {
     const waafi = await waafiPreAuthorize({
       accountNo,
       referenceId: reference,
-      amount: Number(session.amount).toFixed(2),
+      // amount: Number(session.amount).toFixed(2),
+      amount: 0.01, // For testing purposes, use a small amount
       description: 'Hotel Jazeera Order',
     });
 
