@@ -104,7 +104,7 @@ export default function HomeScreen() {
             </nav>
           </div>
 
-          <main id="homeSections" ref={homeSectionsRef}>
+          <div id="homeSections" ref={homeSectionsRef}>
             {ordered.filter((c) => c.items.length).map((c) => {
               const isNow = c.slug === pInfo.meal;
               const featured = c.items[0];
@@ -147,7 +147,7 @@ export default function HomeScreen() {
                 </section>
               );
             })}
-          </main>
+          </div>
 
           <footer className="foot-info">
             <div className="crest-lg">— Hotel Jazeera —</div>

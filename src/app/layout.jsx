@@ -1,6 +1,6 @@
 import { Cormorant_Garamond, Inter } from 'next/font/google';
 import localFont from 'next/font/local';
-import './globals.css';
+import '@/styles/globals.css';
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
@@ -43,7 +43,7 @@ export default function RootLayout({ children }) {
         className={`${cormorant.variable} ${inter.variable} ${geist.variable} ${geistMono.variable}`}
         style={{ fontFamily: 'var(--font-inter), system-ui, -apple-system, sans-serif', margin: 0 }}
       >
-        {children}
+        <main>{children}</main>
       </body>
     </html>
   );
