@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
 
 export async function sendResetCode(email, code) {
   await transporter.sendMail({
-    from: `KFG Menu <${process.env.EMAIL_USER}>`,
+    from: `Hotel Jazeera <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Your password reset code',
     html: `
@@ -28,7 +28,7 @@ export async function sendResetCode(email, code) {
 
 export async function sendEmailVerificationCode(email, code) {
   await transporter.sendMail({
-    from: `KFG Menu <${process.env.EMAIL_USER}>`,
+    from: `Hotel Jazeera <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Verify your email address',
     html: `

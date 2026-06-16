@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import prisma from '@/lib/prisma';
-import RoyalShell from '@/components/public/RoyalShell';
+import MenuApp from '@/components/public/RoyalShell';
 
 export const revalidate = 300;
 
@@ -108,7 +108,7 @@ export default async function HomePage({ searchParams }) {
 
   return (
     <Suspense fallback={null}>
-      <RoyalShell
+      <MenuApp
         categories={safeCategories}
         banners={safeBanners}
         socialLinks={safeSocialLinks}

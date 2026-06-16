@@ -143,7 +143,7 @@ const CARRIERS = [
   { prefix: '66', name: 'Somtel', color: '#c98a2f' },
 ];
 
-export default function RoyalShell({ categories: rawCategories, banners, socialLinks = [], initialOrder = null, openConfirmed = false }) {
+export default function MenuApp({ categories: rawCategories, banners, socialLinks = [], initialOrder = null, openConfirmed = false }) {
   const searchParams = useSearchParams();
 
   // ?table=N from the QR code (persisted to localStorage so checkout can use it
@@ -153,11 +153,11 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
     const fromUrl = (searchParams?.get('table') || '').trim();
     if (fromUrl) {
       setTableFromQr(fromUrl);
-      try { localStorage.setItem('rh_order_ctx', JSON.stringify({ tableNumber: fromUrl })); } catch {}
+      try { localStorage.setItem('menu_order_ctx', JSON.stringify({ tableNumber: fromUrl })); } catch {}
       return;
     }
     try {
-      const raw = localStorage.getItem('rh_order_ctx');
+      const raw = localStorage.getItem('menu_order_ctx');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed?.tableNumber) setTableFromQr(parsed.tableNumber);
@@ -208,8 +208,8 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
   // "Armed" is tracked via the live history state so it can't drift from the browser.
   const navRef = useRef({}); // fresh snapshot for the mount-only popstate listener
   const arm = useCallback(() => {
-    if (!window.history.state?.rhLayer) {
-      window.history.pushState({ rhLayer: true }, '');
+    if (!window.history.state?.menuLayer) {
+      window.history.pushState({ menuLayer: true }, '');
     }
   }, []);
   const goBack = useCallback(() => { window.history.back(); }, []);
@@ -228,13 +228,13 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
   // restore from localStorage on mount
   useEffect(() => {
     try {
-      const raw = localStorage.getItem('rh_cart');
+      const raw = localStorage.getItem('menu_cart');
       if (raw) setCart(JSON.parse(raw));
     } catch {}
   }, []);
   // persist
   useEffect(() => {
-    try { localStorage.setItem('rh_cart', JSON.stringify(cart)); } catch {}
+    try { localStorage.setItem('menu_cart', JSON.stringify(cart)); } catch {}
   }, [cart]);
 
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
@@ -300,13 +300,13 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
     window.scrollTo({ top: 0, behavior: 'instant' });
     // show first-visit swipe hint
     try {
-      if (!localStorage.getItem('rh_swipe_hint_seen')) {
+      if (!localStorage.getItem('menu_swipe_hint_seen')) {
         const el = swipeHintRef.current;
         if (el) {
           el.classList.add('show');
           setTimeout(() => {
             el.classList.remove('show');
-            localStorage.setItem('rh_swipe_hint_seen', '1');
+            localStorage.setItem('menu_swipe_hint_seen', '1');
           }, 3400);
         }
       }
@@ -579,7 +579,7 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
   const goCheckout = () => {
     if (!cart.length) return;
     arm();
-    try { localStorage.setItem('rh_cart', JSON.stringify(cart)); } catch {}
+    try { localStorage.setItem('menu_cart', JSON.stringify(cart)); } catch {}
     if (tableFromQr) {
       setCoTable(tableFromQr);
       setCoOrderType('dine_in');
@@ -608,7 +608,7 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
     setConfirmedOpen(false);
     setCompletedOrder(null);
     setCart([]);
-    try { localStorage.removeItem('rh_cart'); localStorage.removeItem('kfg_cart'); } catch {}
+    try { localStorage.removeItem('menu_cart'); localStorage.removeItem('kfg_cart'); } catch {}
     document.body.style.overflow = '';
     // Clear ?ref= from URL if present (deep link)
     if (typeof window !== 'undefined' && window.location.search.includes('ref=')) {
@@ -739,7 +739,7 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
   //                              RENDER
   // ============================================================
   return (
-    <div className="rh-root">
+    <div className="menu-root">
       <div className="shell">
         <div className="screens">
 
@@ -818,7 +818,7 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
                   <nav className="catnav" ref={catnavHomeRef}>
                     <button className="cat active" data-cat="all" onClick={() => {
                       const first = ordered[0];
-                      if (first) document.getElementById('rh-sec-' + first.slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      if (first) document.getElementById('menu-sec-' + first.slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}>
                       <span className="pill" />All<span className="count">{allItems.length}</span>
                       <span className="now" />
@@ -838,7 +838,7 @@ export default function RoyalShell({ categories: rawCategories, banners, socialL
                     const featured = c.items[0];
                     const minis = c.items.slice(1, 5);
                     return (
-                      <section key={c.slug} className={`section ${isNow ? 'featured-now' : ''}`} id={'rh-sec-' + c.slug}>
+                      <section key={c.slug} className={`section ${isNow ? 'featured-now' : ''}`} id={'menu-sec-' + c.slug}>
                         <div className="section-head reveal">
                           <div className="titleblock">
                             {isNow && <div className="kicker now-tag">Now serving</div>}

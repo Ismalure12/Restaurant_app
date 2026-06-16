@@ -59,11 +59,6 @@ module.exports = {
         'add-mini': '0 4px 10px -2px rgba(35,40,107,.35)',
         'pricebadge': '0 10px 24px -6px rgba(0,0,0,.25)',
       },
-      transitionTimingFunction: {
-        'royal-out': 'cubic-bezier(0.22, 1, 0.36, 1)',
-        'royal-in': 'cubic-bezier(0.7, 0, 0.84, 0)',
-        'royal-inout': 'cubic-bezier(0.76, 0, 0.24, 1)',
-      },
       maxWidth: {
         shell: '440px',
       },
@@ -78,61 +73,61 @@ module.exports = {
         '2xl': '1536px',
       },
       keyframes: {
-        rhFadeIn: {
+        menuFadeIn: {
           from: { opacity: '0', transform: 'translate3d(24px,0,0)' },
           to: { opacity: '1', transform: 'translate3d(0,0,0)' },
         },
-        rhFadeBack: {
+        menuFadeBack: {
           from: { opacity: '0', transform: 'translate3d(-24px,0,0)' },
           to: { opacity: '1', transform: 'translate3d(0,0,0)' },
         },
-        rhPulse: {
+        menuPulse: {
           '0%': { boxShadow: '0 0 0 0 rgba(30,152,98,.6)' },
           '70%': { boxShadow: '0 0 0 8px rgba(30,152,98,0)' },
           '100%': { boxShadow: '0 0 0 0 rgba(30,152,98,0)' },
         },
-        rhBannerSlow: {
+        menuBannerSlow: {
           from: { transform: 'scale(1.0)' },
           to: { transform: 'scale(1.1)' },
         },
-        rhCatIn: { to: { transform: 'scale(1)' } },
-        rhRise: { to: { opacity: '1', transform: 'translateY(0)' } },
-        rhBump: {
+        menuCatIn: { to: { transform: 'scale(1)' } },
+        menuRise: { to: { opacity: '1', transform: 'translateY(0)' } },
+        menuBump: {
           '0%': { transform: 'scale(1)' },
           '30%': { transform: 'scale(1.45)' },
           '60%': { transform: 'scale(.92)' },
           '100%': { transform: 'scale(1)' },
         },
-        rhSwArr: {
+        menuSwArr: {
           '0%,100%': { transform: 'translateX(0)' },
           '50%': { transform: 'translateX(4px)' },
         },
-        rhHand: {
+        menuHand: {
           '0%,100%': { transform: 'translateX(0) rotate(0)' },
           '30%': { transform: 'translateX(-6px) rotate(-8deg)' },
           '60%': { transform: 'translateX(0) rotate(0)' },
         },
-        rhSlideIn: {
+        menuSlideIn: {
           from: { opacity: '0', transform: 'translateX(20px)' },
           to: { opacity: '1', transform: 'translateX(0)' },
         },
-        rhFloaty: {
+        menuFloaty: {
           '0%,100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-5px)' },
         },
       },
       animation: {
-        'rh-fade-in': 'rhFadeIn .45s cubic-bezier(0.22, 1, 0.36, 1) both',
-        'rh-fade-back': 'rhFadeBack .45s cubic-bezier(0.22, 1, 0.36, 1) both',
-        'rh-pulse': 'rhPulse 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite',
-        'rh-banner-slow': 'rhBannerSlow 14s linear infinite alternate',
-        'rh-cat-in': 'rhCatIn 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards',
-        'rh-rise': 'rhRise .7s cubic-bezier(0.22, 1, 0.36, 1) forwards',
-        'rh-bump': 'rhBump .6s cubic-bezier(0.22, 1, 0.36, 1)',
-        'rh-sw-arr': 'rhSwArr 1.6s cubic-bezier(0.76, 0, 0.24, 1) infinite',
-        'rh-hand': 'rhHand 1.6s cubic-bezier(0.76, 0, 0.24, 1) infinite',
-        'rh-slide-in': 'rhSlideIn .5s cubic-bezier(0.22, 1, 0.36, 1) both',
-        'rh-floaty': 'rhFloaty 4s cubic-bezier(0.76, 0, 0.24, 1) infinite',
+        'menu-fade-in': 'menuFadeIn .45s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'menu-fade-back': 'menuFadeBack .45s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'menu-pulse': 'menuPulse 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite',
+        'menu-banner-slow': 'menuBannerSlow 14s linear infinite alternate',
+        'menu-cat-in': 'menuCatIn 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        'menu-rise': 'menuRise .7s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        'menu-bump': 'menuBump .6s cubic-bezier(0.22, 1, 0.36, 1)',
+        'menu-sw-arr': 'menuSwArr 1.6s cubic-bezier(0.76, 0, 0.24, 1) infinite',
+        'menu-hand': 'menuHand 1.6s cubic-bezier(0.76, 0, 0.24, 1) infinite',
+        'menu-slide-in': 'menuSlideIn .5s cubic-bezier(0.22, 1, 0.36, 1) both',
+        'menu-floaty': 'menuFloaty 4s cubic-bezier(0.76, 0, 0.24, 1) infinite',
       },
       backdropBlur: {
         xs: '4px',

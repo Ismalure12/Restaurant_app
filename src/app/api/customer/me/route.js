@@ -8,7 +8,8 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const token = cookieStore.get('kfg_auth')?.value;
+    // Fall back to the legacy cookie name so existing sessions don't hard-break.
+    const token = cookieStore.get('customer_session')?.value ?? cookieStore.get('kfg_auth')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);

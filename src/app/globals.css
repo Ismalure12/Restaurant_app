@@ -56,7 +56,7 @@
    PUBLIC MENU — root container (phone shell)
    ============================================================ */
 @layer components {
-  .rh-root {
+  .menu-root {
     @apply min-h-screen w-full flex justify-center items-stretch text-ink bg-[#e9e8e3] font-ui;
   }
   .shell {
@@ -64,8 +64,8 @@
   }
   .screens { @apply relative min-h-screen; }
   .screen { @apply relative hidden min-h-screen; }
-  .screen.active { @apply block animate-rh-fade-in; }
-  .screen.active.back { animation: rhFadeBack .45s var(--ease-out) both; }
+  .screen.active { @apply block animate-menu-fade-in; }
+  .screen.active.back { animation: menuFadeBack .45s var(--ease-out) both; }
 
   /* ====== TOPBAR ====== */
   .topbar {
@@ -145,7 +145,7 @@
   .banner-img img {
     @apply w-full h-full object-cover;
     transform: scale(1.05); opacity: .55;
-    animation: rhBannerSlow 14s linear infinite alternate;
+    animation: menuBannerSlow 14s linear infinite alternate;
   }
   .banner::before {
     content: ""; position: absolute; inset: 0; z-index: -1;
@@ -380,7 +380,7 @@
   .cat-hero img {
     @apply w-full h-full object-cover;
     transform: scale(1.06);
-    animation: rhCatIn 1.1s var(--ease-out) forwards;
+    animation: menuCatIn 1.1s var(--ease-out) forwards;
   }
   .cat-hero::after {
     content: ""; position: absolute; inset: 0; z-index: 1;
@@ -499,7 +499,7 @@
   .swipe-next .sw-icn {
     @apply w-9 h-9 rounded-full bg-blue text-white flex items-center justify-center relative overflow-hidden;
   }
-  .swipe-next .sw-icn svg { @apply w-4 h-4; animation: rhSwArr 1.6s var(--ease-inout) infinite; }
+  .swipe-next .sw-icn svg { @apply w-4 h-4; animation: menuSwArr 1.6s var(--ease-inout) infinite; }
 
   /* ====== SWIPE HINT ====== */
   .swipe-hint {
@@ -513,7 +513,7 @@
   .swipe-hint.show { @apply opacity-100; transform: translate(0, -50%); }
   .swipe-hint .hand {
     @apply text-2xl leading-none;
-    animation: rhHand 1.6s var(--ease-inout) infinite;
+    animation: menuHand 1.6s var(--ease-inout) infinite;
   }
   .swipe-hint .ht { @apply flex flex-col; }
   .swipe-hint .ht b { @apply font-display font-semibold; font-size: 16px; line-height: 1.15; }
@@ -538,7 +538,7 @@
     min-width: 18px; height: 18px; padding: 0 5px;
     border: 2px solid var(--blue);
   }
-  .cart-fab .badge.bump { animation: rhBump .6s var(--ease-out); }
+  .cart-fab .badge.bump { animation: menuBump .6s var(--ease-out); }
   .cart-fab .total {
     @apply flex items-center gap-2.5;
     border-left: 1px solid rgba(255,255,255,.18);
@@ -770,7 +770,7 @@
   .cart-item {
     @apply grid bg-white rounded-[18px] mb-2.5 shadow-card relative overflow-hidden;
     grid-template-columns: 70px 1fr auto; gap: 14px; padding: 14px;
-    animation: rhSlideIn .5s var(--ease-out) both;
+    animation: menuSlideIn .5s var(--ease-out) both;
   }
   .cart-item img {
     @apply w-[70px] h-[70px] rounded-xl object-cover;
@@ -889,7 +889,7 @@
   .hero-stagger > * {
     @apply opacity-0;
     transform: translateY(12px);
-    animation: rhRise .7s var(--ease-out) forwards;
+    animation: menuRise .7s var(--ease-out) forwards;
   }
   .hero-stagger > *:nth-child(1) { animation-delay: .05s; }
   .hero-stagger > *:nth-child(2) { animation-delay: .15s; }
@@ -1289,7 +1289,7 @@
    ============================================================ */
 @media (min-width: 760px) {
   body { padding: 0; background: var(--cream); align-items: stretch; background-image: none; }
-  .rh-root { background: var(--cream); align-items: stretch; }
+  .menu-root { background: var(--cream); align-items: stretch; }
 
   .shell {
     max-width: none; width: 100%; min-height: 100vh;
@@ -1421,9 +1421,9 @@
    REDUCED MOTION
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
-  .rh-root *,
-  .rh-root *::before,
-  .rh-root *::after {
+  .menu-root *,
+  .menu-root *::before,
+  .menu-root *::after {
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .001ms !important;
@@ -1434,41 +1434,41 @@
 /* ============================================================
    KEYFRAMES (referenced from @layer components above)
    ============================================================ */
-@keyframes rhFadeBack {
+@keyframes menuFadeBack {
   from { opacity: 0; transform: translate3d(-24px, 0, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
-@keyframes rhPulse {
+@keyframes menuPulse {
   0% { box-shadow: 0 0 0 0 rgba(30,152,98,.6); }
   70% { box-shadow: 0 0 0 8px rgba(30,152,98,0); }
   100% { box-shadow: 0 0 0 0 rgba(30,152,98,0); }
 }
-@keyframes rhBannerSlow {
+@keyframes menuBannerSlow {
   from { transform: scale(1.0); }
   to { transform: scale(1.1); }
 }
-@keyframes rhCatIn { to { transform: scale(1); } }
-@keyframes rhRise { to { opacity: 1; transform: translateY(0); } }
-@keyframes rhBump {
+@keyframes menuCatIn { to { transform: scale(1); } }
+@keyframes menuRise { to { opacity: 1; transform: translateY(0); } }
+@keyframes menuBump {
   0% { transform: scale(1); }
   30% { transform: scale(1.45); }
   60% { transform: scale(.92); }
   100% { transform: scale(1); }
 }
-@keyframes rhSwArr {
+@keyframes menuSwArr {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(4px); }
 }
-@keyframes rhHand {
+@keyframes menuHand {
   0%, 100% { transform: translateX(0) rotate(0); }
   30% { transform: translateX(-6px) rotate(-8deg); }
   60% { transform: translateX(0) rotate(0); }
 }
-@keyframes rhSlideIn {
+@keyframes menuSlideIn {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }
-@keyframes rhFloaty {
+@keyframes menuFloaty {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-5px); }
 }
@@ -1489,7 +1489,7 @@
    ADMIN DESIGN SYSTEM
    Used by /admin/* pages. Brand-aligned (Hotel Jazeera blue/green/cream,
    Cormorant headings + Inter body). Class names prefixed .adm- to
-   avoid colliding with the public .rh- system.
+   avoid colliding with the public .menu- system.
    ============================================================ */
 
 /* ---- Page chrome ----------------------------------------- */
@@ -2179,7 +2179,7 @@
    ADMIN · Jazeera "Ledger" theme  (emerald + gold · Geist · light/dark)
    Tokens are scoped to html[data-admin] (set by the dashboard layout) so
    portalled toasts/dialogs inherit them too, while public pages — which
-   never carry data-admin — keep the Royal blue/green palette untouched.
+   never carry data-admin — keep the menu's blue/green palette untouched.
    The legacy admin var names (--blue/--green/--cream/...) are REMAPPED here
    to the design palette so existing .adm-* rules recolour with no churn.
    ============================================================ */

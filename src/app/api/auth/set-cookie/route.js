@@ -16,7 +16,7 @@ export async function POST(request) {
   }
 
   const response = NextResponse.json({ success: true });
-  response.cookies.set('kfg_auth', token, {
+  response.cookies.set('customer_session', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

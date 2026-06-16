@@ -41,7 +41,7 @@ export async function POST(request) {
 
   const { name, phone, orderType, address, tableNumber, cart, total } = parsed.data;
   const cleanPhone = phone.replace(/\D/g, '');
-  const reference = 'rh-' + crypto.randomUUID();
+  const reference = 'ord-' + crypto.randomUUID();
 
   try {
     await prisma.paymentSession.create({
