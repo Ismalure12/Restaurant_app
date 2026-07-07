@@ -58,7 +58,7 @@ const PAGE_HEAD = {
 };
 
 function initials(s) {
-  if (!s) return 'HJ';
+  if (!s) return 'MP';
   const parts = s.trim().split(/[\s@.]+/).filter(Boolean);
   return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || s.slice(0, 2).toUpperCase();
 }
@@ -118,9 +118,9 @@ function DashboardLayout({ children }) {
 
         <aside className="side">
           <div className="side-head">
-            <span className="brand-chip"><Image src="/logo-transparent.png" alt="KFG" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /></span>
+            <span className="brand-chip"><Image src="/logo-icon.png" alt="Maqaaxi Pos" width={30} height={30} style={{ width: 30, height: 30, objectFit: 'contain' }} /></span>
             <div>
-              <div className="brand-name">Restaurant management system</div>
+              <div className="brand-name">Maqaaxi Pos</div>
             </div>
           </div>
 
@@ -139,13 +139,6 @@ function DashboardLayout({ children }) {
           </div>
 
           <div className="side-foot">
-            <button className="side-user" onClick={toggleTheme} aria-label="Toggle theme">
-              <span className="avatar" style={{ background: 'var(--surface-3)', color: 'var(--muted)' }}><ThemeIcon dark={theme === 'dark'} /></span>
-              <span style={{ flex: 1 }}>
-                <span style={{ fontSize: '12.5px', fontWeight: 600, display: 'block' }}>Appearance</span>
-                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{theme === 'dark' ? 'Dark' : 'Light'}</span>
-              </span>
-            </button>
             <button className="side-user" onClick={handleLogout}>
               <span className="avatar">{initials(me?.name || me?.email)}</span>
               <span style={{ flex: 1, minWidth: 0 }}>

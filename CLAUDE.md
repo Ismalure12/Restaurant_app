@@ -1,10 +1,10 @@
-# Royal Hotel Menu App
+# Maqaaxi Pos
 
 ## Stack
 Next.js 16 (App Router, Turbopack) · React 19 · JavaScript (JSX, no TypeScript) · Tailwind CSS (public + admin) · Neon Postgres · Prisma ORM · Vercel
 
 ## What This Is
-Digital menu for Royal Hotel. Customer scans a QR code → browses categories with option groups + extras + tags → builds a cart → checks out via Waafi/EVC payment → sees confirmation. Admins manage categories, items, option groups, extras, tags, banners, social links, and orders via a protected dashboard.
+Maqaaxi Pos — a resellable digital menu + POS for restaurants (placeholder brand uses Goodir company assets). Customer scans a QR code → browses categories with option groups + extras + tags → builds a cart → checks out via Waafi/EVC payment → sees confirmation. Admins manage categories, items, option groups, extras, tags, banners, social links, and orders via a protected dashboard.
 
 ## Database Schema (Prisma)
 - `AdminUser` — admin accounts with JWT auth
@@ -19,10 +19,10 @@ Digital menu for Royal Hotel. Customer scans a QR code → browses categories wi
 - `SocialLink` — platform/value pairs
 
 ## Key Architecture
-- Public menu: `src/app/page.jsx` (server, Prisma) → `src/components/public/RoyalShell.jsx` (client) which mounts Home, Category, Detail, and Cart screens in a phone shell.
-- Design tokens are in `tailwind.config.js` (colors, fonts, shadows, easings, keyframes). Component classes (`.shell`, `.topbar`, `.banner`, `.show-more`, `.cart-fab`, `.icon-btn`, `.detail-*`, `.cart-*`, etc.) are defined as `@layer components` in `src/app/globals.css` using `@apply` + raw CSS. Palette: blue `#30378f`, green `#1e9862`, cream `#FAFAF8`. Fonts: Cormorant Garamond (display) + Inter (UI).
+- Public menu: `src/app/page.jsx` (server, Prisma) → `src/components/menu/MenuApp.jsx` (client, driven by `useMenuController`) which mounts Home, Category, Detail, and Cart screens in a phone shell.
+- Design tokens are in `tailwind.config.js` (colors, fonts, shadows, easings, keyframes). Component classes (`.shell`, `.topbar`, `.banner`, `.show-more`, `.cart-fab`, `.icon-btn`, `.detail-*`, `.cart-*`, etc.) are defined as `@layer components` in `src/styles/globals.css` using `@apply` + raw CSS. Palette: **monochrome maroon** (Goodir brand) — primary `#850D33`, CTA `#A31743`, deep `#6E0B2A`, cream `#FAFAF8`. The `blue`/`green` token names are kept (map to maroon) so existing utility classes still resolve. Fonts: Cormorant Garamond (display) + Inter (UI).
 - Admin dashboard: `src/app/admin/dashboard/` — protected by `middleware.js` checking JWT cookie. Pages: categories, menu-items, tags, banners, orders, social-links, users.
-- Cart flow: `RoyalShell` → "Proceed to checkout" → `/checkout` (Royal-themed form) → `/api/checkout` → `/api/payment/initiate` (Waafi/EVC) → `/order-confirmed?ref=...`
+- Cart flow: `MenuApp` → "Proceed to checkout" → `/checkout` (themed form) → `/api/checkout` → `/api/payment/initiate` (Waafi/EVC) → `/order-confirmed?ref=...`
 - Cart line shape: `{ uid, itemId, name, imageUrl, optionName, extras: [{name, priceAdd}], notes, unitPrice, quantity }`. The legacy `kfg_cart` localStorage key is still written for compatibility with the checkout page.
 - API routes: `src/app/api/` — all use Prisma + Zod validation.
 

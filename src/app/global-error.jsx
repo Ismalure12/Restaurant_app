@@ -54,7 +54,7 @@ export default function GlobalError({ error, reset }) {
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '10px 22px',
-              background: '#30378f', color: '#fff',
+              background: '#850D33', color: '#fff',
               border: 'none', borderRadius: 10,
               fontSize: 13.5, fontWeight: 600,
               cursor: 'pointer',

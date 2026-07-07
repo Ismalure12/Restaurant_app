@@ -55,7 +55,7 @@ export async function waafiPreAuthorize({ accountNo, referenceId, amount, descri
       referenceId,
       amount,
       currency: 'USD',
-      description: description || 'KFG Order',
+      description: description || 'Maqaaxi Pos Order',
     },
   });
   return callWaafi(body);

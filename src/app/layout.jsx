@@ -32,8 +32,8 @@ const geistMono = localFont({
 });
 
 export const metadata = {
-  title: 'KFG — Menu',
-  description: 'KFG — dining menu. Browse, customise and order from your table.',
+  title: 'Maqaaxi Pos — Menu',
+  description: 'Maqaaxi Pos — restaurant menu. Browse, customise and order from your table.',
 };
 
 export default function RootLayout({ children }) {

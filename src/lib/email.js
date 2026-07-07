@@ -10,7 +10,7 @@ const transporter = nodemailer.createTransport({
 
 export async function sendResetCode(email, code) {
   await transporter.sendMail({
-    from: `KFG <${process.env.EMAIL_USER}>`,
+    from: `Maqaaxi Pos <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Your password reset code',
     html: `
@@ -18,7 +18,7 @@ export async function sendResetCode(email, code) {
         <h2 style="color: #1A1A1A; margin-bottom: 8px;">Password Reset</h2>
         <p style="color: #666; font-size: 14px;">Your verification code is:</p>
         <div style="background: #F5F5F5; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0;">
-          <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #E4002B;">${code}</span>
+          <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #850D33;">${code}</span>
         </div>
         <p style="color: #999; font-size: 12px;">This code expires in 15 minutes. If you didn't request this, ignore this email.</p>
       </div>
@@ -28,7 +28,7 @@ export async function sendResetCode(email, code) {
 
 export async function sendEmailVerificationCode(email, code) {
   await transporter.sendMail({
-    from: `KFG <${process.env.EMAIL_USER}>`,
+    from: `Maqaaxi Pos <${process.env.EMAIL_USER}>`,
     to: email,
     subject: 'Verify your email address',
     html: `
@@ -36,7 +36,7 @@ export async function sendEmailVerificationCode(email, code) {
         <h2 style="color: #1A1A1A; margin-bottom: 8px;">Email Verification</h2>
         <p style="color: #666; font-size: 14px;">Your verification code is:</p>
         <div style="background: #F5F5F5; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0;">
-          <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #E4002B;">${code}</span>
+          <span style="font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #850D33;">${code}</span>
         </div>
         <p style="color: #999; font-size: 12px;">This code expires in 15 minutes.</p>
       </div>

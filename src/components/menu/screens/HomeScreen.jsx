@@ -124,9 +124,9 @@ export default function HomeScreen() {
           </div>
 
           <footer className="foot-info">
-            <div className="crest-lg">— KFG —</div>
+            <div className="crest-lg">— Maqaaxi Pos —</div>
             <p className="foot-tag">Taste the difference</p>
-            <p className="foot-loc">Galkacyo, Puntland — Somalia</p>
+            <p className="foot-loc">Your restaurant · powered by Maqaaxi Pos</p>
             {footerLinks.length > 0 && (
               <div className="foot-social">
                 {footerLinks.map((l) => (

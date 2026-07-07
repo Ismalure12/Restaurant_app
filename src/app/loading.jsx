@@ -8,12 +8,12 @@ export default function Loading() {
     }}>
       <div style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
-        color: '#30378f',
+        color: '#850D33',
       }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo-transparent.png"
-          alt="KFG"
+          alt="Maqaaxi Pos"
           style={{ width: 'auto', height: 52, objectFit: 'contain' }}
         />
         <div style={{
@@ -21,7 +21,7 @@ export default function Loading() {
           color: '#8a8c9e', fontFamily: 'var(--font-inter), sans-serif',
           fontWeight: 600,
         }}>
-          KFG · setting the table…
+          Maqaaxi Pos · setting the table…
         </div>
       </div>
     </div>

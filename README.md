@@ -1,12 +1,12 @@
-# KFG — Digital Menu & Restaurant Ops
+# Maqaaxi Pos — Digital Menu & Restaurant Ops
 
-A digital menu and restaurant-operations app for KFG. Customers scan a QR
+A resellable digital-menu and restaurant-operations product (Maqaaxi Pos). Customers scan a QR
 code, browse the menu, build a cart, and pay via Waafi/EVC; staff manage the catalog,
 orders, inventory, finance, and a point-of-sale register through a protected admin
 dashboard.
 
 ## Stack
-- **Next.js 14** (App Router) · **JavaScript/JSX** (no TypeScript)
+- **Next.js 16** (App Router, Turbopack) · **JavaScript/JSX** (no TypeScript)
 - **Tailwind CSS** (public menu + admin dashboard)
 - **Neon Postgres** + **Prisma ORM**
 - **Vercel** (hosting + Blob storage for images)

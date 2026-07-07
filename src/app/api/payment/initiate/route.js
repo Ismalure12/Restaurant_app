@@ -25,7 +25,7 @@ export async function POST(request) {
       referenceId: reference,
       // amount: Number(session.amount).toFixed(2),
       amount: 0.01, // For testing purposes, use a small amount
-      description: 'KFG Order',
+      description: 'Maqaaxi Pos Order',
     });
 
     if (waafi.networkError) return NextResponse.json({ error: 'failed' }, { status: 502 });

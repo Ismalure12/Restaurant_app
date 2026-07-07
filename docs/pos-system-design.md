@@ -1,4 +1,4 @@
-# Royal Hotel — Restaurant POS Expansion (System + DB Design)
+# Maqaaxi Pos — Restaurant POS Expansion (System + DB Design)
 
 ## Context
 The app today is a customer-facing digital menu with online **delivery/dine-in orders** paid via Waafi pre-auth, plus an admin dashboard for menu/catalog/orders. The owner wants to run the venue as a **full restaurant POS** on the same admin: staff take **walk-in orders manually**, **print the waiter a receipt**, **take payment in person** (cash/card/EVC), keep **inventory**, see a **P&L ("balance sheet")**, and **manage staff** (roles + shifts).
@@ -36,6 +36,7 @@ Reuses the existing `Order` model (Json `items` cart-line shape), Waafi flow, `r
 ### Receipt printing
 - A `ReceiptDoc` client component (hotel header, order #, table, lines with options/extras, totals, payment + change, cashier name, timestamp, footer); `window.print()` triggers it.
 - An `@media print` block sized to **80mm** (`@page { size: 80mm auto; margin: 0 }`) hides dashboard chrome and shows only the receipt. Reachable from POS (after placing/paying) and from order detail.
+
 
 ### Inventory (manual)
 - `InventoryItem` holds current `quantity`; every change is a `StockMovement` row (`purchase | usage | adjustment | waste`) applied **inside a Prisma transaction** that also updates `InventoryItem.quantity`. Low-stock = `quantity ≤ reorderLevel`. Purchases with `unitCost` can also create a matching `Expense` (category `purchases`).

@@ -9,7 +9,7 @@ test.describe('Public Menu Page', () => {
     await expect(header).toBeVisible();
 
     // Logo image loads
-    const logo = header.locator('img[alt="KFG"]');
+    const logo = header.locator('img[alt="Maqaaxi Pos"]');
     await expect(logo).toBeVisible();
 
     // Sign-in link
@@ -87,7 +87,7 @@ test.describe('Public Menu Page', () => {
   test('P7 — Header has logo and sign-in link', async ({ page }) => {
     await page.goto('/');
 
-    const logo = page.locator('header img[alt="KFG"]');
+    const logo = page.locator('header img[alt="Maqaaxi Pos"]');
     await expect(logo).toBeVisible();
 
     const signInLink = page.locator('a[href="/admin/login"]');

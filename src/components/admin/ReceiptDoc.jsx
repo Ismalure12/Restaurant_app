@@ -24,7 +24,7 @@ export default function ReceiptDoc({ order }) {
     <div className="receipt-print-root">
       <div className="rcpt">
         <div className="rcpt-head">
-          <div className="rcpt-brand">KFG</div>
+          <div className="rcpt-brand">Maqaaxi Pos</div>
           <div className="rcpt-muted">Restaurant Receipt</div>
         </div>
 
@@ -86,7 +86,7 @@ export default function ReceiptDoc({ order }) {
 
         <div className="rcpt-paid">— PAID —</div>
 
-        <div className="rcpt-foot">Thank you · KFG</div>
+        <div className="rcpt-foot">Thank you · Maqaaxi Pos</div>
       </div>
 
       <style jsx global>{`

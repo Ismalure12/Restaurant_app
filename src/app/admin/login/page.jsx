@@ -102,23 +102,27 @@ export default function AdminLoginPage() {
   return (
     <div
       style={{
+        // Keep the admin login on the emerald/gold "Ledger" theme (the public
+        // --blue/--green tokens are now maroon), scoped to this subtree only.
+        '--blue': '#1f6b4f', '--blue-deep': '#154b38', '--blue-soft': '#e7f1ec',
+        '--green': '#1f6b4f', '--green-deep': '#154b38', '--green-soft': '#e7f1ec',
         minHeight: '100vh',
         background: 'var(--cream)',
         backgroundImage:
-          'radial-gradient(circle at 0% 0%, rgba(48,55,143,0.07) 0%, transparent 45%), radial-gradient(circle at 100% 100%, rgba(30,152,98,0.06) 0%, transparent 45%)',
+          'radial-gradient(circle at 0% 0%, rgba(31,107,79,0.08) 0%, transparent 45%), radial-gradient(circle at 100% 100%, rgba(181,134,44,0.07) 0%, transparent 45%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '24px 16px',
       }}
     >
       <div className="adm-card adm-card-pad-lg" style={{ width: '100%', maxWidth: 420 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <div className="adm-brand-mark"><span>KFG</span></div>
+          <div className="adm-brand-mark"><span>MP</span></div>
           <div>
             <div style={{
               fontFamily: 'var(--font-cormorant), serif',
               color: 'var(--blue)', fontSize: 22, fontWeight: 600, lineHeight: 1.05,
             }}>
-              KFG
+              Maqaaxi Pos
             </div>
             <span className="adm-brand-sub">Staff dashboard</span>
           </div>
@@ -148,7 +152,7 @@ export default function AdminLoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="adm-input"
-                  placeholder="you@kfggalkacyo.com"
+                  placeholder="you@example.com"
                 />
               </div>
               <div>
@@ -190,7 +194,7 @@ export default function AdminLoginPage() {
                 onChange={(e) => setResetEmail(e.target.value)}
                 required
                 className="adm-input"
-                placeholder="you@kfggalkacyo.com"
+                placeholder="you@example.com"
               />
             </div>
             {resetError && <div className="adm-error-banner">{resetError}</div>}

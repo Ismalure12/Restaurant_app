@@ -8,17 +8,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Hotel Jazeera design tokens (from handoff v2)
+        // Maqaaxi Pos monochrome-maroon tokens (Goodir brand #850D33).
+        // Key names blue/green kept so existing utility classes still resolve;
+        // both map onto maroon shades.
         blue: {
-          DEFAULT: '#30378f',
-          deep: '#23286b',
-          soft: '#eef0fb',
+          DEFAULT: '#850D33',
+          deep: '#6E0B2A',
+          soft: '#FBE9EF',
         },
         green: {
-          DEFAULT: '#1e9862',
-          deep: '#147a4e',
-          soft: '#e6f5ee',
-          mint: '#a9eccb',
+          DEFAULT: '#A31743',
+          deep: '#7A0F30',
+          soft: '#F7E4EB',
+          mint: '#E9B9C8',
         },
         cream: {
           DEFAULT: '#FAFAF8',
@@ -34,7 +36,7 @@ module.exports = {
           bg: '#fbe9e2',
         },
         line: {
-          DEFAULT: 'rgba(48,55,143,0.10)',
+          DEFAULT: 'rgba(133,13,51,0.10)',
           soft: 'rgba(21,23,43,0.06)',
         },
       },
@@ -43,20 +45,20 @@ module.exports = {
         ui: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        card: '0 1px 2px rgba(35,40,107,.05), 0 10px 30px -12px rgba(35,40,107,.18)',
+        card: '0 1px 2px rgba(110,11,42,.05), 0 10px 30px -12px rgba(110,11,42,.18)',
         lift: '0 18px 50px -18px rgba(21,23,43,.18)',
-        float: '0 14px 40px -10px rgba(48,55,143,.45)',
-        shell: '0 30px 80px -20px rgba(35,40,107,.35)',
-        'shell-lg': '0 40px 100px -30px rgba(35,40,107,.45)',
-        'fab-green': '0 14px 30px -8px rgba(30,152,98,.5)',
-        'add-blue': '0 8px 18px -8px rgba(48,55,143,.6)',
-        'show-more': '0 10px 24px -12px rgba(48,55,143,.5)',
-        'show-more-hover': '0 14px 30px -10px rgba(48,55,143,.55)',
-        'swipe-next': '0 16px 36px -10px rgba(35,40,107,.32)',
-        'swipe-hint': '0 18px 40px -10px rgba(35,40,107,.5)',
+        float: '0 14px 40px -10px rgba(133,13,51,.45)',
+        shell: '0 30px 80px -20px rgba(110,11,42,.35)',
+        'shell-lg': '0 40px 100px -30px rgba(110,11,42,.45)',
+        'fab-green': '0 14px 30px -8px rgba(163,23,67,.5)',
+        'add-blue': '0 8px 18px -8px rgba(133,13,51,.6)',
+        'show-more': '0 10px 24px -12px rgba(133,13,51,.5)',
+        'show-more-hover': '0 14px 30px -10px rgba(133,13,51,.55)',
+        'swipe-next': '0 16px 36px -10px rgba(110,11,42,.32)',
+        'swipe-hint': '0 18px 40px -10px rgba(110,11,42,.5)',
         'icon-btn': '0 6px 16px -4px rgba(0,0,0,.18)',
         'icon-light': '0 4px 12px -2px rgba(0,0,0,.12)',
-        'add-mini': '0 4px 10px -2px rgba(35,40,107,.35)',
+        'add-mini': '0 4px 10px -2px rgba(110,11,42,.35)',
         'pricebadge': '0 10px 24px -6px rgba(0,0,0,.25)',
       },
       maxWidth: {
@@ -82,9 +84,9 @@ module.exports = {
           to: { opacity: '1', transform: 'translate3d(0,0,0)' },
         },
         menuPulse: {
-          '0%': { boxShadow: '0 0 0 0 rgba(30,152,98,.6)' },
-          '70%': { boxShadow: '0 0 0 8px rgba(30,152,98,0)' },
-          '100%': { boxShadow: '0 0 0 0 rgba(30,152,98,0)' },
+          '0%': { boxShadow: '0 0 0 0 rgba(163,23,67,.6)' },
+          '70%': { boxShadow: '0 0 0 8px rgba(163,23,67,0)' },
+          '100%': { boxShadow: '0 0 0 0 rgba(163,23,67,0)' },
         },
         menuBannerSlow: {
           from: { transform: 'scale(1.0)' },

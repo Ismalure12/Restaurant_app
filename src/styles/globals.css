@@ -3,18 +3,19 @@
 @tailwind utilities;
 
 /* ============================================================
-   ROYAL HOTEL — base reset + CSS variables (for non-Tailwind use)
-   The colors here mirror tailwind.config.js so they can be referenced
-   via var(--blue), var(--green), etc. in arbitrary CSS values.
+   MAQAAXI POS — base reset + CSS variables (for non-Tailwind use)
+   Monochrome-maroon brand palette (Goodir). The --blue/--green token
+   NAMES are kept so existing var(--blue)/var(--green) usages resolve;
+   both now map onto maroon shades.
    ============================================================ */
 :root {
-  --blue: #30378f;
-  --blue-deep: #23286b;
-  --blue-soft: #eef0fb;
-  --green: #1e9862;
-  --green-deep: #147a4e;
-  --green-soft: #e6f5ee;
-  --green-mint: #a9eccb;
+  --blue: #850D33;
+  --blue-deep: #6E0B2A;
+  --blue-soft: #FBE9EF;
+  --green: #A31743;
+  --green-deep: #7A0F30;
+  --green-soft: #F7E4EB;
+  --green-mint: #E9B9C8;
   --cream: #FAFAF8;
   --cream-2: #f3f2ec;
   --ink: #15172b;
@@ -25,9 +26,9 @@
   --amber-soft: #fff4dc;
   --rose: #b03a3a;
   --rose-soft: #fbe9e9;
-  --shadow-card: 0 1px 2px rgba(35,40,107,.05), 0 10px 30px -14px rgba(35,40,107,.16);
+  --shadow-card: 0 1px 2px rgba(110,11,42,.05), 0 10px 30px -14px rgba(110,11,42,.16);
   --shadow-lift: 0 18px 50px -18px rgba(21,23,43,.18);
-  --line: rgba(48,55,143,0.10);
+  --line: rgba(133,13,51,0.10);
   --line-soft: rgba(21,23,43,0.06);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
@@ -74,7 +75,7 @@
   }
   .topbar.solid { @apply bg-cream pointer-events-auto; box-shadow: 0 1px 0 var(--line-soft); }
   .topbar.dark { @apply bg-transparent; }
-  .topbar.dark.solid { background: rgba(35,40,107,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: none; }
+  .topbar.dark.solid { background: rgba(110,11,42,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: none; }
   .topbar.dark .crest { color: rgba(255,255,255,.7); }
   /* Home header is static (non-sticky), flat — matches the Royal-Hotel reference */
   .home-topbar { position: relative; top: auto; z-index: auto; background: transparent; box-shadow: none; pointer-events: auto; }
@@ -184,7 +185,7 @@
     top: 12px; left: 12px;
     padding: 5px 9px 5px 8px; border-radius: 999px;
     letter-spacing: .18em;
-    background: rgba(30,152,98,.95);
+    background: rgba(163,23,67,.95);
   }
   .cat-tile .now-dot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #fff; }
 
@@ -203,7 +204,7 @@
   }
   .banner::before {
     content: ""; position: absolute; inset: 0; z-index: -1;
-    background: linear-gradient(160deg, rgba(35,40,107,.92) 0%, rgba(35,40,107,.66) 45%, rgba(35,40,107,.25) 100%);
+    background: linear-gradient(160deg, rgba(110,11,42,.92) 0%, rgba(110,11,42,.66) 45%, rgba(110,11,42,.25) 100%);
   }
   .banner .grain {
     @apply absolute inset-0 -z-10 pointer-events-none;
@@ -249,7 +250,7 @@
   .catnav-wrap {
     @apply sticky top-0 z-[15] bg-cream pt-[14px] transition-shadow duration-300;
   }
-  .catnav-wrap.stuck { box-shadow: 0 12px 24px -18px rgba(35,40,107,.35); }
+  .catnav-wrap.stuck { box-shadow: 0 12px 24px -18px rgba(110,11,42,.35); }
   .catnav-handle { @apply w-[42px] h-1 rounded-full mx-auto mb-2.5; background: var(--line); }
   .catnav {
     @apply flex gap-1.5 overflow-x-auto px-[18px] pt-1.5 pb-[14px];
@@ -421,9 +422,9 @@
   .tag {
     @apply text-[9.5px] uppercase rounded-md font-semibold text-blue;
     letter-spacing: .14em; padding: 4px 8px;
-    background: rgba(48,55,143,.08);
+    background: rgba(133,13,51,.08);
   }
-  .tag.green { color: var(--green-deep); background: rgba(30,152,98,.10); }
+  .tag.green { color: var(--green-deep); background: rgba(163,23,67,.10); }
   .tag.spicy { color: var(--spicy); background: var(--spicy, #fbe9e2); background-color: #fbe9e2; }
 
   /* ====== CATEGORY HERO ====== */
@@ -467,7 +468,7 @@
     padding: 14px 0 12px;
     border-bottom: 1px solid var(--line-soft);
   }
-  .cat-tabs.stuck { box-shadow: 0 12px 24px -18px rgba(35,40,107,.35); }
+  .cat-tabs.stuck { box-shadow: 0 12px 24px -18px rgba(110,11,42,.35); }
   .cat-tabs .scroll-row {
     @apply flex gap-1.5 overflow-x-auto;
     padding: 0 18px; scrollbar-width: none;
@@ -558,8 +559,8 @@
   /* ====== SWIPE HINT ====== */
   .swipe-hint {
     @apply fixed z-[24] text-white rounded-[18px] flex items-center gap-3 max-w-[240px] pointer-events-none opacity-0 transition-[opacity,transform] duration-500;
-    background: rgba(35,40,107,.94);
-    box-shadow: 0 18px 40px -10px rgba(35,40,107,.5);
+    background: rgba(110,11,42,.94);
+    box-shadow: 0 18px 40px -10px rgba(110,11,42,.5);
     padding: 14px 16px 14px 18px;
     top: 50%; right: 24px;
     transform: translate(20px, -50%);
@@ -605,7 +606,7 @@
   /* ====== FLY DOT ====== */
   .fly {
     @apply fixed w-6 h-6 rounded-full bg-green z-50 pointer-events-none;
-    box-shadow: 0 6px 14px -2px rgba(30,152,98,.5);
+    box-shadow: 0 6px 14px -2px rgba(163,23,67,.5);
     transition: transform .7s var(--ease-inout), opacity .3s ease .55s;
   }
 
@@ -700,7 +701,7 @@
     border: 1.5px solid var(--line-soft);
     padding: 14px 16px;
   }
-  .opt.selected { border-color: var(--blue); background: rgba(48,55,143,.04); }
+  .opt.selected { border-color: var(--blue); background: rgba(133,13,51,.04); }
   .opt .left { @apply flex items-center gap-3; }
   .opt .radio {
     @apply w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all duration-300;
@@ -717,7 +718,7 @@
     border: 1.5px solid var(--line-soft);
     padding: 12px 16px;
   }
-  .extra.checked { border-color: var(--green); background: rgba(30,152,98,.06); }
+  .extra.checked { border-color: var(--green); background: rgba(163,23,67,.06); }
   .extra .left { @apply flex items-center gap-3; }
   .checkbox {
     @apply w-[18px] h-[18px] rounded-md flex items-center justify-center transition-all duration-300;
@@ -806,7 +807,7 @@
   }
   .cart-empty .ring {
     @apply w-[88px] h-[88px] rounded-full flex items-center justify-center text-blue mb-[18px];
-    background: rgba(48,55,143,.06);
+    background: rgba(133,13,51,.06);
   }
   .cart-empty .ring svg { @apply w-8 h-8; }
   .cart-empty h4 {
@@ -1169,7 +1170,7 @@
   border: none; cursor: pointer;
 }
 .ot span { font-family: var(--font-inter), Inter, sans-serif; font-size: 10.5px; font-weight: 400; color: var(--muted); letter-spacing: .04em; }
-.ot.active { background: #fff; box-shadow: 0 1px 2px rgba(35,40,107,.06), 0 6px 16px -10px rgba(35,40,107,.25); }
+.ot.active { background: #fff; box-shadow: 0 1px 2px rgba(110,11,42,.06), 0 6px 16px -10px rgba(110,11,42,.25); }
 .checkout-page.dine .ot.active { color: var(--green); }
 .checkout-page.delivery .ot.active { color: var(--blue); }
 .ot.active span { color: var(--ink-2); }
@@ -1219,7 +1220,7 @@
 .carrier-menu {
   position: absolute; top: calc(100% + 6px); left: 0;
   background: #fff; border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: 0 14px 32px -10px rgba(35,40,107,.25);
+  box-shadow: 0 14px 32px -10px rgba(110,11,42,.25);
   z-index: 50; min-width: 180px; overflow: hidden; display: none;
 }
 .carrier.open .carrier-menu { display: block; }
@@ -1242,8 +1243,8 @@
   font-family: var(--font-inter), Inter, sans-serif;
   transition: filter .2s, transform .2s, background .2s;
 }
-.checkout-page.dine .place-order { background: var(--green); box-shadow: 0 14px 30px -8px rgba(30,152,98,.45); }
-.checkout-page.delivery .place-order { background: var(--blue); box-shadow: 0 14px 30px -8px rgba(48,55,143,.45); }
+.checkout-page.dine .place-order { background: var(--green); box-shadow: 0 14px 30px -8px rgba(163,23,67,.45); }
+.checkout-page.delivery .place-order { background: var(--blue); box-shadow: 0 14px 30px -8px rgba(133,13,51,.45); }
 .place-order:hover { filter: brightness(1.04); }
 .place-order:active { transform: scale(.99); }
 .place-order:disabled { background: #c9cad7; box-shadow: none; cursor: not-allowed; filter: none; }
@@ -1256,14 +1257,14 @@
 /* Payment modal */
 .pay-modal {
   position: fixed; inset: 0;
-  background: rgba(35,40,107,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  background: rgba(110,11,42,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   z-index: 120; display: flex; align-items: center; justify-content: center; padding: 24px;
   opacity: 0; pointer-events: none; transition: opacity .3s;
 }
 .pay-modal.show { opacity: 1; pointer-events: auto; }
 .pay-card {
   background: #fff; border-radius: 24px; border: 1px solid var(--line-soft);
-  box-shadow: 0 24px 60px -20px rgba(35,40,107,.45);
+  box-shadow: 0 24px 60px -20px rgba(110,11,42,.45);
   padding: 40px 32px; max-width: 400px; width: 100%; text-align: center;
   transform: translateY(12px); transition: transform .35s var(--ease-out);
 }
@@ -1331,7 +1332,7 @@
 .cf-back {
   width: 100%; height: 54px; border-radius: 18px; background: var(--blue); color: #fff;
   font-size: 14px; font-weight: 500; letter-spacing: .04em; margin-top: 6px;
-  box-shadow: 0 14px 30px -8px rgba(48,55,143,.45);
+  box-shadow: 0 14px 30px -8px rgba(133,13,51,.45);
   transition: background .2s; cursor: pointer; border: none;
   font-family: var(--font-inter), Inter, sans-serif;
 }
@@ -1434,12 +1435,21 @@
   .cat-list > .reveal.row-2up { grid-column: 1 / -1; }
   .cat-list > .row-2up { grid-column: 1 / -1; }
   .cat-list > .cat-divider { grid-column: 1 / -1; margin-top: 10px; }
-  .row-2up { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  /* "Selected for you" — exactly 2 picks; keep them at a natural size and
+     centered instead of stretched across a 4-col grid (which left the row half-empty). */
+  .row-2up { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+  .row-2up > * { flex: 1 1 300px; max-width: 360px; }
   .item.wide { grid-template-columns: 1fr 150px; }
   .item.wide .name { font-size: 22px; }
 
-  /* wide-grid: legacy fallback in case React wraps category remainders in it */
-  .cat-list .wide-grid { display: contents; }
+  /* "More from the {category}" — own fluid grid that reflows 1→2→n columns and
+     never crushes the wide card's text against its thumb. */
+  .cat-list > .wide-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 18px;
+  }
 
   /* Floating UI repositioned to viewport edges (cart-fab centered) */
   .cart-fab { left: 50%; transform: translateX(-50%) translateY(140%); bottom: 32px; }
@@ -1453,7 +1463,7 @@
     max-width: 460px; left: 50%; right: auto;
     transform: translate(-50%, 100%);
     border-radius: 0;
-    box-shadow: -30px 0 80px -20px rgba(35,40,107,.25);
+    box-shadow: -30px 0 80px -20px rgba(110,11,42,.25);
   }
   .page.open { transform: translate(-50%, 0); }
 
@@ -1500,9 +1510,9 @@
   to { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes menuPulse {
-  0% { box-shadow: 0 0 0 0 rgba(30,152,98,.6); }
-  70% { box-shadow: 0 0 0 8px rgba(30,152,98,0); }
-  100% { box-shadow: 0 0 0 0 rgba(30,152,98,0); }
+  0% { box-shadow: 0 0 0 0 rgba(163,23,67,.6); }
+  70% { box-shadow: 0 0 0 8px rgba(163,23,67,0); }
+  100% { box-shadow: 0 0 0 0 rgba(163,23,67,0); }
 }
 @keyframes menuBannerSlow {
   from { transform: scale(1.0); }
