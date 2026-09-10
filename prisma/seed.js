@@ -1,10 +1,12 @@
-/* eslint-disable */
+// Single-tenant seed: admin/manager/cashier/waiter accounts (from .env) plus
+// the full demo catalog (categories, tags, items, banners).
+// Run: npx prisma db seed
+require('dotenv/config');
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcryptjs');
 
-const adapter = new PrismaPg(process.env.DATABASE_URL);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter: new PrismaPg(process.env.DATABASE_URL) });
 
 const PEX = (id, w = 900) =>
   `https://images.pexels.com/photos/${id}/pexels-photo-${id}.jpeg?auto=compress&cs=tinysrgb&w=${w}`;
@@ -307,23 +309,45 @@ const BANNERS = [
     meta3Label: 'last order', meta3Value: '11 PM' },
 ];
 
-async function main() {
-  // 1) Admin user (preserve existing logic)
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-  if (email && password) {
-    const passwordHash = await bcrypt.hash(password, 12);
+async function seedStaff() {
+  // Admin — the platform's one full-access account.
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
     const user = await prisma.adminUser.upsert({
-      where: { email },
-      update: { passwordHash },
-      create: { email, passwordHash, role: 'admin' },
+      where: { email: adminEmail },
+      // Update keeps the account in sync but does NOT reset the password on re-run.
+      update: { role: 'admin', isActive: true },
+      create: { email: adminEmail, passwordHash, role: 'admin', name: 'Admin' },
     });
-    console.log(`Admin user seeded: ${user.email}`);
+    console.log(`OK   admin    ${user.email}`);
   } else {
-    console.warn('ADMIN_EMAIL / ADMIN_PASSWORD not set — skipping admin user seed.');
+    console.warn('SKIP admin: missing ADMIN_EMAIL / ADMIN_PASSWORD in .env');
   }
 
-  // 2) Wipe menu data
+  // Manager, cashier, waiter — each sourced from .env so credentials aren't hard-coded.
+  const STAFF = [
+    { role: 'manager', name: 'Manager', email: process.env.MANAGER_EMAIL, password: process.env.MANAGER_PASSWORD },
+    { role: 'cashier', name: 'Cashier', email: process.env.CASHIER_EMAIL, password: process.env.CASHIER_PASSWORD },
+    { role: 'waiter', name: 'Waiter', email: process.env.WAITER_EMAIL, password: process.env.WAITER_PASSWORD },
+  ];
+  for (const s of STAFF) {
+    if (!s.email || !s.password) {
+      console.warn(`SKIP ${s.role}: missing ${s.role.toUpperCase()}_EMAIL / _PASSWORD in .env`);
+      continue;
+    }
+    const passwordHash = await bcrypt.hash(s.password, 12);
+    await prisma.adminUser.upsert({
+      where: { email: s.email },
+      update: { role: s.role, name: s.name, isActive: true },
+      create: { email: s.email, passwordHash, role: s.role, name: s.name, isActive: true },
+    });
+    console.log(`OK   ${s.role.padEnd(8)} ${s.email}`);
+  }
+}
+
+async function seedCatalog() {
   await prisma.itemTag.deleteMany();
   await prisma.itemOption.deleteMany();
   await prisma.optionGroup.deleteMany();
@@ -333,7 +357,6 @@ async function main() {
   await prisma.tag.deleteMany();
   await prisma.banner.deleteMany();
 
-  // 3) Tags
   const tagBySlug = {};
   for (const t of TAGS) {
     const row = await prisma.tag.create({ data: t });
@@ -341,7 +364,6 @@ async function main() {
   }
   console.log(`Seeded ${TAGS.length} tags`);
 
-  // 4) Categories
   const catBySlug = {};
   for (let i = 0; i < CATEGORIES.length; i++) {
     const c = CATEGORIES[i];
@@ -350,7 +372,6 @@ async function main() {
   }
   console.log(`Seeded ${CATEGORIES.length} categories`);
 
-  // 5) Items + option groups + extras + tags
   for (let i = 0; i < ITEMS.length; i++) {
     const it = ITEMS[i];
     const categoryId = catBySlug[it.slug];
@@ -370,7 +391,6 @@ async function main() {
       },
     });
 
-    // Option groups
     for (let gi = 0; gi < (it.optionGroups || []).length; gi++) {
       const g = it.optionGroups[gi];
       const group = await prisma.optionGroup.create({
@@ -384,7 +404,6 @@ async function main() {
       }
     }
 
-    // Extras
     for (let ei = 0; ei < (it.extras || []).length; ei++) {
       const x = it.extras[ei];
       await prisma.itemExtra.create({
@@ -392,7 +411,6 @@ async function main() {
       });
     }
 
-    // Tags
     for (const tagSlug of (it.tags || [])) {
       const tagId = tagBySlug[tagSlug];
       if (tagId) await prisma.itemTag.create({ data: { menuItemId: item.id, tagId } });
@@ -400,18 +418,21 @@ async function main() {
   }
   console.log(`Seeded ${ITEMS.length} menu items`);
 
-  // 6) Banners
   for (const b of BANNERS) {
     await prisma.banner.create({ data: b });
   }
   console.log(`Seeded ${BANNERS.length} banners`);
+}
 
-  console.log('\n✓ Maqaaxi Pos demo seed complete.');
+async function main() {
+  await seedStaff();
+  await seedCatalog();
+  console.log('\n✓ Maqaaxi Pos seed complete.');
 }
 
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

@@ -41,10 +41,14 @@ export const changePasswordSchema = z.object({
 
 const PERIODS = ['any', 'morning', 'midday', 'evening'];
 
+// The headline is rendered with dangerouslySetInnerHTML on the public menu —
+// strip every tag except the design's <em>/</em> so stored XSS is impossible.
+const sanitizeHeadline = (v) => (v == null ? v : v.replace(/<(?!\/?em>)[^>]*>/gi, ''));
+
 export const categorySchema = z.object({
   name: z.string().min(1, 'Category name is required').max(100),
   kicker: z.string().max(120).nullable().optional(),
-  headline: z.string().max(300).nullable().optional(),
+  headline: z.string().max(300).nullable().optional().transform(sanitizeHeadline),
   sub: z.string().max(300).nullable().optional(),
   coverUrl: z.url({ error: 'Cover must be a valid URL' }).nullable().optional(),
   period: z.enum(PERIODS, { error: `Period must be one of: ${PERIODS.join(', ')}` }).optional().default('any'),
@@ -132,15 +136,37 @@ export const bannerSchema = z.object({
 // Mirrors the cart-line Json shape used by the public menu + checkout.
 const posCartLineSchema = z.object({
   uid: z.string().optional(),
-  itemId: z.number().int().positive().optional(),
+  itemId: z.number().int().positive(),
   name: z.string().min(1),
   imageUrl: z.string().nullable().optional(),
   optionName: z.string().nullable().optional(),
   extras: z.array(z.object({ name: z.string(), priceAdd: z.number() })).optional().default([]),
   notes: z.string().max(500).optional().default(''),
+  // Display-only — the server reprices every line from the database.
   unitPrice: z.number().nonnegative(),
-  quantity: z.number().int().positive(),
+  quantity: z.number().int().positive().max(99),
 });
+
+// A customer identified/created inline from the POS invoice step (mirrors
+// the checkout flow's contact fields).
+export const invoiceCustomerSchema = z.object({
+  phone: z.string().min(1, 'Phone is required').max(40),
+  name: z.string().min(1, 'Name is required').max(120),
+  address: z.string().max(300).nullable().optional(),
+});
+
+// The dedicated Customer CRUD surface (Customers page + picker "+ New
+// customer" form). Same shape as invoiceCustomerSchema but named for its
+// own use so the two can evolve independently.
+export const customerSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(120),
+  phone: z.string().min(1, 'Phone is required').max(40),
+  address: z.string().max(300).nullable().optional(),
+});
+
+export const updateCustomerSchema = customerSchema.partial();
+
+const PAYMENT_METHODS = ['cash', 'card', 'evc', 'invoice'];
 
 export const posOrderSchema = z
   .object({
@@ -156,6 +182,15 @@ export const posOrderSchema = z
     contactPhone: z.string().max(40).nullable().optional(),
     address: z.string().max(500).nullable().optional(),
     notes: z.string().max(500).nullable().optional(),
+    // How the customer paid. 'invoice' bills the customer instead of
+    // collecting payment now — see invoiceCustomerId/invoiceCustomer below.
+    paymentMethod: z.enum(PAYMENT_METHODS, { error: `Payment method must be one of: ${PAYMENT_METHODS.join(', ')}` }),
+    // Cash tendered — enables a change-due line on the receipt. Cash only.
+    amountReceived: z.number().min(0).nullable().optional(),
+    // Invoice customer — an existing one by id, or enough to create one.
+    invoiceCustomerId: z.number().int().positive().nullable().optional(),
+    invoiceCustomer: invoiceCustomerSchema.nullable().optional(),
+    invoiceDueDate: z.string().datetime().nullable().optional(),
   })
   .superRefine((val, ctx) => {
     // Table is always optional now; only delivery has hard requirements.
@@ -165,6 +200,9 @@ export const posOrderSchema = z
     }
     if (val.discountType && (val.discountValue == null || val.discountValue <= 0)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['discountValue'], message: 'Enter a discount amount' });
+    }
+    if (val.paymentMethod === 'invoice' && !val.invoiceCustomerId && !val.invoiceCustomer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['invoiceCustomer'], message: 'Select or enter a customer to invoice' });
     }
   });
 
@@ -183,7 +221,9 @@ export const stockMovementSchema = z.object({
   type: z.enum(MOVEMENT_TYPES, { error: `Type must be one of: ${MOVEMENT_TYPES.join(', ')}` }),
   // signed delta: positive adds stock, negative removes it
   quantity: z.number().refine((n) => n !== 0, 'Quantity cannot be zero'),
-  unitCost: z.number().min(0).nullable().optional(),
+  // Total price paid for the whole purchased quantity (purchase-type only) —
+  // NOT a per-unit price, since unit price fluctuates day to day.
+  totalCost: z.number().min(0).nullable().optional(),
   note: z.string().max(300).nullable().optional(),
 });
 
@@ -198,4 +238,45 @@ export const shiftSchema = z.object({
   openingFloat: z.number().min(0).nullable().optional(),
   closingCash: z.number().min(0).nullable().optional(),
   note: z.string().max(300).nullable().optional(),
+});
+
+// ── Invoicing (customers who pay later) ──────────────────────────────────
+
+const invoiceLineSchema = z.object({
+  description: z.string().min(1).max(200),
+  quantity: z.number().positive().max(9999),
+  unitPrice: z.number().nonnegative(),
+});
+
+export const createInvoiceSchema = z
+  .object({
+    customerId: z.number().int().positive().optional(),
+    customer: invoiceCustomerSchema.optional(),
+    items: z.array(invoiceLineSchema).min(1, 'Add at least one line'),
+    discount: z.number().min(0).optional().default(0),
+    dueDate: z.string().datetime().nullable().optional(),
+    tableNumber: z.string().max(20).nullable().optional(),
+    note: z.string().max(500).nullable().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (!val.customerId && !val.customer) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['customer'], message: 'Select or enter a customer' });
+    }
+  });
+
+export const updateInvoiceSchema = z.object({
+  dueDate: z.string().datetime().nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+  // Only 'void' is settable here — 'paid'/'partial'/'unpaid' are derived from
+  // recorded payments, never set directly.
+  status: z.enum(['unpaid', 'void']).optional(),
+});
+
+const INVOICE_PAYMENT_METHODS = ['cash', 'card', 'evc'];
+
+export const recordInvoicePaymentSchema = z.object({
+  amount: z.number().positive(),
+  method: z.enum(INVOICE_PAYMENT_METHODS, { error: `Method must be one of: ${INVOICE_PAYMENT_METHODS.join(', ')}` }),
+  note: z.string().max(300).nullable().optional(),
+  paidAt: z.string().datetime().optional(),
 });

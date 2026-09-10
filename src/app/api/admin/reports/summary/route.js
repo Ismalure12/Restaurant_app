@@ -19,12 +19,12 @@ export async function GET(request) {
   // `lte: to` includes the whole final day instead of dropping it.
   if (toParam) to.setUTCHours(23, 59, 59, 999);
 
-  try {
-    const orders = await prisma.order.findMany({
-      where: { paymentStatus: 'paid', createdAt: { gte: from, lte: to } },
-      select: { source: true, total: true, staffId: true, waiterId: true, items: true },
-    });
+  // Aggregating an unbounded range would load the whole orders table.
+  if (to.getTime() - from.getTime() > 92 * 24 * 60 * 60 * 1000) {
+    return NextResponse.json({ error: 'Date range too large (max 92 days)' }, { status: 400 });
+  }
 
+  try {
     // Orders by channel (manual = pos, digital = online).
     const bySource = { online: { count: 0, total: 0 }, pos: { count: 0, total: 0 } };
     // Items sold (from the cart Json).
@@ -33,29 +33,46 @@ export async function GET(request) {
     const waiterAgg = new Map(); // waiterId|null -> { orders, total }
     const staffAgg = new Map();  // staffId|null -> { orders, total }
 
-    for (const o of orders) {
-      const total = Number(o.total);
-      const bucket = o.source === 'pos' ? bySource.pos : bySource.online;
-      bucket.count += 1; bucket.total += total;
+    // Stream in batches so a busy quarter can't blow up memory; the numbers
+    // stay exact because every row in range is still visited.
+    const BATCH = 1000;
+    let cursor;
+    for (;;) {
+      const orders = await prisma.order.findMany({
+        where: { paymentStatus: 'paid', createdAt: { gte: from, lte: to } },
+        select: { id: true, source: true, total: true, staffId: true, waiterId: true, items: true },
+        orderBy: { id: 'asc' },
+        take: BATCH,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
 
-      const lines = Array.isArray(o.items) ? o.items : [];
-      for (const l of lines) {
-        const name = l.name || 'Item';
-        const cur = itemMap.get(name) || { qty: 0, total: 0 };
-        cur.qty += l.quantity || 1;
-        cur.total += Number(l.unitPrice || 0) * (l.quantity || 1);
-        itemMap.set(name, cur);
+      for (const o of orders) {
+        const total = Number(o.total);
+        const bucket = o.source === 'pos' ? bySource.pos : bySource.online;
+        bucket.count += 1; bucket.total += total;
+
+        const lines = Array.isArray(o.items) ? o.items : [];
+        for (const l of lines) {
+          const name = l.name || 'Item';
+          const cur = itemMap.get(name) || { qty: 0, total: 0 };
+          cur.qty += l.quantity || 1;
+          cur.total += Number(l.unitPrice || 0) * (l.quantity || 1);
+          itemMap.set(name, cur);
+        }
+
+        if (o.source === 'pos') {
+          const wk = o.waiterId ?? 'none';
+          const w = waiterAgg.get(wk) || { waiterId: o.waiterId ?? null, orders: 0, total: 0 };
+          w.orders += 1; w.total += total; waiterAgg.set(wk, w);
+        }
+
+        const sk = o.staffId ?? 'none';
+        const s = staffAgg.get(sk) || { staffId: o.staffId ?? null, orders: 0, total: 0 };
+        s.orders += 1; s.total += total; staffAgg.set(sk, s);
       }
 
-      if (o.source === 'pos') {
-        const wk = o.waiterId ?? 'none';
-        const w = waiterAgg.get(wk) || { waiterId: o.waiterId ?? null, orders: 0, total: 0 };
-        w.orders += 1; w.total += total; waiterAgg.set(wk, w);
-      }
-
-      const sk = o.staffId ?? 'none';
-      const s = staffAgg.get(sk) || { staffId: o.staffId ?? null, orders: 0, total: 0 };
-      s.orders += 1; s.total += total; staffAgg.set(sk, s);
+      if (orders.length < BATCH) break;
+      cursor = orders[orders.length - 1].id;
     }
 
     // Resolve names.
@@ -73,11 +90,11 @@ export async function GET(request) {
     const totalUnits = allItems.reduce((sum, i) => sum + i.qty, 0);
 
     const waiterPerformance = [...waiterAgg.values()]
-      .map((w) => ({ waiterId: w.waiterId, name: w.waiterId == null ? 'Unassigned' : (waiterName[w.waiterId] || `Waiter #${w.waiterId}`), orders: w.orders, total: w.total }))
+      .map((w) => ({ waiterId: w.waiterId, name: w.waiterId == null ? 'Unassigned' : (waiterName[w.waiterId] || `Waiter #${w.waiterId}`), orders: w.orders, total: w.total, avgTicket: w.orders ? w.total / w.orders : 0 }))
       .sort((a, b) => b.total - a.total);
 
     const salesByStaff = [...staffAgg.values()]
-      .map((s) => ({ staffId: s.staffId, name: s.staffId == null ? 'Online / unattributed' : (staffName[s.staffId] || `Staff #${s.staffId}`), orders: s.orders, total: s.total }))
+      .map((s) => ({ staffId: s.staffId, name: s.staffId == null ? 'Online / unattributed' : (staffName[s.staffId] || `Staff #${s.staffId}`), orders: s.orders, total: s.total, avgTicket: s.orders ? s.total / s.orders : 0 }))
       .sort((a, b) => b.total - a.total);
 
     return NextResponse.json({

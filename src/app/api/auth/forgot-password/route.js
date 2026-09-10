@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import prisma from '@/lib/prisma';
 import { forgotPasswordSchema } from '@/lib/validations';
 import { sendResetCode } from '@/lib/email';
@@ -20,12 +21,19 @@ export async function POST(request) {
       return NextResponse.json({ success: true });
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Cooldown: a fresh code lives 15 min — if the current one was issued
+    // less than a minute ago, don't send another (stops email bombing).
+    if (user.resetCodeExp && user.resetCodeExp.getTime() > Date.now() + 14 * 60 * 1000) {
+      return NextResponse.json({ success: true });
+    }
+
+    // crypto-strong code, stored hashed — a DB leak doesn't leak live codes.
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000);
     const exp = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
     await prisma.adminUser.update({
       where: { id: user.id },
-      data: { resetCode: code, resetCodeExp: exp },
+      data: { resetCode: await bcrypt.hash(code, 10), resetCodeExp: exp, resetAttempts: 0 },
     });
 
     await sendResetCode(email, code);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
+import { priceCart, toCents } from '@/lib/cartPricing';
 
 const cartLineSchema = z.object({
   itemId: z.number().int().positive().optional(),
@@ -9,6 +10,7 @@ const cartLineSchema = z.object({
   optionName: z.string().nullable().optional(),
   extras: z.array(z.object({ name: z.string(), priceAdd: z.number() })).optional().default([]),
   notes: z.string().max(500).optional().default(''),
+  // Display-only — the server reprices every line from the database.
   unitPrice: z.number().nonnegative(),
   quantity: z.number().int().positive(),
 });
@@ -44,6 +46,16 @@ export async function POST(request) {
   const reference = 'ord-' + crypto.randomUUID();
 
   try {
+    // Never trust the client's cart prices or total — recompute both from
+    // the database before persisting anything.
+    const priced = await priceCart(prisma, cart);
+    if (priced.error) {
+      return NextResponse.json({ error: priced.error }, { status: 400 });
+    }
+    if (toCents(total) !== priced.totalCents) {
+      return NextResponse.json({ error: 'Prices have changed — please refresh your cart and try again.' }, { status: 409 });
+    }
+
     await prisma.paymentSession.create({
       data: {
         reference,
@@ -52,8 +64,8 @@ export async function POST(request) {
         address: orderType === 'delivery' ? address : null,
         orderType,
         tableNumber: orderType === 'dine_in' ? tableNumber : null,
-        cartJson: cart,
-        amount: total,
+        cartJson: priced.lines,
+        amount: priced.totalCents / 100,
       },
     });
 

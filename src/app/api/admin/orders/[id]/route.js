@@ -13,7 +13,12 @@ export async function GET(request, { params }) {
   try {
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { customer: true, staff: { select: { name: true, email: true } }, waiter: { select: { name: true, email: true } } },
+      include: {
+        customer: true,
+        staff: { select: { name: true, email: true } },
+        waiter: { select: { name: true, email: true } },
+        invoice: { select: { id: true, status: true } },
+      },
     });
 
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 });
@@ -40,6 +45,7 @@ export async function GET(request, { params }) {
       paymentTransactionId: order.paymentTransactionId,
       createdAt: order.createdAt,
       customer: order.customer,
+      invoice: order.invoice,
     });
   } catch (err) {
     console.error('GET /api/admin/orders/[id]:', err);

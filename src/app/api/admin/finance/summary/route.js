@@ -24,16 +24,27 @@ export async function GET(request) {
 
   try {
     const paidWhere = { paymentStatus: 'paid', createdAt: { gte: from, lte: to } };
+    const invoiceWhere = { createdAt: { gte: from, lte: to }, status: { not: 'void' } };
 
-    const [revenueAgg, byStaff, expenseByCat, orderCount] = await Promise.all([
-      // All money is EVC — we don't track payment method, just total revenue.
+    const [revenueAgg, byMethod, byStaff, expenseByCat, orderCount, invoiceAgg, invoiceOutstandingAgg] = await Promise.all([
       prisma.order.aggregate({ where: paidWhere, _sum: { total: true } }),
+      prisma.order.groupBy({ by: ['paymentMethod'], where: paidWhere, _sum: { total: true } }),
       prisma.order.groupBy({ by: ['staffId'], where: paidWhere, _sum: { total: true }, _count: { _all: true } }),
       prisma.expense.groupBy({ by: ['category'], where: { incurredAt: { gte: from, lte: to } }, _sum: { amount: true } }),
       prisma.order.count({ where: paidWhere }),
+      // Invoicing is billed revenue, tracked separately from collected cash/card/evc.
+      prisma.invoice.aggregate({ where: invoiceWhere, _sum: { total: true, amountPaid: true } }),
+      prisma.invoice.aggregate({ where: { status: { in: ['unpaid', 'partial'] } }, _sum: { total: true, amountPaid: true } }),
     ]);
 
     const revenueTotal = Number(revenueAgg._sum.total || 0);
+    const revenueByMethod = byMethod
+      .map((r) => ({ method: r.paymentMethod || 'unspecified', total: Number(r._sum.total || 0) }))
+      .sort((a, b) => b.total - a.total);
+    const invoicedTotal = Number(invoiceAgg._sum.total || 0);
+    // Outstanding balance across ALL open invoices (not just this window) —
+    // what customers currently owe, as of now.
+    const invoiceOutstanding = Math.max(0, Number(invoiceOutstandingAgg._sum.total || 0) - Number(invoiceOutstandingAgg._sum.amountPaid || 0));
 
     const expensesByCategory = expenseByCat.map((r) => ({
       category: r.category,
@@ -58,6 +69,9 @@ export async function GET(request) {
       from,
       to,
       revenueTotal,
+      revenueByMethod,
+      invoicedTotal,
+      invoiceOutstanding,
       expensesTotal,
       expensesByCategory,
       net: revenueTotal - expensesTotal,

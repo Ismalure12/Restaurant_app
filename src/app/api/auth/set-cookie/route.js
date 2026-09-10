@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-
-const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+import { jwtSecret } from '@/lib/auth';
 
 export async function POST(request) {
   const { token } = await request.json();
@@ -9,9 +8,16 @@ export async function POST(request) {
     return NextResponse.json({ error: 'token required' }, { status: 400 });
   }
 
+  let payload;
   try {
-    await jwtVerify(token, secret);
+    ({ payload } = await jwtVerify(token, jwtSecret()));
   } catch {
+    return NextResponse.json({ error: 'invalid token' }, { status: 400 });
+  }
+
+  // Only customer tokens may be installed here — an admin token must never
+  // become a long-lived customer_session cookie.
+  if (payload.type !== 'customer' || !payload.customerId) {
     return NextResponse.json({ error: 'invalid token' }, { status: 400 });
   }
 
@@ -21,7 +27,7 @@ export async function POST(request) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 60 * 60 * 24 * 365, // 1 year
+    maxAge: 60 * 60 * 24 * 30, // 30 days — matches the token's own expiry
   });
   return response;
 }

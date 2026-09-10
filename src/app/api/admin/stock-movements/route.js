@@ -24,7 +24,7 @@ export async function GET(request) {
       id: m.id,
       type: m.type,
       quantity: m.quantity.toString(),
-      unitCost: m.unitCost?.toString() ?? null,
+      totalCost: m.totalCost?.toString() ?? null,
       note: m.note,
       staff: m.staff ? (m.staff.name || m.staff.email) : null,
       createdAt: m.createdAt,

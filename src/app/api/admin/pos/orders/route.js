@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requirePos } from '@/lib/auth';
 import { posOrderSchema } from '@/lib/validations';
+import { priceCart } from '@/lib/cartPricing';
 
 export async function POST(request) {
   const auth = await requirePos(prisma);
@@ -15,13 +16,33 @@ export async function POST(request) {
     }
 
     const {
-      items, orderType, tableNumber, waiterId, discountType, discountValue,
+      items, orderType, tableNumber, discountType, discountValue,
       deliveryFee, contactName, contactPhone, address, notes,
+      paymentMethod, amountReceived, invoiceCustomerId, invoiceCustomer, invoiceDueDate,
     } = parsed.data;
+    let { waiterId } = parsed.data;
+
+    // A waiter operating the register is always attributed to their own
+    // sale — the client is never trusted for this. A cashier/manager ringing
+    // up on a waiter's behalf may still pick any waiter from the picker.
+    if (auth.session.role === 'waiter') {
+      waiterId = auth.session.userId;
+    } else if (waiterId) {
+      const waiter = await prisma.adminUser.findFirst({
+        where: { id: waiterId, role: 'waiter', isActive: true },
+        select: { id: true },
+      });
+      if (!waiter) return NextResponse.json({ error: 'Waiter not found' }, { status: 404 });
+    }
 
     // Everything is recomputed server-side; never trust client totals.
-    // unitPrice already includes option + extras.
-    const subtotal = items.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+    // Each line's unitPrice is repriced from the database (item + option + extras).
+    const priced = await priceCart(prisma, items);
+    if (priced.error) {
+      return NextResponse.json({ error: priced.error }, { status: 400 });
+    }
+    const pricedItems = priced.lines;
+    const subtotal = priced.totalCents / 100;
 
     // Resolve discount from type/value, clamped to [0, subtotal].
     let discount = 0;
@@ -37,28 +58,77 @@ export async function POST(request) {
     const total = Math.round((subtotal - discount + delivery) * 100) / 100;
     if (!(total > 0)) return NextResponse.json({ error: 'Order total must be greater than zero' }, { status: 400 });
 
-    const order = await prisma.order.create({
-      data: {
-        customerId: null,
-        staffId: auth.session.userId,
-        source: 'pos',
-        status: 'confirmed',
-        // Paid in person at the counter — no separate payment step or method tracked.
-        paymentStatus: 'paid',
-        paymentMethod: null,
-        orderType,
-        tableNumber: orderType === 'dine_in' ? (tableNumber || null) : null,
-        waiterId: waiterId ?? null,
-        discount,
-        deliveryFee: delivery,
-        contactName: orderType === 'delivery' ? (contactName || null) : null,
-        contactPhone: orderType === 'delivery' ? (contactPhone || null) : null,
-        address: orderType === 'delivery' ? (address || null) : (notes || null),
-        items,
-        total,
-        reference: 'pos-' + crypto.randomUUID(),
-      },
+    const isInvoice = paymentMethod === 'invoice';
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Invoice sales bill a customer instead of collecting payment now —
+      // resolve/create that customer before the order so we can link it.
+      let invoiceCustomerRow = null;
+      if (isInvoice) {
+        if (invoiceCustomerId) {
+          invoiceCustomerRow = await tx.customer.findFirst({ where: { id: invoiceCustomerId } });
+          if (!invoiceCustomerRow) throw Object.assign(new Error('Customer not found'), { httpStatus: 404 });
+        } else {
+          const existing = await tx.customer.findUnique({ where: { phone: invoiceCustomer.phone } });
+          invoiceCustomerRow = await tx.customer.upsert({
+            where: { phone: invoiceCustomer.phone },
+            update: { name: invoiceCustomer.name, address: invoiceCustomer.address ?? existing?.address ?? '' },
+            create: {
+              phone: invoiceCustomer.phone,
+              name: invoiceCustomer.name,
+              address: invoiceCustomer.address ?? '',
+            },
+          });
+        }
+      }
+
+      const order = await tx.order.create({
+        data: {
+          customerId: isInvoice ? invoiceCustomerRow.id : null,
+          staffId: auth.session.userId,
+          source: 'pos',
+          status: 'confirmed',
+          // Cash/card/evc are collected at the counter and paid immediately;
+          // an invoice bills the customer instead — no money changes hands now.
+          paymentStatus: isInvoice ? 'unpaid' : 'paid',
+          paymentMethod,
+          amountReceived: !isInvoice && amountReceived != null ? amountReceived : null,
+          orderType,
+          tableNumber: orderType === 'dine_in' ? (tableNumber || null) : null,
+          waiterId: waiterId ?? null,
+          discount,
+          deliveryFee: delivery,
+          contactName: orderType === 'delivery' ? (contactName || null) : null,
+          contactPhone: orderType === 'delivery' ? (contactPhone || null) : null,
+          address: orderType === 'delivery' ? (address || null) : (notes || null),
+          items: pricedItems,
+          total,
+          reference: 'pos-' + crypto.randomUUID(),
+        },
+      });
+
+      let invoice = null;
+      if (isInvoice) {
+        invoice = await tx.invoice.create({
+          data: {
+            customerId: invoiceCustomerRow.id,
+            orderId: order.id,
+            items: pricedItems,
+            subtotal,
+            discount,
+            total,
+            dueDate: invoiceDueDate ? new Date(invoiceDueDate) : null,
+            tableNumber: order.tableNumber,
+            orderType: order.orderType,
+            createdBy: auth.session.userId,
+          },
+        });
+      }
+
+      return { order, invoice };
     });
+
+    const { order, invoice } = result;
 
     return NextResponse.json({
       id: order.id,
@@ -69,10 +139,14 @@ export async function POST(request) {
       total: order.total.toString(),
       orderType: order.orderType,
       tableNumber: order.tableNumber,
+      paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
+      amountReceived: order.amountReceived?.toString() ?? null,
+      invoiceId: invoice?.id ?? null,
       createdAt: order.createdAt,
     }, { status: 201 });
   } catch (err) {
+    if (err.httpStatus === 404) return NextResponse.json({ error: err.message }, { status: 404 });
     console.error('POST /api/admin/pos/orders:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

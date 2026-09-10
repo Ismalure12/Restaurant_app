@@ -7,23 +7,27 @@ datasource db {
 }
 
 model AdminUser {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
-  passwordHash String    @map("password_hash")
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
   // admin | manager | cashier | waiter | user
-  role         String    @default("user")
-  name         String?
-  phone        String?
-  isActive     Boolean   @default(true) @map("is_active")
-  resetCode    String?   @map("reset_code")
-  resetCodeExp DateTime? @map("reset_code_exp")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  role          String    @default("user")
+  name          String?
+  phone         String?
+  isActive      Boolean   @default(true) @map("is_active")
+  resetCode     String?   @map("reset_code")
+  resetCodeExp  DateTime? @map("reset_code_exp")
+  // Failed reset-code attempts since the code was issued — locks out after 5.
+  resetAttempts Int       @default(0) @map("reset_attempts")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
-  ordersTaken    Order[]         @relation("OrderStaff")
-  ordersServed   Order[]         @relation("OrderWaiter")
-  shifts         Shift[]
-  stockMovements StockMovement[]
-  expenses       Expense[]
+  ordersTaken             Order[]          @relation("OrderStaff")
+  ordersServed            Order[]          @relation("OrderWaiter")
+  shifts                  Shift[]
+  stockMovements          StockMovement[]
+  expenses                Expense[]
+  invoicesCreated         Invoice[]        @relation("InvoiceCreator")
+  invoicePaymentsRecorded InvoicePayment[] @relation("InvoicePaymentRecorder")
 
   @@map("admin_users")
 }
@@ -146,12 +150,13 @@ model Banner {
 }
 
 model Customer {
-  id        Int      @id @default(autoincrement())
-  phone     String   @unique
+  id        Int       @id @default(autoincrement())
+  phone     String    @unique
   name      String
-  address   String
-  createdAt DateTime @default(now()) @map("created_at")
+  address   String?
+  createdAt DateTime  @default(now()) @map("created_at")
   orders    Order[]
+  invoices  Invoice[]
 
   @@map("customers")
 }
@@ -182,7 +187,7 @@ model Order {
   // online = QR/Waafi · pos = walk-in taken by staff
   source               String   @default("online")
   staffId              Int?     @map("staff_id")
-  paymentMethod        String?  @map("payment_method") // cash | card | evc | waafi
+  paymentMethod        String?  @map("payment_method") // cash | card | evc | invoice | waafi
   paymentStatus        String   @default("unpaid") @map("payment_status") // unpaid | paid | refunded
   amountReceived       Decimal? @map("amount_received") @db.Decimal(10, 2)
   discount             Decimal  @default(0) @db.Decimal(10, 2)
@@ -199,10 +204,74 @@ model Order {
   customer             Customer?  @relation(fields: [customerId], references: [id])
   staff                AdminUser? @relation("OrderStaff", fields: [staffId], references: [id])
   waiter               AdminUser? @relation("OrderWaiter", fields: [waiterId], references: [id])
+  // Set only when paymentMethod = 'invoice' — the sale was billed to a
+  // customer's account instead of collected at the counter.
+  invoice              Invoice?
 
   @@index([staffId])
   @@index([waiterId])
   @@map("orders")
+}
+
+// A bill owed by a Customer who doesn't pay upfront (a tab, a monthly
+// account). Created either from a POS sale (paymentMethod = 'invoice', see
+// orderId) or standalone against a customer directly from the Invoicing page.
+// `items` is a snapshot independent of Order so an invoice's line detail
+// (and table/service info) survives even if the source order is deleted.
+model Invoice {
+  id          Int       @id @default(autoincrement())
+  customerId  Int       @map("customer_id")
+  // The POS sale that spawned this invoice, if any — null for a standalone
+  // invoice created directly against a customer with no register sale.
+  orderId     Int?      @unique @map("order_id")
+  items       Json // [{ name/description, quantity, unitPrice }]
+  subtotal    Decimal   @db.Decimal(10, 2)
+  discount    Decimal   @default(0) @db.Decimal(10, 2)
+  total       Decimal   @db.Decimal(10, 2)
+  amountPaid  Decimal   @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  // unpaid | partial | paid | void
+  status      String    @default("unpaid")
+  dueDate     DateTime? @map("due_date")
+  // Snapshot of the source order's service info, carried through for
+  // traceability (e.g. which table a dine-in tab belonged to).
+  tableNumber String?   @map("table_number")
+  orderType   String?   @map("order_type")
+  note        String?
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  order    Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  creator  AdminUser?       @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  payments InvoicePayment[]
+
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([createdBy])
+  @@map("invoices")
+}
+
+// A single payment collected against an Invoice over time (partial/monthly
+// payments). The running total lives on Invoice.amountPaid; this table is
+// the audit trail of how it got there.
+model InvoicePayment {
+  id         Int      @id @default(autoincrement())
+  invoiceId  Int      @map("invoice_id")
+  amount     Decimal  @db.Decimal(10, 2)
+  method     String // cash | card | evc
+  note       String?
+  recordedBy Int?     @map("recorded_by")
+  paidAt     DateTime @default(now()) @map("paid_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  invoice  Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recorder AdminUser? @relation("InvoicePaymentRecorder", fields: [recordedBy], references: [id])
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@index([recordedBy])
+  @@map("invoice_payments")
 }
 
 model InventoryItem {
@@ -211,6 +280,9 @@ model InventoryItem {
   unit         String
   quantity     Decimal         @default(0) @db.Decimal(12, 3)
   reorderLevel Decimal?        @map("reorder_level") @db.Decimal(12, 3)
+  // Manual fallback estimate only — once the item has purchase-movement
+  // history, the weighted-average cost derived from StockMovement.totalCost
+  // is used instead (see src/lib/inventoryCosting.js).
   costPerUnit  Decimal?        @map("cost_per_unit") @db.Decimal(10, 2)
   supplier     String?
   isActive     Boolean         @default(true) @map("is_active")
@@ -226,7 +298,12 @@ model StockMovement {
   inventoryItemId Int           @map("inventory_item_id")
   type            String // purchase | usage | adjustment | waste
   quantity        Decimal       @db.Decimal(12, 3) // signed delta
-  unitCost        Decimal?      @map("unit_cost") @db.Decimal(10, 2)
+  // Total price actually paid for this purchased quantity (purchase-type
+  // movements only) — NOT a per-unit price, because the per-unit price
+  // fluctuates day to day. Weighted-average unit cost for valuation is
+  // derived on read from sum(totalCost)/sum(quantity) across purchases —
+  // see src/lib/inventoryCosting.js.
+  totalCost       Decimal?      @map("total_cost") @db.Decimal(10, 2)
   note            String?
   staffId         Int?          @map("staff_id")
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -234,18 +311,19 @@ model StockMovement {
   staff           AdminUser?    @relation(fields: [staffId], references: [id])
 
   @@index([inventoryItemId])
+  @@index([type])
   @@map("stock_movements")
 }
 
 model Expense {
-  id        Int        @id @default(autoincrement())
-  category  String
-  amount    Decimal    @db.Decimal(10, 2)
-  note      String?
-  staffId   Int?       @map("staff_id")
-  incurredAt DateTime  @default(now()) @map("incurred_at")
-  createdAt DateTime   @default(now()) @map("created_at")
-  staff     AdminUser? @relation(fields: [staffId], references: [id])
+  id         Int        @id @default(autoincrement())
+  category   String
+  amount     Decimal    @db.Decimal(10, 2)
+  note       String?
+  staffId    Int?       @map("staff_id")
+  incurredAt DateTime   @default(now()) @map("incurred_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+  staff      AdminUser? @relation(fields: [staffId], references: [id])
 
   @@index([incurredAt])
   @@map("expenses")

@@ -1,29 +1,21 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { fetchJson, parseApiError } from '@/lib/apiError';
+import Bk from '@/components/admin/Bk';
+
+const METHOD_LABEL = { cash: 'Cash', card: 'Card', evc: 'EVC', invoice: 'Invoice', unspecified: 'Unspecified' };
 
 const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 const num = (n) => Number(n || 0).toLocaleString('en-US');
 // 0..7 index for the last 8 weeks (7 = current week). Date.now lives here, out of render.
 const weekIndex = (d) => 7 - Math.floor((Date.now() - new Date(d).getTime()) / (7 * 86400000));
 
-function Bk({ rows, color = 'var(--primary)' }) {
-  const max = Math.max(...rows.map((r) => r.v), 1);
-  return rows.length === 0 ? <div className="sub">No data in range.</div> : rows.map((r, i) => (
-    <div className="bk-row" key={i}>
-      <span className="bk-l">{r.l}</span>
-      <div className="bk-bar"><i className="anim-grow-x" style={{ width: `${Math.round((r.v / max) * 100)}%`, background: r.c || color, '--d': `${i * 0.06}s` }} /></div>
-      <span className="bk-v">{r.fmt || money(r.v)}</span>
-    </div>
-  ));
-}
-
 export default function InsightsPage() {
   const qc = useQueryClient();
-  const [tab, setTab] = useState('pnl');
   const [exp, setExp] = useState({ category: '', amount: '', note: '' });
 
   const { data: fin } = useQuery({ queryKey: ['fin-summary'], queryFn: () => fetchJson('/api/admin/finance/summary') });
@@ -63,95 +55,72 @@ export default function InsightsPage() {
   };
 
   return (
-    <>
-      <div className="tabs-lg">
-        <button className={tab === 'pnl' ? 'active' : ''} onClick={() => setTab('pnl')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>Profit &amp; Loss</button>
-        <button className={tab === 'ops' ? 'active' : ''} onClick={() => setTab('ops')}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="8" width="3" height="10" /><rect x="17" y="5" width="3" height="13" /></svg>Operations</button>
+    <div style={{ maxWidth: 1200 }}>
+      <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
+        <div className="kpi"><div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg></div><span className="kpi-k">Revenue</span></div><div className="kpi-v"><small>$</small>{num(Math.round(revenue))}</div><div className="kpi-foot"><span>last 30 days</span></div></div>
+        <div className="kpi"><div className="kpi-top"><div className="kpi-ic gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" /><path d="M18 9l-5 5-3-3-4 4" /></svg></div><span className="kpi-k">Expenses</span></div><div className="kpi-v"><small>$</small>{num(Math.round(expensesTotal))}</div><div className="kpi-foot"><span>last 30 days</span></div></div>
+        <div className="kpi"><div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></div><span className="kpi-k">Net profit</span></div><div className="kpi-v"><small>$</small>{num(Math.round(net))}</div><div className="kpi-foot"><span className="pill pill-green" style={{ padding: '1px 8px' }}>{margin}% margin</span></div></div>
+        <div className="kpi"><div className="kpi-top"><div className="kpi-ic ink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /></svg></div><span className="kpi-k">Paid orders</span></div><div className="kpi-v">{num(orderCount)}</div><div className="kpi-foot"><span>avg {money(orderCount ? revenue / orderCount : 0)}</span></div></div>
       </div>
 
-      {tab === 'pnl' ? (
-        <section>
-          <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg></div><span className="kpi-k">Revenue</span></div><div className="kpi-v"><small>$</small>{num(Math.round(revenue))}</div><div className="kpi-foot"><span>last 30 days</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" /><path d="M18 9l-5 5-3-3-4 4" /></svg></div><span className="kpi-k">Expenses</span></div><div className="kpi-v"><small>$</small>{num(Math.round(expensesTotal))}</div><div className="kpi-foot"><span>last 30 days</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></div><span className="kpi-k">Net profit</span></div><div className="kpi-v"><small>$</small>{num(Math.round(net))}</div><div className="kpi-foot"><span className="pill pill-green" style={{ padding: '1px 8px' }}>{margin}% margin</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic ink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /></svg></div><span className="kpi-k">Paid orders</span></div><div className="kpi-v">{num(orderCount)}</div><div className="kpi-foot"><span>avg {money(orderCount ? revenue / orderCount : 0)}</span></div></div>
+      <div className="grid-chart reveal" style={{ animationDelay: '.08s' }}>
+        <div className="card card-pad">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div><div className="eyebrow">Revenue vs expenses</div><div className="h-2" style={{ marginTop: 2 }}>Weekly · last 8 weeks</div></div>
+            <div className="legend" style={{ gap: 14 }}><span><i style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--primary)' }} />Revenue</span><span><i style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--gold)' }} />Expenses</span></div>
           </div>
+          <div className="bars2">
+            {m.rev.map((r, i) => (
+              <div className="bcol" key={i}><div className="bpair"><i className="rev" style={{ height: `${(r / m.maxBar) * 100}%`, '--d': `${i * 0.05}s` }} /><i className="exp" style={{ height: `${(m.expw[i] / m.maxBar) * 100}%`, '--d': `${i * 0.05 + 0.04}s` }} /></div><span>W{i + 1}</span></div>
+            ))}
+          </div>
+        </div>
+        <div className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Channel split</div>
+          <Bk rows={[{ l: 'Counter', v: m.counter.t }, { l: 'Online', v: m.online.t, c: 'var(--sky)' }]} />
+        </div>
+      </div>
 
-          <div className="grid-chart reveal" style={{ animationDelay: '.08s' }}>
-            <div className="card card-pad">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <div><div className="eyebrow">Revenue vs expenses</div><div className="h-2" style={{ marginTop: 2 }}>Weekly · last 8 weeks</div></div>
-                <div className="legend" style={{ gap: 14 }}><span><i style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--primary)' }} />Revenue</span><span><i style={{ width: 11, height: 11, borderRadius: 3, background: 'var(--gold)' }} />Expenses</span></div>
-              </div>
-              <div className="bars2">
-                {m.rev.map((r, i) => (
-                  <div className="bcol" key={i}><div className="bpair"><i className="rev" style={{ height: `${(r / m.maxBar) * 100}%`, '--d': `${i * 0.05}s` }} /><i className="exp" style={{ height: `${(m.expw[i] / m.maxBar) * 100}%`, '--d': `${i * 0.05 + 0.04}s` }} /></div><span>W{i + 1}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="card card-pad">
-              <div className="eyebrow" style={{ marginBottom: 12 }}>Channel split</div>
-              <Bk rows={[{ l: 'Counter', v: m.counter.t }, { l: 'Online', v: m.online.t, c: 'var(--sky)' }]} />
-            </div>
-          </div>
+      <div className="grid3 reveal" style={{ marginTop: 16, animationDelay: '.12s' }}>
+        <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Expenses by category</div><Bk color="var(--gold)" rows={(fin?.expensesByCategory || []).map((r) => ({ l: r.category, v: r.total, c: 'var(--gold)' }))} /></div>
+        <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Sales by staff</div><Bk rows={(fin?.salesByStaff || []).slice(0, 5).map((r) => ({ l: r.name, v: r.total }))} /></div>
+        <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Top items</div><Bk rows={(rep?.itemsSold || []).slice(0, 5).map((r) => ({ l: r.name, v: r.total }))} /></div>
+      </div>
 
-          <div className="grid3 reveal" style={{ marginTop: 16, animationDelay: '.12s' }}>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Expenses by category</div><Bk color="var(--gold)" rows={(fin?.expensesByCategory || []).map((r) => ({ l: r.category, v: r.total, c: 'var(--gold)' }))} /></div>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Sales by staff</div><Bk rows={(fin?.salesByStaff || []).slice(0, 5).map((r) => ({ l: r.name, v: r.total }))} /></div>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Top items</div><Bk rows={(rep?.itemsSold || []).slice(0, 5).map((r) => ({ l: r.name, v: r.total }))} /></div>
-          </div>
+      <div className="grid3 reveal" style={{ marginTop: 16, animationDelay: '.14s' }}>
+        <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Revenue by payment method</div><Bk rows={(fin?.revenueByMethod || []).map((r) => ({ l: METHOD_LABEL[r.method] || r.method, v: r.total }))} /></div>
+        <div className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Invoicing</div>
+          <div className="sc-stat"><div className="v">{money(fin?.invoicedTotal)}</div><div className="k">Invoiced, last 30 days</div></div>
+          <div className="sc-stat" style={{ marginTop: 10 }}><div className="v" style={{ color: 'var(--rose)' }}>{money(fin?.invoiceOutstanding)}</div><div className="k">Currently outstanding</div></div>
+          <div style={{ marginTop: 10, textAlign: 'right' }}><Link href="/admin/dashboard/invoices" className="btn btn-ghost btn-sm">Open Invoicing →</Link></div>
+        </div>
+        <div className="card card-pad">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Full breakdown</div>
+          <p className="empty-sub" style={{ textAlign: 'left' }}>The Daily Report has revenue by method, item-level sales, stock consumed and invoice activity for any date range.</p>
+          <div style={{ marginTop: 10, textAlign: 'right' }}><Link href="/admin/dashboard/reports" className="btn btn-primary btn-sm">Open Daily Report →</Link></div>
+        </div>
+      </div>
 
-          <div className="card card-pad reveal" style={{ marginTop: 16, animationDelay: '.16s' }}>
-            <div className="h-2" style={{ marginBottom: 14 }}>Expenses</div>
-            <form className="exp-form" onSubmit={submitExp}>
-              <input className="input" value={exp.category} onChange={(e) => setExp({ ...exp, category: e.target.value })} placeholder="Category (e.g. rent)" />
-              <input className="input" type="number" step="any" value={exp.amount} onChange={(e) => setExp({ ...exp, amount: e.target.value })} placeholder="Amount" />
-              <input className="input" value={exp.note} onChange={(e) => setExp({ ...exp, note: e.target.value })} placeholder="Note (optional)" />
-              <button className="btn btn-primary" type="submit" disabled={addExpense.isPending}>Add</button>
-            </form>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="table"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th className="num">Amount</th></tr></thead>
-                <tbody>
-                  {expenses.slice(0, 12).map((e) => (
-                    <tr key={e.id}><td style={{ color: 'var(--muted)' }}>{new Date(e.incurredAt || e.createdAt).toLocaleDateString()}</td><td style={{ textTransform: 'capitalize' }}>{e.category}</td><td style={{ color: 'var(--muted)' }}>{e.note || '—'}</td><td className="num">${num(e.amount)}</td></tr>
-                  ))}
-                  {expenses.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No expenses yet</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section>
-          <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /></svg></div><span className="kpi-k">Total orders</span></div><div className="kpi-v">{num(rep?.totalOrders || 0)}</div><div className="kpi-foot"><span>last 30 days</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20" /></svg></div><span className="kpi-k">Digital · online</span></div><div className="kpi-v">{num(m.online.c)}</div><div className="kpi-foot"><span>{money(m.online.t)}</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="13" rx="2" /><line x1="8" y1="20" x2="16" y2="20" /><line x1="12" y1="16" x2="12" y2="20" /></svg></div><span className="kpi-k">Manual · counter</span></div><div className="kpi-v">{num(m.counter.c)}</div><div className="kpi-foot"><span>{money(m.counter.t)}</span></div></div>
-            <div className="kpi"><div className="kpi-top"><div className="kpi-ic ink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><path d="M7 7h.01" /></svg></div><span className="kpi-k">Items sold</span></div><div className="kpi-v">{num(rep?.itemsSoldUnits || 0)}</div><div className="kpi-foot"><span>units</span></div></div>
-          </div>
-
-          <div className="grid3 reveal" style={{ animationDelay: '.08s' }}>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Manual vs digital</div><Bk color="var(--gold)" rows={[{ l: 'Manual', v: m.counter.c, fmt: num(m.counter.c), c: 'var(--gold)' }, { l: 'Digital', v: m.online.c, fmt: num(m.online.c), c: 'var(--sky)' }]} /></div>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Waiter performance</div><Bk rows={(rep?.waiterPerformance || []).filter((w) => w.waiterId != null).slice(0, 5).map((w) => ({ l: w.name, v: w.orders, fmt: num(w.orders) }))} /></div>
-            <div className="card card-pad"><div className="eyebrow" style={{ marginBottom: 12 }}>Sales by cashier</div><Bk rows={(rep?.salesByStaff || []).slice(0, 5).map((s) => ({ l: s.name, v: s.count, fmt: num(s.count) }))} /></div>
-          </div>
-
-          <div className="card card-pad reveal" style={{ marginTop: 16, animationDelay: '.12s' }}>
-            <div className="h-2" style={{ marginBottom: 14 }}>Items sold</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="table"><thead><tr><th>Item</th><th className="num">Qty sold</th><th className="num">Revenue</th></tr></thead>
-                <tbody>
-                  {(rep?.itemsSold || []).slice(0, 12).map((it, i) => (
-                    <tr key={i}><td>{it.name}</td><td className="num">{num(it.qty)}</td><td className="num">{money(it.total)}</td></tr>
-                  ))}
-                  {(!rep?.itemsSold || rep.itemsSold.length === 0) && <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No sales yet</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-      )}
-    </>
+      <div className="card card-pad reveal" style={{ marginTop: 16, animationDelay: '.16s' }}>
+        <div className="h-2" style={{ marginBottom: 14 }}>Expenses</div>
+        <form className="exp-form" onSubmit={submitExp}>
+          <input className="input" value={exp.category} onChange={(e) => setExp({ ...exp, category: e.target.value })} placeholder="Category (e.g. rent)" />
+          <input className="input" type="number" step="any" value={exp.amount} onChange={(e) => setExp({ ...exp, amount: e.target.value })} placeholder="Amount" />
+          <input className="input" value={exp.note} onChange={(e) => setExp({ ...exp, note: e.target.value })} placeholder="Note (optional)" />
+          <button className="btn btn-primary" type="submit" disabled={addExpense.isPending}>Add</button>
+        </form>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table"><thead><tr><th>Date</th><th>Category</th><th>Note</th><th className="num">Amount</th></tr></thead>
+            <tbody>
+              {expenses.slice(0, 12).map((e) => (
+                <tr key={e.id}><td style={{ color: 'var(--muted)' }}>{new Date(e.incurredAt || e.createdAt).toLocaleDateString()}</td><td style={{ textTransform: 'capitalize' }}>{e.category}</td><td style={{ color: 'var(--muted)' }}>{e.note || '—'}</td><td className="num">${num(e.amount)}</td></tr>
+              ))}
+              {expenses.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>No expenses yet</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }

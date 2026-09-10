@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { fetchJson, parseApiError } from '@/lib/apiError';
@@ -110,6 +111,7 @@ export default function StaffPage() {
                   <div className="sc-stat"><div className="v" style={{ fontSize: 13 }}>{row.isActive ? 'Active' : 'Inactive'}</div><div className="k">Status</div></div>
                 </div>
                 <div className="sc-foot">
+                  <Link href={`/admin/dashboard/insights/staff/${row.id}`} className="btn btn-ghost btn-sm">Performance</Link>
                   <button className="btn btn-ghost btn-sm" onClick={() => startEdit(row)}>Edit</button>
                   {!isSelf && <button className="btn btn-danger btn-sm" onClick={() => remove(row)} disabled={del.isPending}>Remove</button>}
                 </div>

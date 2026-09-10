@@ -7,8 +7,10 @@
  *
  * order shape: { id, reference, orderType, tableNumber, items[], total,
  *                discount, deliveryFee, contactName, contactPhone, address,
- *                paymentMethod, amountReceived, change, cashierName, createdAt }
+ *                paymentMethod, amountReceived, change, invoiceId,
+ *                cashierName, createdAt }
  */
+const METHOD_LABEL = { cash: 'Cash', card: 'Card', evc: 'EVC', invoice: 'Invoice', waafi: 'Waafi' };
 export default function ReceiptDoc({ order }) {
   if (!order) return null;
 
@@ -84,7 +86,19 @@ export default function ReceiptDoc({ order }) {
           <span>TOTAL</span><span>{money(order.total)}</span>
         </div>
 
-        <div className="rcpt-paid">— PAID —</div>
+        {order.paymentMethod ? (
+          <div className="rcpt-sums" style={{ marginTop: 4 }}>
+            <div><span>Payment</span><span>{METHOD_LABEL[order.paymentMethod] || order.paymentMethod}</span></div>
+            {order.amountReceived != null ? <div><span>Received</span><span>{money(order.amountReceived)}</span></div> : null}
+            {order.change != null && order.change > 0 ? <div><span>Change</span><span>{money(order.change)}</span></div> : null}
+          </div>
+        ) : null}
+
+        {order.invoiceId ? (
+          <div className="rcpt-paid" style={{ color: '#000' }}>— INVOICE #{order.invoiceId}: BALANCE DUE —</div>
+        ) : (
+          <div className="rcpt-paid">— PAID —</div>
+        )}
 
         <div className="rcpt-foot">Thank you · Maqaaxi Pos</div>
       </div>

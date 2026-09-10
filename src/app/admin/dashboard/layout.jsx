@@ -11,6 +11,9 @@ const I = {
   overview: (<><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></>),
   pos: (<><rect x="4" y="3" width="16" height="18" rx="2" /><rect x="7" y="6" width="10" height="4" rx="1" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01M16 17h.01" /></>),
   orders: (<><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="M9 12h6M9 16h4" /></>),
+  invoices: (<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>),
+  customers: (<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M6 16c0-1.66 1.34-3 3-3s3 1.34 3 3M14 9h4M14 13h4" /></>),
+  reports: (<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 17V11M12 17V7M16 17v-4" /></>),
   insights: (<><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 5-6" /></>),
   performance: (<><path d="M3 3v18h18" /><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14" /></>),
   inventory: (<><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7L12 12l8.7-5M12 22V12" /></>),
@@ -22,12 +25,16 @@ const I = {
 const svg = (k) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">{I[k]}</svg>;
 
 // Grouped nav matching the design IA. `roles` gates visibility; a waiter only
-// sees Register + My Performance. Server enforcement lives in middleware.js.
+// sees Register + My Performance. Server enforcement lives in src/proxy.js.
+// Overview is the full financial dashboard — manager tier and above only.
 const NAV = [
   { group: 'Main', items: [
-    { id: 'overview', label: 'Overview', href: '/admin/dashboard', exact: true, roles: ['admin', 'manager', 'cashier'] },
+    { id: 'overview', label: 'Overview', href: '/admin/dashboard', exact: true, roles: ['admin', 'manager'] },
     { id: 'pos', label: 'Register', href: '/admin/dashboard/pos', roles: ['admin', 'manager', 'cashier', 'waiter'] },
     { id: 'orders', label: 'Orders', href: '/admin/dashboard/orders', roles: ['admin', 'manager', 'cashier'], badge: 'pending' },
+    { id: 'invoices', label: 'Invoicing', href: '/admin/dashboard/invoices', roles: ['admin', 'manager', 'cashier'] },
+    { id: 'customers', label: 'Customers', href: '/admin/dashboard/customers', roles: ['admin', 'manager', 'cashier'] },
+    { id: 'reports', label: 'Daily Report', href: '/admin/dashboard/reports', roles: ['admin', 'manager'] },
     { id: 'insights', label: 'Insights', href: '/admin/dashboard/insights', roles: ['admin', 'manager'] },
     { id: 'performance', label: 'My Performance', href: '/admin/dashboard/performance', roles: ['admin', 'manager', 'cashier', 'waiter'] },
   ]},
@@ -48,6 +55,9 @@ const PAGE_HEAD = {
   '/admin/dashboard': { title: 'Overview', sub: 'Live', action: { label: 'New order', href: '/admin/dashboard/pos' } },
   '/admin/dashboard/pos': { title: 'Register', sub: 'Point of sale · counter' },
   '/admin/dashboard/orders': { title: 'Orders', sub: 'Online & counter · live triage', action: { label: 'New counter order', href: '/admin/dashboard/pos' } },
+  '/admin/dashboard/invoices': { title: 'Invoicing', sub: 'Customer bills & payments' },
+  '/admin/dashboard/customers': { title: 'Customers', sub: 'Accounts & balances owed' },
+  '/admin/dashboard/reports': { title: 'Daily Report', sub: 'Sales, items & stock, day by day' },
   '/admin/dashboard/insights': { title: 'Insights', sub: 'Profit & operations' },
   '/admin/dashboard/performance': { title: 'My Performance', sub: 'Your numbers' },
   '/admin/dashboard/inventory': { title: 'Inventory', sub: 'Stock & movements' },

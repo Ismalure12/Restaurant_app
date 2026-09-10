@@ -1,7 +1,15 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+// Fail fast: signing with an unset secret would mean encoding the string
+// "undefined" — a predictable key that makes every token forgeable.
+export function jwtSecret() {
+  const s = process.env.JWT_SECRET;
+  if (!s) throw new Error('JWT_SECRET environment variable is required');
+  return new TextEncoder().encode(s);
+}
+
+const secret = jwtSecret();
 const COOKIE_NAME = 'auth-token';
 
 export async function signToken(payload) {

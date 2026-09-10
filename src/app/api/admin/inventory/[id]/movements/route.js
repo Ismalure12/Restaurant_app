@@ -20,7 +20,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: parsed.error.issues?.[0]?.message || 'Invalid input' }, { status: 400 });
     }
 
-    const { type, quantity, unitCost, note } = parsed.data;
+    const { type, quantity, totalCost, note } = parsed.data;
     const staffId = auth.session.userId;
 
     // Sign is enforced by type so the ledger can't be corrupted by a bad sign:
@@ -31,11 +31,11 @@ export async function POST(request, { params }) {
     else delta = quantity; // adjustment
 
     const result = await prisma.$transaction(async (tx) => {
-      const item = await tx.inventoryItem.findUnique({ where: { id: inventoryItemId } });
+      const item = await tx.inventoryItem.findFirst({ where: { id: inventoryItemId } });
       if (!item) throw Object.assign(new Error('Item not found'), { httpStatus: 404 });
 
       const movement = await tx.stockMovement.create({
-        data: { inventoryItemId, type, quantity: delta, unitCost: unitCost ?? null, note: note ?? null, staffId },
+        data: { inventoryItemId, type, quantity: delta, totalCost: totalCost ?? null, note: note ?? null, staffId },
       });
 
       const updated = await tx.inventoryItem.update({
@@ -43,12 +43,13 @@ export async function POST(request, { params }) {
         data: { quantity: { increment: delta } },
       });
 
-      // A purchase with a unit cost also books a matching expense.
-      if (type === 'purchase' && unitCost != null && unitCost > 0) {
+      // A purchase with a total cost also books a matching expense — the
+      // amount actually paid, entered directly (no per-unit multiplication).
+      if (type === 'purchase' && totalCost != null && totalCost > 0) {
         await tx.expense.create({
           data: {
             category: 'purchases',
-            amount: Math.abs(delta) * unitCost,
+            amount: totalCost,
             note: note ?? `Stock purchase: ${item.name}`,
             staffId,
           },

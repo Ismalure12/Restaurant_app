@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { fetchJson, parseApiError } from '@/lib/apiError';
 import ReceiptDoc from '@/components/admin/ReceiptDoc';
+import CustomerPicker from '@/components/admin/CustomerPicker';
 
 const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -32,6 +33,15 @@ export default function PosPage() {
   const [discount, setDiscount] = useState({ type: 'percent', value: '' });
   const deliveryOn = service === 'delivery';
 
+  // How the customer is paying. The server is the source of truth on who
+  // gets attributed as the waiter — a logged-in waiter is always themselves,
+  // regardless of anything sent here.
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [amountReceived, setAmountReceived] = useState('');
+  const [invoiceCustomer, setInvoiceCustomer] = useState({ customerId: null, customer: null });
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  const isWaiterSelf = me?.role === 'waiter';
+
   const [customizing, setCustomizing] = useState(null);
   const [selOptions, setSelOptions] = useState({});
   const [selExtras, setSelExtras] = useState({});
@@ -52,8 +62,10 @@ export default function PosPage() {
   const { data: settings } = useQuery({ queryKey: ['pos-settings'], queryFn: () => fetchJson('/api/admin/settings') });
 
   const defaultFee = settings?.deliveryFee != null ? String(settings.deliveryFee) : '0';
-  const selfWaiterId = me?.role === 'waiter' && me?.userId ? String(me.userId) : '';
-  const effWaiterId = waiterId || selfWaiterId;
+  // A waiter is always attributed to their own sale server-side — the picker
+  // is for a cashier/manager ringing up on a waiter's behalf, so it's hidden
+  // for a waiter's own session rather than shown-but-ignored.
+  const effWaiterId = isWaiterSelf ? String(me.userId) : waiterId;
   const effFee = deliveryFee === '' ? defaultFee : deliveryFee;
 
   const visibleItems = useMemo(() => {
@@ -123,12 +135,16 @@ export default function PosPage() {
   const resetOrder = () => {
     setCart([]); setService('dine_in'); setTableNumber(''); setWaiterId(''); setContactName(''); setContactPhone('');
     setAddress(''); setDeliveryFee(''); setDiscount({ type: 'percent', value: '' });
+    setPaymentMethod('cash'); setAmountReceived(''); setInvoiceCustomer({ customerId: null, customer: null }); setInvoiceDueDate('');
     setPlaced(null); setReceipt(null);
   };
+
+  const isInvoice = paymentMethod === 'invoice';
 
   const placeOrder = async () => {
     if (cart.length === 0) return;
     if (deliveryOn && (!contactPhone.trim() || !address.trim())) { toast.error('Delivery needs a phone and address'); return; }
+    if (isInvoice && !invoiceCustomer.customerId) { toast.error('Select or create the customer to bill'); return; }
     setPlacing(true);
     try {
       const order = await fetchJson('/api/admin/pos/orders', {
@@ -144,8 +160,13 @@ export default function PosPage() {
           contactName: deliveryOn ? contactName.trim() || null : null,
           contactPhone: deliveryOn ? contactPhone.trim() || null : null,
           address: deliveryOn ? address.trim() || null : null,
+          paymentMethod,
+          amountReceived: !isInvoice && paymentMethod === 'cash' && amountReceived !== '' ? Number(amountReceived) : null,
+          invoiceCustomerId: isInvoice ? invoiceCustomer.customerId : null,
+          invoiceDueDate: isInvoice && invoiceDueDate ? new Date(invoiceDueDate).toISOString() : null,
         }),
       });
+      const received = order.amountReceived != null ? Number(order.amountReceived) : null;
       setReceipt({
         id: order.id, reference: order.reference, orderType,
         tableNumber: orderType === 'dine_in' ? tableNumber.trim() : null,
@@ -153,11 +174,15 @@ export default function PosPage() {
         contactName: deliveryOn ? contactName.trim() : null,
         contactPhone: deliveryOn ? contactPhone.trim() : null,
         address: deliveryOn ? address.trim() : null,
-        waiterName: effWaiterId ? (waiters.find((w) => String(w.id) === String(effWaiterId))?.name ?? null) : null,
+        waiterName: effWaiterId ? (isWaiterSelf ? (me.name || me.email) : waiters.find((w) => String(w.id) === String(effWaiterId))?.name) ?? null : null,
         cashierName: cashier, createdAt: new Date().toISOString(),
+        paymentMethod: order.paymentMethod,
+        amountReceived: received,
+        change: received != null ? Math.max(0, received - Number(order.total)) : null,
+        invoiceId: order.invoiceId,
       });
       setPlaced(order);
-      toast.success(`Order #${order.id} placed`);
+      toast.success(order.invoiceId ? `Invoice #${order.invoiceId} created` : `Order #${order.id} placed`);
       setTimeout(() => window.print(), 150);
     } catch (err) {
       toast.error(parseApiError(err));
@@ -216,8 +241,9 @@ export default function PosPage() {
               {!deliveryOn ? (
                 <>
                   <input className="input" value={tableNumber} onChange={(e) => setTableNumber(e.target.value)} placeholder="Table no. (optional)" />
-                  {waiters.length > 0 && (
-                    <select className="input" value={effWaiterId} onChange={(e) => setWaiterId(e.target.value)}>
+                  {/* A waiter's own sale is always attributed to them — no picker needed. */}
+                  {!isWaiterSelf && waiters.length > 0 && (
+                    <select className="input" value={waiterId} onChange={(e) => setWaiterId(e.target.value)}>
                       <option value="">Waiter (optional)</option>
                       {waiters.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                     </select>
@@ -246,8 +272,8 @@ export default function PosPage() {
         ) : placed ? (
           <div className="pos-placed">
             <div className="pos-placed-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 26, height: 26 }}><path d="M20 6 9 17l-5-5" /></svg></div>
-            <div className="h-2">Order #{placed.id} placed</div>
-            <div className="sub" style={{ marginBottom: 16 }}>Receipt sent to the printer.</div>
+            <div className="h-2">{placed.invoiceId ? `Invoice #${placed.invoiceId} created` : `Order #${placed.id} placed`}</div>
+            <div className="sub" style={{ marginBottom: 16 }}>{placed.invoiceId ? 'Balance due from the customer — receipt sent to the printer.' : 'Receipt sent to the printer.'}</div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => window.print()}>Reprint</button>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={resetOrder}>New order</button>
@@ -290,8 +316,36 @@ export default function PosPage() {
             {discountAmount > 0 && <div className="tf-row"><span>Discount</span><span className="v" style={{ color: 'var(--rose)' }}>−{money(discountAmount)}</span></div>}
             {delivery > 0 && <div className="tf-row"><span>Delivery fee</span><span className="v">{money(delivery)}</span></div>}
             <div className="tf-row total"><span>Total</span><span className="v">{money(total)}</span></div>
+
+            <div className="field-l" style={{ marginTop: 10 }}>Payment method</div>
+            <div className="chips">
+              {[{ v: 'cash', label: 'Cash' }, { v: 'card', label: 'Card' }, { v: 'evc', label: 'EVC' }, { v: 'invoice', label: 'Invoice' }].map((m) => (
+                <button key={m.v} type="button" className={`chip2${paymentMethod === m.v ? ' on' : ''}`} onClick={() => setPaymentMethod(m.v)}>{m.label}</button>
+              ))}
+            </div>
+
+            {paymentMethod === 'cash' && (
+              <div className="disc-row" style={{ marginTop: 8 }}>
+                <input className="input" type="number" min="0" step="0.01" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="Amount received (optional)" style={{ height: 34, fontSize: '12.5px' }} />
+                {Number(amountReceived) > total && <span className="v" style={{ alignSelf: 'center', color: 'var(--primary)', fontSize: 12.5, whiteSpace: 'nowrap' }}>Change {money(Number(amountReceived) - total)}</span>}
+              </div>
+            )}
+
+            {isInvoice && (
+              <div style={{ marginTop: 8, padding: 10, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 12 }}>
+                <div className="empty-sub" style={{ textAlign: 'left', marginBottom: 8 }}>Bill this customer instead of collecting payment now.</div>
+                <CustomerPicker
+                  customerId={invoiceCustomer.customerId}
+                  customer={invoiceCustomer.customer}
+                  onChange={setInvoiceCustomer}
+                  disabled={placing}
+                />
+                <input className="input" type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} placeholder="Due date (optional)" style={{ marginTop: 8 }} />
+              </div>
+            )}
+
             <button className="btn btn-primary" style={{ width: '100%', height: 46, fontSize: 14, marginTop: 12 }} disabled={placing} onClick={placeOrder}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" /></svg>{placing ? 'Placing…' : 'Place order & print'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" /></svg>{placing ? 'Placing…' : isInvoice ? 'Create invoice & print' : 'Place order & print'}
             </button>
           </div>
         )}

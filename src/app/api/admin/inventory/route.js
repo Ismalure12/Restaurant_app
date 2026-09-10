@@ -2,18 +2,28 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireRole } from '@/lib/auth';
 import { inventoryItemSchema } from '@/lib/validations';
+import { getAvgCostMap, effectiveCost } from '@/lib/inventoryCosting';
 
 const VIEW_ROLES = ['admin', 'manager', 'cashier'];
 const EDIT_ROLES = ['admin', 'manager'];
 
-function serialize(item) {
+function serialize(item, avgCost = null) {
   return {
     id: item.id,
     name: item.name,
     unit: item.unit,
     quantity: item.quantity.toString(),
     reorderLevel: item.reorderLevel?.toString() ?? null,
+    // Manual fallback estimate — see effectiveCost for what's actually used.
     costPerUnit: item.costPerUnit?.toString() ?? null,
+    // Weighted-average cost from purchase history, or null if none yet.
+    avgCost: avgCost != null ? avgCost.toFixed(2) : null,
+    // What valuation/reporting should actually use: avgCost when it exists,
+    // else the manual costPerUnit estimate.
+    effectiveCost: (() => {
+      const c = effectiveCost(avgCost, item.costPerUnit);
+      return c != null ? c.toFixed(2) : null;
+    })(),
     supplier: item.supplier,
     isActive: item.isActive,
     lowStock: item.reorderLevel != null && Number(item.quantity) <= Number(item.reorderLevel),
@@ -28,7 +38,8 @@ export async function GET() {
 
   try {
     const items = await prisma.inventoryItem.findMany({ orderBy: { name: 'asc' } });
-    return NextResponse.json(items.map(serialize));
+    const avgCostMap = await getAvgCostMap(prisma, items.map((i) => i.id));
+    return NextResponse.json(items.map((item) => serialize(item, avgCostMap.get(item.id) ?? null)));
   } catch (err) {
     console.error('GET /api/admin/inventory:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

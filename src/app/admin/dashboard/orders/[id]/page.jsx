@@ -61,7 +61,7 @@ export default function OrderDetailPage() {
   const act = useCallback(async (kind) => {
     setBusy(kind); setActionError('');
     try {
-      const res = await fetch(`/api/admin/orders/${id}/${kind}`, { method:'POST' });
+      const res = await fetch(`/api/admin/orders/${id}/${kind}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok || !data.success) { setActionError(data.error || `Failed to ${kind}`); setBusy(null); return; }
       setOrder(prev => ({ ...prev, ...data.order }));
@@ -402,34 +402,66 @@ export default function OrderDetailPage() {
             </div>
           </div>
 
-          {/* Payment hold */}
-          <div className="adm-rail-card">
-            <h4>Payment hold</h4>
-            <div className="adm-kv-list">
-              <div className="adm-kv">
-                <span className="k">Provider</span>
-                <span className="v">Waafi</span>
-              </div>
-              {order.paymentTransactionId && (
+          {/* Payment */}
+          {isPos ? (
+            <div className="adm-rail-card">
+              <h4>Payment</h4>
+              <div className="adm-kv-list">
                 <div className="adm-kv">
-                  <span className="k">Pre-auth</span>
-                  <span className="v mono">{order.paymentTransactionId}</span>
+                  <span className="k">Method</span>
+                  <span className="v" style={{ textTransform: 'capitalize' }}>{order.paymentMethod || '—'}</span>
                 </div>
-              )}
-              <div className="adm-kv">
-                <span className="k">Reference</span>
-                <span className="v mono">{order.reference}</span>
-              </div>
-              <div className="adm-kv">
-                <span className="k">Placed</span>
-                <span className="v">{fmtDate(order.createdAt)} · {fmtTime(order.createdAt)}</span>
-              </div>
-              <div className="adm-kv">
-                <span className="k">Status</span>
-                <span className="v" style={{ color: cfg.pillColor }}>{cfg.label}</span>
+                <div className="adm-kv">
+                  <span className="k">Status</span>
+                  <span className="v" style={{ textTransform: 'capitalize' }}>{order.paymentStatus}</span>
+                </div>
+                {order.amountReceived != null && (
+                  <div className="adm-kv">
+                    <span className="k">Received</span>
+                    <span className="v">${Number(order.amountReceived).toFixed(2)}</span>
+                  </div>
+                )}
+                {order.invoice && (
+                  <div className="adm-kv">
+                    <span className="k">Invoice</span>
+                    <span className="v">
+                      <Link href={`/admin/dashboard/invoices/${order.invoice.id}`} style={{ textDecoration: 'underline' }}>
+                        #{order.invoice.id} · <span style={{ textTransform: 'capitalize' }}>{order.invoice.status}</span>
+                      </Link>
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="adm-rail-card">
+              <h4>Payment hold</h4>
+              <div className="adm-kv-list">
+                <div className="adm-kv">
+                  <span className="k">Provider</span>
+                  <span className="v">Waafi</span>
+                </div>
+                {order.paymentTransactionId && (
+                  <div className="adm-kv">
+                    <span className="k">Pre-auth</span>
+                    <span className="v mono">{order.paymentTransactionId}</span>
+                  </div>
+                )}
+                <div className="adm-kv">
+                  <span className="k">Reference</span>
+                  <span className="v mono">{order.reference}</span>
+                </div>
+                <div className="adm-kv">
+                  <span className="k">Placed</span>
+                  <span className="v">{fmtDate(order.createdAt)} · {fmtTime(order.createdAt)}</span>
+                </div>
+                <div className="adm-kv">
+                  <span className="k">Status</span>
+                  <span className="v" style={{ color: cfg.pillColor }}>{cfg.label}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Activity */}
           <div className="adm-rail-card">
@@ -482,6 +514,7 @@ export default function OrderDetailPage() {
         paymentMethod: order.paymentMethod,
         amountReceived: order.amountReceived,
         change: order.amountReceived != null ? Math.max(0, Number(order.amountReceived) - total) : 0,
+        invoiceId: order.invoice?.id ?? null,
         cashierName: order.staff || order.customer?.name,
         createdAt: order.createdAt,
       }} />

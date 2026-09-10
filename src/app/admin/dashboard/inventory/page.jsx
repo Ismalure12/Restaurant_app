@@ -31,7 +31,7 @@ export default function InventoryPage() {
   const [movingId, setMovingId] = useState(null);
   const [mvType, setMvType] = useState('purchase');
   const [mvQty, setMvQty] = useState('');
-  const [mvCost, setMvCost] = useState('');
+  const [mvTotalCost, setMvTotalCost] = useState('');
   const [mvNote, setMvNote] = useState('');
   const [movementError, setMovementError] = useState('');
   const [log, setLog] = useState({});
@@ -56,7 +56,9 @@ export default function InventoryPage() {
   const statusOf = (it) => (Number(it.quantity) <= 0 ? 'out' : it.lowStock ? 'low' : 'ok');
   const lowCount = useMemo(() => allItems.filter((i) => statusOf(i) === 'low').length, [allItems]);
   const outCount = useMemo(() => allItems.filter((i) => statusOf(i) === 'out').length, [allItems]);
-  const stockValue = useMemo(() => allItems.reduce((s, i) => s + Number(i.quantity) * Number(i.costPerUnit || 0), 0), [allItems]);
+  // Uses the API's effectiveCost (weighted-average purchase cost, falling
+  // back to the manual estimate) — never a stale client-side costPerUnit.
+  const stockValue = useMemo(() => allItems.reduce((s, i) => s + Number(i.quantity) * Number(i.effectiveCost || 0), 0), [allItems]);
 
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -93,14 +95,14 @@ export default function InventoryPage() {
       toast.success('Stock updated', { id: 'inv-move' });
       const { id, payload } = variables;
       setLog((prev) => ({ ...prev, [id]: [{ type: payload.type, q: payload.quantity, t: 'just now' }, ...(prev[id] || [])] }));
-      setMvQty(''); setMvCost(''); setMvNote('');
+      setMvQty(''); setMvTotalCost(''); setMvNote('');
       qc.invalidateQueries({ queryKey: ['inventory'] });
     },
     onError: (err) => { toast.dismiss('inv-move'); setMovementError(parseApiError(err)); },
   });
 
   const resetForm = () => { setForm(emptyItem); setEditingId(null); setShowForm(false); setFormError(''); };
-  const closeMovement = () => { setMovingId(null); setMvType('purchase'); setMvQty(''); setMvCost(''); setMvNote(''); setMovementError(''); };
+  const closeMovement = () => { setMovingId(null); setMvType('purchase'); setMvQty(''); setMvTotalCost(''); setMvNote(''); setMovementError(''); };
 
   const handleSubmit = (e) => {
     e.preventDefault(); setFormError('');
@@ -124,11 +126,11 @@ export default function InventoryPage() {
     if (magnitude == null || magnitude === 0) { setMovementError('Enter a non-zero quantity'); return; }
     movementMutation.mutate({
       id: movingItem.id,
-      payload: { type: mvType, quantity: magnitude, unitCost: mvType === 'purchase' ? num(mvCost) : null, note: mvNote.trim() || null },
+      payload: { type: mvType, quantity: magnitude, totalCost: mvType === 'purchase' ? num(mvTotalCost) : null, note: mvNote.trim() || null },
     });
   };
 
-  const openMovement = (item) => { setMovingId(item.id); setMvType('purchase'); setMvQty(''); setMvCost(''); setMvNote(''); setMovementError(''); };
+  const openMovement = (item) => { setMovingId(item.id); setMvType('purchase'); setMvQty(''); setMvTotalCost(''); setMvNote(''); setMovementError(''); };
 
   const isSaving = saveMutation.isPending;
   const isMoving = movementMutation.isPending;
@@ -207,6 +209,8 @@ export default function InventoryPage() {
           <div style={{ overflowX: 'auto' }}>
             <table className="table">
               <thead><tr><th>Item</th><th>On hand</th><th>Reorder at</th><th>Status</th><th className="num">Cost/unit</th><th>Supplier</th><th /></tr></thead>
+              {/* Cost/unit shows the weighted-average purchase cost (avg) once the
+                  item has purchase history, else the manual estimate (est.). */}
               <tbody>
                 {items.map((it) => {
                   const st = statusOf(it);
@@ -223,7 +227,14 @@ export default function InventoryPage() {
                       </td>
                       <td className="num" style={{ color: 'var(--muted)' }}>{it.reorderLevel ?? '—'} {it.reorderLevel ? it.unit : ''}</td>
                       <td>{statusPill(st)}</td>
-                      <td className="num">{it.costPerUnit ? money(it.costPerUnit) : '—'}</td>
+                      <td className="num">
+                        {it.effectiveCost ? (
+                          <>
+                            {money(it.effectiveCost)}{' '}
+                            <span style={{ fontSize: 10, color: 'var(--faint)', fontWeight: 500 }}>{it.avgCost ? 'avg' : 'est.'}</span>
+                          </>
+                        ) : '—'}
+                      </td>
                       <td style={{ color: 'var(--muted)' }}>{it.supplier ?? '—'}</td>
                       <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => openMovement(it)}>Movement</button>
@@ -255,7 +266,7 @@ export default function InventoryPage() {
                   <div className="ff" style={{ flex: 1 }}><label>Reorder level</label><input className="input" type="number" step="any" min="0" value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })} /></div>
                 </div>
                 <div className="ff-row">
-                  <div className="ff" style={{ flex: 1 }}><label>Cost / unit</label><input className="input" type="number" step="any" min="0" value={form.costPerUnit} onChange={(e) => setForm({ ...form, costPerUnit: e.target.value })} /></div>
+                  <div className="ff" style={{ flex: 1 }}><label>Estimated cost / unit</label><input className="input" type="number" step="any" min="0" value={form.costPerUnit} onChange={(e) => setForm({ ...form, costPerUnit: e.target.value })} placeholder="Used until purchases are logged" /></div>
                   <div className="ff" style={{ flex: 1 }}><label>Supplier</label><input className="input" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} /></div>
                 </div>
                 <label className="ff-row" style={{ cursor: 'pointer' }}>
@@ -297,7 +308,13 @@ export default function InventoryPage() {
               <div className="field-l">Quantity ({movingItem.unit}){mvType === 'adjustment' ? ' — signed' : ''}</div>
               <input className="input" type="number" step="any" value={mvQty} onChange={(e) => setMvQty(e.target.value)} placeholder="e.g. 10" />
 
-              {mvType === 'purchase' && (<><div className="field-l">Cost / unit (books an expense)</div><input className="input" type="number" step="any" min="0" value={mvCost} onChange={(e) => setMvCost(e.target.value)} placeholder="0.00" /></>)}
+              {mvType === 'purchase' && (
+                <>
+                  <div className="field-l">Total cost paid (books an expense)</div>
+                  <input className="input" type="number" step="any" min="0" value={mvTotalCost} onChange={(e) => setMvTotalCost(e.target.value)} placeholder="0.00" />
+                  <p className="empty-sub" style={{ textAlign: 'left', margin: '6px 0 0' }}>What you paid for this whole purchase — not a per-unit price. Unit cost is averaged automatically from purchase history.</p>
+                </>
+              )}
 
               <div className="field-l">Note (optional)</div>
               <input className="input" value={mvNote} onChange={(e) => setMvNote(e.target.value)} placeholder="Supplier, reason…" />
