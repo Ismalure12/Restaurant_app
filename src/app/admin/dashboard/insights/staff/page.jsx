@@ -4,34 +4,39 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
+import { KpiRowSkeleton, RowsSkeleton } from '@/components/admin/Skeletons';
 
-const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = (n) => Number(n || 0).toLocaleString('en-US');
 function toISODate(d) { return d.toISOString().slice(0, 10); }
 function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return d; }
+const PRESETS = [{ v: 'today', l: 'Today' }, { v: '7d', l: '7 days' }, { v: '30d', l: '30 days' }];
 
 function sortRows(rows, key, dir) {
   return [...rows].sort((a, b) => (dir === 'asc' ? a[key] - b[key] : b[key] - a[key]));
 }
 
 function SortTh({ k, sortKey, sortDir, onSort, children }) {
+  const active = sortKey === k;
   return (
-    <th className="num" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(k)}>
-      {children}{sortKey === k ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+    <th className="num sortable" onClick={() => onSort(k)} aria-sort={active ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}>
+      {children}{active && <span className="arr">{sortDir === 'desc' ? '↓' : '↑'}</span>}
     </th>
   );
 }
 
-function StaffTable({ title, rows, idKey, emptyMsg, style, className = '' }) {
+function StaffTable({ title, rows, idKey, emptyMsg, delay }) {
   const [sortKey, setSortKey] = useState('total');
   const [sortDir, setSortDir] = useState('desc');
   const sorted = useMemo(() => sortRows(rows, sortKey, sortDir), [rows, sortKey, sortDir]);
   const toggleSort = (key) => { if (sortKey === key) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc')); else { setSortKey(key); setSortDir('desc'); } };
 
   return (
-    <div className={`card ${className}`.trim()} style={{ overflow: 'hidden', marginBottom: 16, ...style }}>
-      <div style={{ padding: '14px 18px', fontWeight: 620, borderBottom: '1px solid var(--line)' }}>{title}</div>
-      <div style={{ overflowX: 'auto' }}>
+    <div className="card reveal" style={{ overflow: 'hidden', marginBottom: 16, animationDelay: delay }}>
+      <div className="card-h">
+        <div><div className="ttl">{title}</div><div className="note">{rows.length === 1 ? '1 person' : `${num(rows.length)} people`} with sales in range</div></div>
+      </div>
+      <div className="table-wrap">
         <table className="table">
           <thead><tr>
             <th>Name</th>
@@ -42,15 +47,15 @@ function StaffTable({ title, rows, idKey, emptyMsg, style, className = '' }) {
           </tr></thead>
           <tbody>
             {sorted.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>{emptyMsg}</td></tr>
+              <tr><td colSpan={5} className="td-empty">{emptyMsg}</td></tr>
             ) : sorted.map((r) => (
               <tr key={r[idKey] ?? 'none'}>
-                <td style={{ fontWeight: 560, color: 'var(--ink)' }}>{r.name}</td>
+                <td className="strong">{r.name}</td>
                 <td className="num">{num(r.orders)}</td>
                 <td className="num">{money(r.total)}</td>
                 <td className="num">{money(r.avgTicket)}</td>
-                <td style={{ textAlign: 'right' }}>
-                  {r[idKey] != null ? <Link href={`/admin/dashboard/insights/staff/${r[idKey]}`} className="btn btn-ghost btn-sm">View →</Link> : null}
+                <td className="act">
+                  {r[idKey] != null ? <Link href={`/admin/dashboard/insights/staff/${r[idKey]}`} className="btn btn-ghost btn-sm">Details</Link> : null}
                 </td>
               </tr>
             ))}
@@ -75,54 +80,59 @@ export default function AllStaffPerformancePage() {
     queryFn: () => fetchJson(`/api/admin/reports/summary?${new URLSearchParams(params)}`),
   });
 
-  const waiters = (rep?.waiterPerformance || []).filter((w) => w.waiterId != null);
-  const staff = (rep?.salesByStaff || []).filter((s) => s.staffId != null);
-  const topPerformer = useMemo(() => {
+  const waiters = useMemo(() => (rep?.waiterPerformance || []).filter((w) => w.waiterId != null), [rep]);
+  const staff = useMemo(() => (rep?.salesByStaff || []).filter((s) => s.staffId != null), [rep]);
+  const summary = useMemo(() => {
     const all = [...waiters, ...staff];
-    if (all.length === 0) return null;
-    return all.reduce((best, r) => (r.total > (best?.total ?? -Infinity) ? r : best), null);
+    const top = all.reduce((best, r) => (r.total > (best?.total ?? -Infinity) ? r : best), null);
+    const total = all.reduce((s, r) => s + Number(r.total || 0), 0);
+    return { top, total };
   }, [waiters, staff]);
+  const presetLabel = PRESETS.find((p) => p.v === preset)?.l.toLowerCase();
 
   return (
-    <div style={{ maxWidth: 1200 }}>
-      <nav className="adm-crumb" style={{ marginBottom: 14 }}>
+    <div className="wrap">
+      <nav className="adm-crumb">
         <Link href="/admin/dashboard/insights">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
           Insights
         </Link>
         <span className="sep">/</span>
-        <span>All staff performance</span>
+        <span>Staff performance</span>
       </nav>
 
-      <div className="toolbar reveal" style={{ marginBottom: 16 }}>
+      <div className="toolbar">
         <div className="seg">
-          {[{ v: 'today', l: 'Today' }, { v: '7d', l: '7 days' }, { v: '30d', l: '30 days' }].map((p) => (
-            <button key={p.v} className={preset === p.v ? 'active' : ''} onClick={() => setPreset(p.v)}>{p.l}</button>
-          ))}
+          {PRESETS.map((p) => <button key={p.v} className={preset === p.v ? 'active' : ''} onClick={() => setPreset(p.v)}>{p.l}</button>)}
         </div>
       </div>
 
       {isLoading ? (
-        <div className="card" style={{ overflow: 'hidden' }}>{[1, 2, 3].map((n) => <div key={n} className="sk" style={{ height: 52, margin: 12, borderRadius: 'var(--r-sm)' }} />)}</div>
+        <>
+          <KpiRowSkeleton count={3} style={{ marginBottom: 16 }} />
+          {[0, 1].map((i) => <div key={i} className="card card-pad" style={{ marginBottom: 16 }}><RowsSkeleton rows={4} /></div>)}
+        </>
       ) : (
         <>
           <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
             <div className="kpi">
-              <div className="kpi-top"><div className="kpi-ic gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" /><line x1="16" y1="8" x2="2" y2="22" /><line x1="17.5" y1="15" x2="9" y2="15" /></svg></div><span className="kpi-k">Waiters</span></div>
+              <div className="kpi-top"><div className="kpi-ic gold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /></svg></div><span className="kpi-k">Waiters</span></div>
               <div className="kpi-v">{num(waiters.length)}</div>
+              <div className="kpi-foot"><span>with sales · {presetLabel}</span></div>
             </div>
             <div className="kpi">
-              <div className="kpi-top"><div className="kpi-ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /></svg></div><span className="kpi-k">Cashiers &amp; managers</span></div>
+              <div className="kpi-top"><div className="kpi-ic sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="3" width="16" height="18" rx="2" /><rect x="7" y="6" width="10" height="4" rx="1" /></svg></div><span className="kpi-k">Cashiers &amp; managers</span></div>
               <div className="kpi-v">{num(staff.length)}</div>
+              <div className="kpi-foot"><span>{money(summary.total)} combined sales</span></div>
             </div>
             <div className="kpi">
               <div className="kpi-top"><div className="kpi-ic green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2l3 7h7l-5.5 4.5L18.5 21 12 16.5 5.5 21l2-7.5L2 9h7z" /></svg></div><span className="kpi-k">Top performer</span></div>
-              <div className="kpi-v" style={{ fontSize: 19 }}>{topPerformer?.name || '—'}</div>
-              <div className="kpi-foot"><span>{topPerformer ? money(topPerformer.total) : 'No sales in range'}</span></div>
+              <div className="kpi-v is-text">{summary.top?.name || '—'}</div>
+              <div className="kpi-foot"><span>{summary.top ? `${money(summary.top.total)} · ${num(summary.top.orders)} orders` : 'No sales in range'}</span></div>
             </div>
           </div>
-          <StaffTable title="Waiters" rows={waiters} idKey="waiterId" emptyMsg="No waiter sales in range" style={{ animationDelay: '.08s' }} className="reveal" />
-          <StaffTable title="Cashiers & managers" rows={staff} idKey="staffId" emptyMsg="No staff sales in range" style={{ animationDelay: '.12s' }} className="reveal" />
+          <StaffTable title="Waiters" rows={waiters} idKey="waiterId" emptyMsg="No waiter sales in this range" delay=".08s" />
+          <StaffTable title="Cashiers & managers" rows={staff} idKey="staffId" emptyMsg="No staff sales in this range" delay=".12s" />
         </>
       )}
     </div>

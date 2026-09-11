@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireRole, CATALOG_ROLES } from '@/lib/auth';
 import { categorySchema } from '@/lib/validations';
 import { slugify } from '@/lib/slug';
 
 export async function PUT(request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const { id } = await params;
     const body = await request.json();
@@ -41,10 +39,8 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const { id } = await params;
 

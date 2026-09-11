@@ -13,6 +13,8 @@ const STAFF = ['admin', 'manager', 'cashier'];
 const MANAGER = ['admin', 'manager'];
 const POS = ['admin', 'manager', 'cashier', 'waiter'];
 const INVOICE_ROLES = ['admin', 'manager', 'cashier'];
+// Cashiers maintain the menu; waiters never do. Mirrors CATALOG_ROLES in lib/auth.js.
+const CATALOG = ['admin', 'manager', 'cashier'];
 
 // First match wins. Overview root is exact; everything else is a prefix.
 // Overview is the full financial dashboard — manager tier and above only. A
@@ -25,8 +27,9 @@ function allowedRoles(pathname) {
   if (pathname.startsWith('/admin/dashboard/customers')) return INVOICE_ROLES;
   if (pathname.startsWith('/admin/dashboard/reports')) return MANAGER;
   if (pathname.startsWith('/admin/dashboard/insights')) return MANAGER;
-  if (pathname.startsWith('/admin/dashboard/categories')) return MANAGER;
-  if (pathname.startsWith('/admin/dashboard/menu-items')) return MANAGER;
+  if (pathname.startsWith('/admin/dashboard/expenses')) return MANAGER;
+  if (pathname.startsWith('/admin/dashboard/categories')) return CATALOG;
+  if (pathname.startsWith('/admin/dashboard/menu-items')) return CATALOG;
   if (pathname.startsWith('/admin/dashboard/users')) return MANAGER;
   if (pathname.startsWith('/admin/dashboard/settings')) return MANAGER;
   // orders, counter-orders, inventory, and anything else → back-office staff

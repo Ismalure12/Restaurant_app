@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireRole, CATALOG_ROLES } from '@/lib/auth';
 import { itemOptionSchema } from '@/lib/validations';
 
 export async function POST(request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const body = await request.json();
     const parsed = itemOptionSchema.safeParse(body);
     if (!parsed.success) {

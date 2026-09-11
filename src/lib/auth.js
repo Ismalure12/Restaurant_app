@@ -70,6 +70,13 @@ export const STAFF_ROLES = ['admin', 'manager', 'cashier'];
 // Waiters are login accounts (role 'waiter') limited to these two surfaces.
 export const POS_ROLES = ['admin', 'manager', 'cashier', 'waiter'];
 
+// Manager tier: finance (expenses, insights), staff, settings, tags.
+export const MANAGER_ROLES = ['admin', 'manager'];
+
+// May create/edit/delete the menu: items, categories, option groups,
+// options, extras and their images. Waiters are deliberately excluded.
+export const CATALOG_ROLES = ['admin', 'manager', 'cashier'];
+
 /**
  * Allows the request only if the session role is one of `roles`.
  * Mirrors requireAdmin's return shape: { session } or { error, status }.

@@ -206,6 +206,53 @@ export const posOrderSchema = z
     }
   });
 
+// ── Manager-only order correction ────────────────────────────────────────
+//
+// Editing an existing order is a FULL REPLACE of its priced content, not a
+// sparse patch, because `discountType` is never persisted — only the resolved
+// flat `discount` is — so a percentage discount can't be re-derived from the
+// stored row. The client re-states the whole order every time.
+//
+// Deliberately NOT editable: paymentMethod (would need create/void-an-invoice
+// logic), paymentStatus/status (owned by accept/decline/void), amountReceived
+// (the tender physically taken is a historical fact), waiterId/staffId (the
+// attribution keys every performance report groups by), customerId, source,
+// reference, createdAt.
+export const updateOrderSchema = z
+  .object({
+    items: z.array(posCartLineSchema).min(1, 'An order must keep at least one item — void it instead'),
+    orderType: z.enum(['dine_in', 'delivery']),
+    tableNumber: z.string().max(20).nullable().optional(),
+    discountType: z.enum(['percent', 'fixed']).nullable().optional(),
+    discountValue: z.number().min(0).nullable().optional(),
+    deliveryFee: z.number().min(0).nullable().optional(),
+    contactName: z.string().max(120).nullable().optional(),
+    contactPhone: z.string().max(40).nullable().optional(),
+    address: z.string().max(500).nullable().optional(),
+    notes: z.string().max(500).nullable().optional(),
+    // Required: an edit to money already counted in revenue with no stated
+    // reason is indistinguishable from tampering.
+    editReason: z.string({ error: 'Give a reason for the edit' }).trim().min(3, 'Give a reason for the edit').max(300),
+  })
+  .superRefine((val, ctx) => {
+    // Mirrors posOrderSchema so a correction can't produce a shape the create
+    // route would have rejected.
+    if (val.orderType === 'delivery') {
+      if (!val.contactPhone) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['contactPhone'], message: 'Contact phone is required for delivery' });
+      if (!val.address) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['address'], message: 'Address is required for delivery' });
+    }
+    if (val.discountType && (val.discountValue == null || val.discountValue <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['discountValue'], message: 'Enter a discount amount' });
+    }
+  });
+
+// Void takes only a reason. Void vs refund is DERIVED server-side from the
+// order's paymentStatus — a client flag would be a second, spoofable source of
+// truth for a money decision.
+export const voidOrderSchema = z.object({
+  reason: z.string({ error: 'Give a reason for voiding' }).trim().min(3, 'Give a reason for voiding').max(300),
+});
+
 export const inventoryItemSchema = z.object({
   name: z.string().min(1).max(160),
   unit: z.string().min(1).max(30),
@@ -227,11 +274,14 @@ export const stockMovementSchema = z.object({
   note: z.string().max(300).nullable().optional(),
 });
 
+// incurredAt accepts the form's date-only "YYYY-MM-DD" or a full ISO datetime.
+const expenseDate = z.string().refine((s) => /^\d{4}-\d{2}-\d{2}$/.test(s) || !Number.isNaN(Date.parse(s)), 'Enter a valid date');
+
 export const expenseSchema = z.object({
-  category: z.string().min(1).max(80),
-  amount: z.number().positive(),
-  note: z.string().max(300).nullable().optional(),
-  incurredAt: z.string().datetime().optional(),
+  category: z.string({ error: 'Category is required' }).trim().min(1, 'Category is required').max(80, 'Category is too long'),
+  amount: z.number({ error: 'Enter an amount' }).positive('Amount must be greater than zero').max(10000000, 'Amount is too large'),
+  note: z.string().trim().max(300, 'Note is too long').nullable().optional(),
+  incurredAt: expenseDate.optional(),
 });
 
 export const shiftSchema = z.object({

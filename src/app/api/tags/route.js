@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireRole, MANAGER_ROLES } from '@/lib/auth';
 import { tagSchema } from '@/lib/validations';
 
 export async function GET() {
@@ -14,8 +14,8 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, MANAGER_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const body = await request.json();
     const parsed = tagSchema.safeParse(body);
     if (!parsed.success) {

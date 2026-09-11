@@ -1,14 +1,15 @@
+import prisma from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getSession } from '@/lib/auth';
+import { requireRole, CATALOG_ROLES } from '@/lib/auth';
 import sharp from 'sharp';
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export async function POST(request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const formData = await request.formData();
     const file = formData.get('file');

@@ -42,7 +42,7 @@ export default function useConfirm() {
           <div className="adm-modal-body">
             <p style={{
               fontFamily: 'var(--font-inter), Inter, sans-serif',
-              fontSize: 13.5,
+              fontSize: 'var(--t-base, 14px)',
               color: 'var(--ink-2)',
               margin: 0,
               lineHeight: 1.55,

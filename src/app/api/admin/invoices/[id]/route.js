@@ -32,6 +32,8 @@ function serializeDetail(inv) {
       method: p.method,
       note: p.note,
       recordedBy: p.recorder ? (p.recorder.name || p.recorder.email) : null,
+      // Name only — the printed invoice never shows a staff login email.
+      recordedByName: p.recorder?.name?.trim() || null,
       paidAt: p.paidAt,
     })),
     createdAt: inv.createdAt,

@@ -13,6 +13,7 @@ const I = {
   orders: (<><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="M9 12h6M9 16h4" /></>),
   invoices: (<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>),
   customers: (<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M6 16c0-1.66 1.34-3 3-3s3 1.34 3 3M14 9h4M14 13h4" /></>),
+  expenses: (<><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4" /><path d="M4 6v12a2 2 0 0 0 2 2h14v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></>),
   reports: (<><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 17V11M12 17V7M16 17v-4" /></>),
   insights: (<><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 5-6" /></>),
   performance: (<><path d="M3 3v18h18" /><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14" /></>),
@@ -40,11 +41,12 @@ const NAV = [
   ]},
   { group: 'Operations', items: [
     { id: 'inventory', label: 'Inventory', href: '/admin/dashboard/inventory', roles: ['admin', 'manager', 'cashier'] },
+    { id: 'expenses', label: 'Expenses', href: '/admin/dashboard/expenses', roles: ['admin', 'manager'] },
     { id: 'staff', label: 'Staff', href: '/admin/dashboard/users', roles: ['admin', 'manager'] },
   ]},
   { group: 'Catalog', items: [
-    { id: 'menu-items', label: 'Menu Items', href: '/admin/dashboard/menu-items', roles: ['admin', 'manager'] },
-    { id: 'categories', label: 'Categories', href: '/admin/dashboard/categories', roles: ['admin', 'manager'] },
+    { id: 'menu-items', label: 'Menu Items', href: '/admin/dashboard/menu-items', roles: ['admin', 'manager', 'cashier'] },
+    { id: 'categories', label: 'Categories', href: '/admin/dashboard/categories', roles: ['admin', 'manager', 'cashier'] },
   ]},
   { group: 'System', items: [
     { id: 'settings', label: 'Settings', href: '/admin/dashboard/settings', roles: ['admin', 'manager'] },
@@ -58,9 +60,10 @@ const PAGE_HEAD = {
   '/admin/dashboard/invoices': { title: 'Invoicing', sub: 'Customer bills & payments' },
   '/admin/dashboard/customers': { title: 'Customers', sub: 'Accounts & balances owed' },
   '/admin/dashboard/reports': { title: 'Daily Report', sub: 'Sales, items & stock, day by day' },
-  '/admin/dashboard/insights': { title: 'Insights', sub: 'Profit & operations' },
+  '/admin/dashboard/insights': { title: 'Insights', sub: 'Profit & performance' },
   '/admin/dashboard/performance': { title: 'My Performance', sub: 'Your numbers' },
   '/admin/dashboard/inventory': { title: 'Inventory', sub: 'Stock & movements' },
+  '/admin/dashboard/expenses': { title: 'Expenses', sub: 'Costs & spending' },
   '/admin/dashboard/users': { title: 'Staff', sub: 'Roles, shifts & sales' },
   '/admin/dashboard/menu-items': { title: 'Menu Items', sub: 'Dishes, options & extras' },
   '/admin/dashboard/categories': { title: 'Categories', sub: 'Menu sections' },
@@ -152,8 +155,8 @@ function DashboardLayout({ children }) {
             <button className="side-user" onClick={handleLogout}>
               <span className="avatar">{initials(me?.name || me?.email)}</span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{me?.name || me?.email || 'Signed in'}</span>
-                <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'capitalize' }}>{role || '—'} · sign out</span>
+                <span className="su-nm">{me?.name || me?.email || 'Signed in'}</span>
+                <span className="su-role">{role || '—'} · sign out</span>
               </span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
             </button>
@@ -163,7 +166,7 @@ function DashboardLayout({ children }) {
         <div className="main">
           <header className="topbar">
             <button className="icon-btn menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12h18M3 6h18M3 18h18" /></svg></button>
-            <div>
+            <div className="tb-head">
               <div className="tb-title">{head.title}</div>
               {head.sub && <div className="tb-sub">{head.sub}</div>}
             </div>
@@ -176,7 +179,7 @@ function DashboardLayout({ children }) {
             </Link>
             {head.action && (
               <Link className="btn btn-primary" href={head.action.href}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" /></svg>{head.action.label}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" /></svg><span className="tb-act-l">{head.action.label}</span>
               </Link>
             )}
           </header>

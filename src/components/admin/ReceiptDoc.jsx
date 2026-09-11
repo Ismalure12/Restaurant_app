@@ -1,155 +1,195 @@
 'use client';
 
-/**
- * 80mm thermal-style receipt. Hidden on screen; only this subtree is visible
- * when window.print() runs. Print styles are scoped here via styled-jsx so the
- * public globals.css is never touched.
- *
- * order shape: { id, reference, orderType, tableNumber, items[], total,
- *                discount, deliveryFee, contactName, contactPhone, address,
- *                paymentMethod, amountReceived, change, invoiceId,
- *                cashierName, createdAt }
- */
-const METHOD_LABEL = { cash: 'Cash', card: 'Card', evc: 'EVC', invoice: 'Invoice', waafi: 'Waafi' };
-export default function ReceiptDoc({ order }) {
-  if (!order) return null;
+import { createPortal } from 'react-dom';
+import { useIsClient, useBusiness, printMoney as money, printDate, printTime } from './printShared';
 
-  const money = (n) => `$${Number(n).toFixed(2)}`;
+/**
+ * 80mm thermal receipt, laid out in the standard restaurant order: business
+ * header → document band → order meta → items with a fixed right-hand price
+ * column → totals → payment → status stamp → footer.
+ *
+ * Rendered into document.body via a portal and hidden on screen. When
+ * window.print() runs, every other body child is display:none, so the
+ * dashboard can't add blank paper to the roll.
+ *
+ * Pure black on white with a monospace face: thermal heads dither greys into
+ * mud, and proportional type breaks the price column.
+ *
+ * order: { id, reference, status?, orderType, tableNumber, items[], total,
+ *          discount, deliveryFee, contactName, contactPhone, address,
+ *          waiterName, cashierName, paymentMethod, amountReceived, change?,
+ *          invoiceId, createdAt }
+ */
+const METHOD_LABEL = { cash: 'Cash', card: 'Card', evc: 'EVC Plus', invoice: 'On account', waafi: 'Waafi' };
+
+export default function ReceiptDoc({ order }) {
+  const isClient = useIsClient();
+  const biz = useBusiness();
+  if (!order || !isClient) return null;
+
+  const items = Array.isArray(order.items) ? order.items : [];
   const when = order.createdAt ? new Date(order.createdAt) : new Date();
   const discount = Number(order.discount || 0);
   const deliveryFee = Number(order.deliveryFee || 0);
-  const subtotal = order.items.reduce((s, l) => s + Number(l.unitPrice) * l.quantity, 0);
-  // Don't infer delivery from a phone number — public dine-in orders also carry one.
+  const total = Number(order.total || 0);
+  const subtotal = items.reduce((s, l) => s + Number(l.unitPrice) * Number(l.quantity), 0);
+  const units = items.reduce((s, l) => s + Number(l.quantity || 0), 0);
+  // Don't infer delivery from a phone number — public dine-in orders carry one too.
   const isDelivery = order.orderType === 'delivery' || deliveryFee > 0;
+  const isInvoice = Boolean(order.invoiceId);
+  const voided = order.status === 'voided';
+  const received = order.amountReceived != null && order.amountReceived !== '' ? Number(order.amountReceived) : null;
+  const change = order.change != null ? Number(order.change) : (received != null ? Math.max(0, received - total) : null);
+  const title = voided ? 'VOID' : isInvoice ? 'INVOICE SALE' : isDelivery ? 'DELIVERY RECEIPT' : 'SALES RECEIPT';
+  const hasDeliveryContact = isDelivery && (order.contactName || order.contactPhone || order.address);
 
-  return (
-    <div className="receipt-print-root">
+  return createPortal(
+    <div className="rcpt-root" aria-hidden="true">
       <div className="rcpt">
-        <div className="rcpt-head">
-          <div className="rcpt-brand">Maqaaxi Pos</div>
-          <div className="rcpt-muted">Restaurant Receipt</div>
+        <header className="rc-head">
+          <div className="rc-name">{biz.name}</div>
+          {biz.address && <div className="rc-line">{biz.address}</div>}
+          {biz.phone && <div className="rc-line">Tel {biz.phone}</div>}
+          {biz.taxId && <div className="rc-line">Tax ID {biz.taxId}</div>}
+        </header>
+
+        <div className="rc-band">{title}</div>
+
+        <div className="rc-meta">
+          <div><span>Order</span><b>#{order.id}</b></div>
+          <div><span>Date</span><span>{printDate(when)} {printTime(when)}</span></div>
+          <div><span>Service</span><span>{isDelivery ? 'Delivery' : 'Dine-in'}{!isDelivery && order.tableNumber ? ` · Table ${order.tableNumber}` : ''}</span></div>
+          {order.waiterName && <div><span>Server</span><span>{order.waiterName}</span></div>}
+          {order.cashierName && <div><span>Cashier</span><span>{order.cashierName}</span></div>}
         </div>
 
-        <div className="rcpt-meta">
-          <div><span>Order</span><span>#{order.id}</span></div>
-          <div><span>Ref</span><span>{order.reference}</span></div>
-          <div><span>Service</span><span>{isDelivery ? 'Delivery' : 'Dine-in'}</span></div>
-          {!isDelivery && order.tableNumber ? <div><span>Table</span><span>{order.tableNumber}</span></div> : null}
-          {order.waiterName ? <div><span>Waiter</span><span>{order.waiterName}</span></div> : null}
-          {order.cashierName ? <div><span>Cashier</span><span>{order.cashierName}</span></div> : null}
-          <div><span>Date</span><span>{when.toLocaleString()}</span></div>
-        </div>
-
-        {isDelivery && (order.contactName || order.contactPhone || order.address) ? (
+        {hasDeliveryContact && (
           <>
-            <div className="rcpt-rule" />
-            <div className="rcpt-meta">
-              {order.contactName ? <div><span>Customer</span><span>{order.contactName}</span></div> : null}
-              {order.contactPhone ? <div><span>Phone</span><span>{order.contactPhone}</span></div> : null}
-              {order.address ? <div className="rcpt-addr"><span>Address</span><span>{order.address}</span></div> : null}
+            <div className="rc-rule" />
+            <div className="rc-sec">DELIVER TO</div>
+            <div className="rc-meta">
+              {order.contactName && <div><span>Name</span><span>{order.contactName}</span></div>}
+              {order.contactPhone && <div><span>Phone</span><span>{order.contactPhone}</span></div>}
+              {order.address && <div className="rc-addr">{order.address}</div>}
             </div>
           </>
-        ) : null}
-
-        <div className="rcpt-rule" />
-
-        <div className="rcpt-lines">
-          {order.items.map((line, i) => {
-            const lineTotal = Number(line.unitPrice) * line.quantity;
-            return (
-              <div className="rcpt-line" key={line.uid || i}>
-                <div className="rcpt-line-top">
-                  <span>{line.quantity}× {line.name}</span>
-                  <span>{money(lineTotal)}</span>
-                </div>
-                {line.optionName ? <div className="rcpt-sub">{line.optionName}</div> : null}
-                {line.extras && line.extras.length > 0 ? (
-                  <div className="rcpt-sub">+ {line.extras.map((e) => e.name).join(', ')}</div>
-                ) : null}
-                {line.notes ? <div className="rcpt-sub">Note: {line.notes}</div> : null}
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="rcpt-rule" />
-
-        {(discount > 0 || deliveryFee > 0) ? (
-          <div className="rcpt-sums">
-            <div><span>Subtotal</span><span>{money(subtotal)}</span></div>
-            {discount > 0 ? <div><span>Discount</span><span>−{money(discount)}</span></div> : null}
-            {deliveryFee > 0 ? <div><span>Delivery</span><span>{money(deliveryFee)}</span></div> : null}
-          </div>
-        ) : null}
-
-        <div className="rcpt-total">
-          <span>TOTAL</span><span>{money(order.total)}</span>
-        </div>
-
-        {order.paymentMethod ? (
-          <div className="rcpt-sums" style={{ marginTop: 4 }}>
-            <div><span>Payment</span><span>{METHOD_LABEL[order.paymentMethod] || order.paymentMethod}</span></div>
-            {order.amountReceived != null ? <div><span>Received</span><span>{money(order.amountReceived)}</span></div> : null}
-            {order.change != null && order.change > 0 ? <div><span>Change</span><span>{money(order.change)}</span></div> : null}
-          </div>
-        ) : null}
-
-        {order.invoiceId ? (
-          <div className="rcpt-paid" style={{ color: '#000' }}>— INVOICE #{order.invoiceId}: BALANCE DUE —</div>
-        ) : (
-          <div className="rcpt-paid">— PAID —</div>
         )}
 
-        <div className="rcpt-foot">Thank you · Maqaaxi Pos</div>
+        <div className="rc-rule" />
+        <div className="rc-cols"><span>QTY</span><span>ITEM</span><span>AMOUNT</span></div>
+        <div className="rc-rule thin" />
+
+        {items.map((line, i) => {
+          const qty = Number(line.quantity);
+          const unit = Number(line.unitPrice);
+          const extras = Array.isArray(line.extras) && line.extras.length ? line.extras.map((e) => e.name).join(', ') : '';
+          return (
+            <div className="rc-item" key={line.uid || i}>
+              <span className="q">{qty}</span>
+              <span className="n">
+                {line.name}
+                {line.optionName && <span className="mod">{line.optionName}</span>}
+                {extras && <span className="mod">+ {extras}</span>}
+                {line.notes && <span className="mod">* {line.notes}</span>}
+                {qty > 1 && <span className="mod">@ {money(unit)} each</span>}
+              </span>
+              <span className="a">{money(unit * qty)}</span>
+            </div>
+          );
+        })}
+
+        <div className="rc-rule" />
+        <div className="rc-sum"><span>Items</span><span>{units}</span></div>
+        <div className="rc-sum"><span>Subtotal</span><span>{money(subtotal)}</span></div>
+        {discount > 0 && <div className="rc-sum"><span>Discount</span><span>-{money(discount)}</span></div>}
+        {deliveryFee > 0 && <div className="rc-sum"><span>Delivery fee</span><span>{money(deliveryFee)}</span></div>}
+
+        <div className="rc-total"><span>TOTAL</span><span>{money(total)}</span></div>
+
+        {order.paymentMethod && !isInvoice && (
+          <>
+            <div className="rc-sum"><span>Paid by</span><span>{METHOD_LABEL[order.paymentMethod] || order.paymentMethod}</span></div>
+            {received != null && <div className="rc-sum"><span>Tendered</span><span>{money(received)}</span></div>}
+            {change != null && change > 0 && <div className="rc-sum strong"><span>Change</span><span>{money(change)}</span></div>}
+          </>
+        )}
+
+        {biz.evcAccount && !voided && (order.paymentMethod === 'evc' || isInvoice) && (
+          <div className="rc-evc">
+            <div className="rc-sec">PAY BY EVC PLUS</div>
+            <div className="rc-evc-no">{biz.evcAccount}</div>
+            <div className="rc-line">{biz.name}</div>
+          </div>
+        )}
+
+        {voided
+          ? <div className="rc-stamp">*** VOID · NOT A VALID RECEIPT ***</div>
+          : isInvoice
+            ? <div className="rc-stamp">BALANCE DUE · INVOICE #{order.invoiceId}</div>
+            : <div className="rc-stamp">PAID IN FULL</div>}
+
+        <div className="rc-rule" />
+        <footer className="rc-foot">
+          <div className="rc-msg">{biz.footer || 'Thank you for dining with us!'}</div>
+          {order.reference && <div className="rc-ref">Ref {order.reference}</div>}
+          <div className="rc-ref">Maqaaxi POS</div>
+        </footer>
       </div>
 
       <style jsx global>{`
-        .receipt-print-root { display: none; }
+        .rcpt-root { display: none; }
 
         @media print {
-          body * { visibility: hidden; }
-          .receipt-print-root,
-          .receipt-print-root * { visibility: visible; }
-          .receipt-print-root {
-            display: block;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 80mm;
-          }
+          body > *:not(.rcpt-root) { display: none !important; }
+          .rcpt-root { display: block !important; }
+          html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
           @page { size: 80mm auto; margin: 0; }
         }
 
-        /* Pure black on white — thermal printers render greys as muddy dither. */
         .rcpt {
           width: 80mm;
-          padding: 6mm 4mm;
+          padding: 5mm 4mm 8mm;
           box-sizing: border-box;
-          font-family: 'Courier New', ui-monospace, monospace;
+          font-family: "Consolas", "Lucida Console", "Menlo", "Courier New", monospace;
+          font-size: 12.5px;
+          line-height: 1.35;
           color: #000;
           background: #fff;
-          font-size: 12px;
-          line-height: 1.4;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
         }
-        .rcpt * { color: #000 !important; }
-        .rcpt-head { text-align: center; margin-bottom: 6px; }
-        .rcpt-brand { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
-        .rcpt-muted { font-size: 11px; }
-        .rcpt-meta div,
-        .rcpt-sums div,
-        .rcpt-total { display: flex; justify-content: space-between; gap: 8px; }
-        .rcpt-sums { margin-bottom: 4px; }
-        .rcpt-addr span:last-child { text-align: right; max-width: 60%; }
-        .rcpt-rule { border-top: 1px dashed #000; margin: 6px 0; }
-        .rcpt-line { margin-bottom: 4px; }
-        .rcpt-line-top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
-        .rcpt-sub { font-size: 11px; padding-left: 10px; }
-        .rcpt-total { font-weight: 700; font-size: 14px; margin: 4px 0; }
-        .rcpt-paid { text-align: center; font-weight: 700; letter-spacing: 2px; margin-top: 8px; font-size: 13px; }
-        .rcpt-foot { text-align: center; margin-top: 8px; font-size: 11px; }
+        .rcpt * { box-sizing: border-box; }
+        .rc-head { text-align: center; margin-bottom: 6px; }
+        .rc-name { font-size: 18px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; overflow-wrap: anywhere; }
+        .rc-line { font-size: 11.5px; margin-top: 2px; overflow-wrap: anywhere; }
+        .rc-band { background: #000; color: #fff; text-align: center; font-weight: 700; letter-spacing: .2em; font-size: 12px; padding: 4px 0; margin: 6px 0 8px; }
+        .rc-meta > div { display: flex; justify-content: space-between; gap: 10px; }
+        .rc-meta > div > :first-child { flex-shrink: 0; }
+        .rc-meta > div > :last-child { text-align: right; overflow-wrap: anywhere; }
+        .rc-meta .rc-addr { display: block; text-align: left; overflow-wrap: anywhere; }
+        .rc-sec { font-weight: 700; letter-spacing: .12em; font-size: 11px; margin-bottom: 2px; }
+        .rc-rule { border-top: 1px dashed #000; margin: 7px 0; }
+        .rc-rule.thin { margin: 3px 0 6px; }
+        .rc-cols, .rc-item { display: grid; grid-template-columns: 3.5ch 1fr auto; column-gap: 8px; }
+        .rc-cols { font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+        .rc-cols > :last-child, .rc-item .a { text-align: right; }
+        .rc-item { margin-bottom: 6px; align-items: start; }
+        .rc-item .q { font-weight: 700; }
+        .rc-item .n { font-weight: 600; overflow-wrap: anywhere; }
+        .rc-item .a { white-space: nowrap; font-weight: 600; }
+        .rc-item .mod { display: block; font-weight: 400; font-size: 11.5px; }
+        .rc-sum { display: flex; justify-content: space-between; gap: 10px; }
+        .rc-sum.strong { font-weight: 700; }
+        .rc-total { display: flex; justify-content: space-between; gap: 10px; font-size: 17px; font-weight: 800; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 0; margin: 7px 0; }
+        .rc-evc { text-align: center; border: 1.5px dashed #000; padding: 6px 4px; margin: 9px 0 2px; }
+        .rc-evc .rc-sec { margin-bottom: 1px; }
+        .rc-evc-no { font-size: 17px; font-weight: 800; letter-spacing: .06em; overflow-wrap: anywhere; }
+        .rc-stamp { text-align: center; font-weight: 800; letter-spacing: .08em; border: 1.5px solid #000; padding: 5px 4px; margin: 9px 0 2px; font-size: 12.5px; }
+        .rc-foot { text-align: center; }
+        .rc-msg { font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+        .rc-ref { font-size: 10.5px; overflow-wrap: anywhere; }
       `}</style>
-    </div>
+    </div>,
+    document.body,
   );
 }

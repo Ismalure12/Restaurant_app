@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { requirePos } from '@/lib/auth';
 import { posOrderSchema } from '@/lib/validations';
 import { priceCart } from '@/lib/cartPricing';
+import { computeOrderTotals } from '@/lib/orderTotals';
 
 export async function POST(request) {
   const auth = await requirePos(prisma);
@@ -42,21 +43,12 @@ export async function POST(request) {
       return NextResponse.json({ error: priced.error }, { status: 400 });
     }
     const pricedItems = priced.lines;
-    const subtotal = priced.totalCents / 100;
 
-    // Resolve discount from type/value, clamped to [0, subtotal].
-    let discount = 0;
-    if (discountType && discountValue > 0) {
-      discount = discountType === 'percent' ? (subtotal * discountValue) / 100 : discountValue;
-    }
-    discount = Math.min(Math.max(discount, 0), subtotal);
-    discount = Math.round(discount * 100) / 100;
-
-    // Delivery fee only applies to delivery orders.
-    const delivery = orderType === 'delivery' ? Math.max(deliveryFee || 0, 0) : 0;
-
-    const total = Math.round((subtotal - discount + delivery) * 100) / 100;
-    if (!(total > 0)) return NextResponse.json({ error: 'Order total must be greater than zero' }, { status: 400 });
+    // Discount clamping, delivery-fee rule and rounding live in one shared
+    // helper so the manager edit route prices a correction identically.
+    const totals = computeOrderTotals({ totalCents: priced.totalCents, discountType, discountValue, orderType, deliveryFee });
+    if (totals.error) return NextResponse.json({ error: totals.error }, { status: 400 });
+    const { subtotal, discount, delivery, total } = totals;
 
     const isInvoice = paymentMethod === 'invoice';
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireRole, CATALOG_ROLES } from '@/lib/auth';
 import { menuItemSchema, itemTagsSchema } from '@/lib/validations';
 
 export async function GET(_request, { params }) {
@@ -28,8 +28,8 @@ export async function GET(_request, { params }) {
 
 export async function PUT(request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const { id } = await params;
     const body = await request.json();
@@ -86,8 +86,8 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(_request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, CATALOG_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const { id } = await params;
     await prisma.menuItem.delete({ where: { id: parseInt(id) } });

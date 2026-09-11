@@ -53,7 +53,7 @@ export default function PosPage() {
   const [receipt, setReceipt] = useState(null);
 
   useEffect(() => {
-    fetch('/api/auth/me').then((r) => r.json()).then((d) => { setMe(d); setCashier(d.name || d.email || ''); }).catch(() => {});
+    fetch('/api/auth/me').then((r) => r.json()).then((d) => { setMe(d); setCashier(d.name || ''); }).catch(() => {});
   }, []);
 
   const { data: categories = [] } = useQuery({ queryKey: ['pos-categories'], queryFn: () => fetchJson('/api/categories') });
@@ -174,7 +174,8 @@ export default function PosPage() {
         contactName: deliveryOn ? contactName.trim() : null,
         contactPhone: deliveryOn ? contactPhone.trim() : null,
         address: deliveryOn ? address.trim() : null,
-        waiterName: effWaiterId ? (isWaiterSelf ? (me.name || me.email) : waiters.find((w) => String(w.id) === String(effWaiterId))?.name) ?? null : null,
+        // Receipts print real names only — never a login email.
+        waiterName: effWaiterId ? (isWaiterSelf ? (me?.name || null) : waiters.find((w) => String(w.id) === String(effWaiterId))?.name) ?? null : null,
         cashierName: cashier, createdAt: new Date().toISOString(),
         paymentMethod: order.paymentMethod,
         amountReceived: received,
@@ -196,9 +197,9 @@ export default function PosPage() {
       {/* LEFT — menu */}
       <section className="pos-menu">
         <div className="pos-menu-top">
-          <div className="search" style={{ width: '100%' }}>
+          <div className="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the menu…" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the menu…" aria-label="Search the menu" />
           </div>
           <div className="pos-cats">
             <button className={`pos-cat${activeCat === 'all' ? ' on' : ''}`} onClick={() => setActiveCat('all')}>All</button>
@@ -209,7 +210,7 @@ export default function PosPage() {
           {isLoading
             ? [1, 2, 3, 4, 5, 6].map((n) => <div key={n} className="sk" style={{ height: 180, borderRadius: 'var(--r-md)' }} />)
             : visibleItems.length === 0
-              ? <div className="sub" style={{ padding: 30 }}>No items found.</div>
+              ? <div className="empty"><div className="empty-ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg></div><p className="empty-title">No items found</p><p className="empty-sub">Try another search or category.</p></div>
               : visibleItems.map((item) => {
                 const hasChoices = item.optionGroups?.length > 0 || item.extras?.length > 0;
                 return (
@@ -245,7 +246,7 @@ export default function PosPage() {
                   {!isWaiterSelf && waiters.length > 0 && (
                     <select className="input" value={waiterId} onChange={(e) => setWaiterId(e.target.value)}>
                       <option value="">Waiter (optional)</option>
-                      {waiters.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                      {waiters.map((w) => <option key={w.id} value={w.id}>{w.label || w.name}</option>)}
                     </select>
                   )}
                 </>
@@ -254,7 +255,7 @@ export default function PosPage() {
                   <input className="input" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Customer name (optional)" />
                   <input className="input" type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone — required" />
                   <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address" />
-                  <div className="fee-field"><span className="fee-lbl">Delivery fee</span><input className="input" type="number" min="0" step="0.5" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)} /><span className="fee-hint sub" style={{ fontSize: 10.5 }}>from settings</span></div>
+                  <div className="fee-field"><span className="fee-lbl">Delivery fee</span><input className="input" type="number" min="0" step="0.5" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)} aria-label="Delivery fee" /><span className="fee-hint">default from Settings</span></div>
                 </>
               )}
             </div>
@@ -265,18 +266,18 @@ export default function PosPage() {
           <div className="ticket-lines">
             <div className="ticket-empty">
               <div className="er"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="26" height="26"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg></div>
-              <div style={{ fontWeight: 600, color: 'var(--ink)' }}>Ticket is empty</div>
-              <div className="empty-sub" style={{ marginTop: 3 }}>Tap a menu item to start the order.</div>
+              <div className="et">Ticket is empty</div>
+              <div className="sub">Tap a menu item to start the order.</div>
             </div>
           </div>
         ) : placed ? (
           <div className="pos-placed">
             <div className="pos-placed-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 26, height: 26 }}><path d="M20 6 9 17l-5-5" /></svg></div>
             <div className="h-2">{placed.invoiceId ? `Invoice #${placed.invoiceId} created` : `Order #${placed.id} placed`}</div>
-            <div className="sub" style={{ marginBottom: 16 }}>{placed.invoiceId ? 'Balance due from the customer — receipt sent to the printer.' : 'Receipt sent to the printer.'}</div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => window.print()}>Reprint</button>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={resetOrder}>New order</button>
+            <div className="sub">{placed.invoiceId ? 'Balance due from the customer — receipt sent to the printer.' : 'Receipt sent to the printer.'}</div>
+            <div className="acts">
+              <button className="btn btn-ghost" onClick={() => window.print()}>Reprint</button>
+              <button className="btn btn-primary" onClick={resetOrder}>New order</button>
             </div>
           </div>
         ) : (
@@ -293,9 +294,9 @@ export default function PosPage() {
                 <div className="tline-r">
                   <span className="tline-pr">{money(l.unitPrice * l.quantity)}</span>
                   <span className="tline-steps">
-                    <button onClick={() => changeQty(l.uid, -1)}>−</button>
+                    <button onClick={() => changeQty(l.uid, -1)} aria-label={`Decrease ${l.name}`}>−</button>
                     <span>{l.quantity}</span>
-                    <button onClick={() => changeQty(l.uid, 1)}>+</button>
+                    <button onClick={() => changeQty(l.uid, 1)} aria-label={`Increase ${l.name}`}>+</button>
                   </span>
                 </div>
               </div>
@@ -306,7 +307,7 @@ export default function PosPage() {
         {cart.length > 0 && !placed && (
           <div className="ticket-foot">
             <div className="disc-row">
-              <input className="input" type="number" min="0" value={discount.value} onChange={(e) => setDiscount((d) => ({ ...d, value: e.target.value }))} placeholder="Discount" style={{ height: 34, fontSize: '12.5px' }} />
+              <input className="input" type="number" min="0" value={discount.value} onChange={(e) => setDiscount((d) => ({ ...d, value: e.target.value }))} placeholder="Discount" aria-label="Discount" />
               <div className="seg" style={{ flexShrink: 0 }}>
                 <button className={discount.type === 'percent' ? 'active' : ''} onClick={() => setDiscount((d) => ({ ...d, type: 'percent' }))}>%</button>
                 <button className={discount.type === 'fixed' ? 'active' : ''} onClick={() => setDiscount((d) => ({ ...d, type: 'fixed' }))}>$</button>
@@ -317,7 +318,7 @@ export default function PosPage() {
             {delivery > 0 && <div className="tf-row"><span>Delivery fee</span><span className="v">{money(delivery)}</span></div>}
             <div className="tf-row total"><span>Total</span><span className="v">{money(total)}</span></div>
 
-            <div className="field-l" style={{ marginTop: 10 }}>Payment method</div>
+            <div className="field-l">Payment method</div>
             <div className="chips">
               {[{ v: 'cash', label: 'Cash' }, { v: 'card', label: 'Card' }, { v: 'evc', label: 'EVC' }, { v: 'invoice', label: 'Invoice' }].map((m) => (
                 <button key={m.v} type="button" className={`chip2${paymentMethod === m.v ? ' on' : ''}`} onClick={() => setPaymentMethod(m.v)}>{m.label}</button>
@@ -325,26 +326,32 @@ export default function PosPage() {
             </div>
 
             {paymentMethod === 'cash' && (
-              <div className="disc-row" style={{ marginTop: 8 }}>
-                <input className="input" type="number" min="0" step="0.01" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="Amount received (optional)" style={{ height: 34, fontSize: '12.5px' }} />
-                {Number(amountReceived) > total && <span className="v" style={{ alignSelf: 'center', color: 'var(--primary)', fontSize: 12.5, whiteSpace: 'nowrap' }}>Change {money(Number(amountReceived) - total)}</span>}
-              </div>
+              <>
+                <div className="disc-row" style={{ marginTop: 8, marginBottom: 0 }}>
+                  <input className="input" type="number" min="0" step="0.01" value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} placeholder="Cash received (optional)" aria-label="Cash received" />
+                </div>
+                {Number(amountReceived) > total && <div className="tf-change"><span>Change due</span><span className="v">{money(Number(amountReceived) - total)}</span></div>}
+                {amountReceived !== '' && Number(amountReceived) < total && <div className="field-err" style={{ marginTop: 6 }}>Received is less than the total.</div>}
+              </>
             )}
 
             {isInvoice && (
-              <div style={{ marginTop: 8, padding: 10, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 12 }}>
-                <div className="empty-sub" style={{ textAlign: 'left', marginBottom: 8 }}>Bill this customer instead of collecting payment now.</div>
+              <div className="ticket-sec">
+                <div className="note">Bill this customer instead of collecting payment now.</div>
                 <CustomerPicker
                   customerId={invoiceCustomer.customerId}
                   customer={invoiceCustomer.customer}
                   onChange={setInvoiceCustomer}
                   disabled={placing}
                 />
-                <input className="input" type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} placeholder="Due date (optional)" style={{ marginTop: 8 }} />
+                <div>
+                  <div className="field-l" style={{ marginTop: 0 }}>Due date (optional)</div>
+                  <input className="input" type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} aria-label="Invoice due date" />
+                </div>
               </div>
             )}
 
-            <button className="btn btn-primary" style={{ width: '100%', height: 46, fontSize: 14, marginTop: 12 }} disabled={placing} onClick={placeOrder}>
+            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 12 }} disabled={placing} onClick={placeOrder}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" /></svg>{placing ? 'Placing…' : isInvoice ? 'Create invoice & print' : 'Place order & print'}
             </button>
           </div>

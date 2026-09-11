@@ -19,6 +19,16 @@ const platformInfo = (p) => PLATFORMS.find((x) => x.value === p) || { value: p, 
 const placeholderFor = (p) => (p === 'phone' || p === 'whatsapp') ? '+252 70 000 0000' : 'https://example.com';
 const VARIANTS = [{ value: 'default', label: 'Blue', dot: 'var(--primary)' }, { value: 'green', label: 'Green', dot: 'var(--primary-2)' }, { value: 'spicy', label: 'Spicy', dot: 'var(--rose)' }];
 const variantDot = (v) => (VARIANTS.find((x) => x.value === v) || VARIANTS[0]).dot;
+// [field, label, wide (textarea), placeholder, input type]
+const BIZ_FIELDS = [
+  ['businessName', 'Business name', false, 'e.g. Hotel Jazeera Restaurant'],
+  ['businessPhone', 'Phone', false, '+252 61 000 0000', 'tel'],
+  ['businessAddress', 'Address', false, 'Street, district, city'],
+  ['taxId', 'Tax ID (optional)', false, 'Shown under the address'],
+  ['evcAccount', 'EVC Plus number', false, 'Customers send EVC payments here', 'tel'],
+  ['receiptFooter', 'Receipt message', true, 'Thank you for dining with us!'],
+  ['invoiceTerms', 'Invoice payment terms', true, 'Payment is due by the due date shown above.'],
+];
 const slugify = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function SectionHead({ icon, gold, title, sub, action }) {
@@ -58,6 +68,22 @@ export default function SettingsPage() {
   });
   const submitFee = (e) => { e.preventDefault(); const v = parseFloat(feeValue); if (isNaN(v) || v < 0) { toast.error('Enter a valid amount'); return; } saveFee.mutate(v); };
 
+  // Business identity printed on receipts and invoices. `biz` is a local
+  // draft; null means "show what's saved".
+  const [biz, setBiz] = useState(null);
+  const bizValues = biz ?? Object.fromEntries(BIZ_FIELDS.map(([k]) => [k, settings?.[k] ?? '']));
+  const setBizField = (k, v) => setBiz({ ...bizValues, [k]: v });
+  const saveBiz = useMutation({
+    mutationFn: (payload) => fetchJson('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
+    onSuccess: (d) => { toast.success('Receipt details saved'); qc.setQueryData(['settings'], d); qc.invalidateQueries({ queryKey: ['pos-settings'] }); setBiz(null); },
+    onError: (e) => toast.error(parseApiError(e)),
+  });
+  const submitBiz = (e) => {
+    e.preventDefault();
+    if (!bizValues.businessName.trim()) { toast.error('Business name is required — it heads every receipt'); return; }
+    saveBiz.mutate(bizValues);
+  };
+
   const { data: links = [] } = useQuery({ queryKey: ['social-links'], queryFn: () => fetchJson('/api/social-links') });
   const [linkModal, setLinkModal] = useState(null);
   const [linkForm, setLinkForm] = useState({ platform: '', value: '' });
@@ -89,6 +115,25 @@ export default function SettingsPage() {
   return (
     <div className="set-wrap">
       {dialog}
+      <section className="card set-sec">
+        <SectionHead gold icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2h16v20l-3-2-3 2-2-2-2 2-3-2-3 2z" /><path d="M8 7h8M8 11h8M8 15h5" /></svg>} title="Receipt & business details" sub="Printed at the top of every receipt and invoice. Keep the phone and address current so customers can reach you." />
+        <div className="set-body">
+          <form className="set-form" onSubmit={submitBiz}>
+            <div className="form-grid">
+              {BIZ_FIELDS.filter(([, , wide]) => !wide).map(([k, label, , ph, type]) => (
+                <div className="ff" key={k}><label htmlFor={`biz-${k}`}>{label}</label><input id={`biz-${k}`} className="input" type={type || 'text'} value={bizValues[k]} onChange={(e) => setBizField(k, e.target.value)} placeholder={ph} /></div>
+              ))}
+            </div>
+            {BIZ_FIELDS.filter(([, , wide]) => wide).map(([k, label, , ph]) => (
+              <div className="ff" key={k}><label htmlFor={`biz-${k}`}>{label}</label><textarea id={`biz-${k}`} className="input" rows={2} value={bizValues[k]} onChange={(e) => setBizField(k, e.target.value)} placeholder={ph} /></div>
+            ))}
+            <div className="set-actions">
+              {biz && <button type="button" className="btn btn-ghost" onClick={() => setBiz(null)} disabled={saveBiz.isPending}>Discard changes</button>}
+              <button type="submit" className="btn btn-primary" disabled={saveBiz.isPending || !biz}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg>{saveBiz.isPending ? 'Saving…' : 'Save details'}</button>
+            </div>
+          </form>
+        </div>
+      </section>
       <section className="card set-sec">
         <SectionHead icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H3v12M14 9h4l3 3v6M3 18h11" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>} title="Delivery" sub="The standard delivery fee. It's applied automatically to delivery orders at the Register — cashiers can still edit it per order." />
         <div className="set-body">

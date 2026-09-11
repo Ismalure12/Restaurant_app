@@ -64,11 +64,29 @@ export async function GET(request) {
 
     const hasMore = invoices.length > take;
     const page = hasMore ? invoices.slice(0, take) : invoices;
+    const result = { invoices: page.map(serialize), nextCursor: hasMore ? page[page.length - 1].id : null };
 
-    return NextResponse.json({
-      invoices: page.map(serialize),
-      nextCursor: hasMore ? page[page.length - 1].id : null,
-    });
+    // Header figures for the whole filtered set — the list itself is paginated,
+    // so totals summed client-side from one page would undercount.
+    if (!Number.isFinite(cursorParam)) {
+      const within = (extra) => ({ AND: [where, extra] });
+      const OPEN = { status: { in: ['unpaid', 'partial'] } };
+      const [live, open, overdue] = await Promise.all([
+        prisma.invoice.aggregate({ where: within({ status: { not: 'void' } }), _sum: { total: true, amountPaid: true }, _count: { _all: true } }),
+        prisma.invoice.aggregate({ where: within(OPEN), _sum: { total: true, amountPaid: true }, _count: { _all: true } }),
+        prisma.invoice.count({ where: within({ ...OPEN, dueDate: { lt: new Date() } }) }),
+      ]);
+      result.summary = {
+        count: live._count._all,
+        invoicedTotal: Number(live._sum.total || 0).toFixed(2),
+        collected: Number(live._sum.amountPaid || 0).toFixed(2),
+        outstanding: Math.max(0, Number(open._sum.total || 0) - Number(open._sum.amountPaid || 0)).toFixed(2),
+        openCount: open._count._all,
+        overdue,
+      };
+    }
+
+    return NextResponse.json(result);
   } catch (err) {
     console.error('GET /api/admin/invoices:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

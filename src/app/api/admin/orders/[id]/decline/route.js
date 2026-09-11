@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaff } from '@/lib/auth';
 import { waafiCancel } from '@/lib/waafi';
+import { ORDER_INCLUDE, serializeOrder } from '@/lib/orderSerialize';
 
 export const maxDuration = 60;
 
+// Declining a pending online order releases the customer's pre-authorized
+// funds — counter work open to any back-office staff member.
 export async function POST(request, { params }) {
-  const auth = await requireAdmin(prisma);
+  const auth = await requireStaff(prisma);
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { id } = await params;
@@ -16,10 +19,7 @@ export async function POST(request, { params }) {
   }
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { customer: { select: { name: true, phone: true } } },
-    });
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
@@ -43,29 +43,19 @@ export async function POST(request, { params }) {
       );
     }
 
-    const updated = await prisma.order.update({
-      where: { id: order.id },
+    const written = await prisma.order.updateMany({
+      where: { id: order.id, status: 'pending' },
       data: { status: 'declined' },
-      include: { customer: { select: { name: true, phone: true } } },
     });
+    if (written.count === 0) {
+      console.error(`POST /api/admin/orders/[id]/decline: hold released but order ${order.reference} was no longer pending`);
+      return NextResponse.json({ error: 'The hold was released but the order changed at the same time — check this order before acting again' }, { status: 409 });
+    }
 
-    return NextResponse.json({
-      success: true,
-      order: {
-        id: updated.id,
-        reference: updated.reference,
-        status: updated.status,
-        total: updated.total.toString(),
-        address: updated.address,
-        orderType: updated.orderType,
-        tableNumber: updated.tableNumber,
-        items: updated.items,
-        createdAt: updated.createdAt,
-        customer: updated.customer,
-      },
-    });
+    const updated = await prisma.order.findUnique({ where: { id: order.id }, include: ORDER_INCLUDE });
+    return NextResponse.json({ success: true, order: serializeOrder(updated) });
   } catch (err) {
-    console.error('POST /api/admin/orders/[id]/decline:', err);
+    console.error(`POST /api/admin/orders/[id]/decline (order ${orderId}):`, err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

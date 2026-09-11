@@ -23,6 +23,8 @@ model AdminUser {
 
   ordersTaken             Order[]          @relation("OrderStaff")
   ordersServed            Order[]          @relation("OrderWaiter")
+  ordersEdited            Order[]          @relation("OrderEditor")
+  ordersVoided            Order[]          @relation("OrderVoider")
   shifts                  Shift[]
   stockMovements          StockMovement[]
   expenses                Expense[]
@@ -196,20 +198,40 @@ model Order {
   contactPhone         String?  @map("contact_phone")
   // waiter the order is attributed to — a login AdminUser with role 'waiter'
   waiterId             Int?     @map("waiter_id")
-  // pending = preauth held, awaiting admin · confirmed = admin accepted, captured · declined = admin declined, refunded
+  // pending = preauth held, awaiting admin · confirmed = accepted/captured ·
+  // declined = pre-auth released · voided = manager cancelled the sale (terminal)
   status               String   @default("pending")
   reference            String   @unique
   paymentTransactionId String?  @map("payment_transaction_id")
   createdAt            DateTime @default(now()) @map("created_at")
+  // Last write of any kind. Nullable so rows predating the column stay NULL
+  // (truthfully "never touched"); doubles as the optimistic-concurrency token
+  // the edit/void routes guard their writes on.
+  updatedAt            DateTime? @updatedAt @map("updated_at")
+  // Manager correction of the sale's content: who, when, why.
+  editedById           Int?      @map("edited_by_id")
+  editedAt             DateTime? @map("edited_at")
+  editReason           String?   @map("edit_reason")
+  // Void / refund of the whole sale. Terminal — never cleared.
+  voidedById           Int?      @map("voided_by_id")
+  voidedAt             DateTime? @map("voided_at")
+  voidReason           String?   @map("void_reason")
   customer             Customer?  @relation(fields: [customerId], references: [id])
   staff                AdminUser? @relation("OrderStaff", fields: [staffId], references: [id])
   waiter               AdminUser? @relation("OrderWaiter", fields: [waiterId], references: [id])
+  editor               AdminUser? @relation("OrderEditor", fields: [editedById], references: [id])
+  voider               AdminUser? @relation("OrderVoider", fields: [voidedById], references: [id])
   // Set only when paymentMethod = 'invoice' — the sale was billed to a
   // customer's account instead of collected at the counter.
   invoice              Invoice?
 
   @@index([staffId])
   @@index([waiterId])
+  @@index([editedById])
+  @@index([voidedById])
+  // Every revenue aggregate filters on this pair; voiding makes paymentStatus
+  // the load-bearing revenue filter.
+  @@index([paymentStatus, createdAt])
   @@map("orders")
 }
 

@@ -425,7 +425,7 @@ export default function OrderDetailPage() {
                   <div className="adm-kv">
                     <span className="k">Invoice</span>
                     <span className="v">
-                      <Link href={`/admin/dashboard/invoices/${order.invoice.id}`} style={{ textDecoration: 'underline' }}>
+                      <Link href={order.customer?.id ? `/admin/dashboard/customers/${order.customer.id}/invoices/${order.invoice.id}` : `/admin/dashboard/invoices/${order.invoice.id}`} style={{ textDecoration: 'underline' }}>
                         #{order.invoice.id} · <span style={{ textTransform: 'capitalize' }}>{order.invoice.status}</span>
                       </Link>
                     </span>

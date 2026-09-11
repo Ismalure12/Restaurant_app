@@ -15,7 +15,7 @@ export async function GET(request, { params }) {
     const customer = await prisma.customer.findFirst({ where: { id } });
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
 
-    const [balanceAgg, invoices] = await Promise.all([
+    const [balanceAgg, invoices, invoiceCount, openCount] = await Promise.all([
       prisma.invoice.aggregate({
         where: { customerId: id, status: { not: 'void' } },
         _sum: { total: true, amountPaid: true },
@@ -26,6 +26,9 @@ export async function GET(request, { params }) {
         take: 50,
         select: { id: true, total: true, amountPaid: true, status: true, dueDate: true, tableNumber: true, createdAt: true },
       }),
+      // True counts — the history list above is capped at 50.
+      prisma.invoice.count({ where: { customerId: id } }),
+      prisma.invoice.count({ where: { customerId: id, status: { in: ['unpaid', 'partial'] } } }),
     ]);
     const owedBalance = Math.max(0, Number(balanceAgg._sum.total || 0) - Number(balanceAgg._sum.amountPaid || 0));
 
@@ -38,6 +41,8 @@ export async function GET(request, { params }) {
         createdAt: customer.createdAt,
       },
       owedBalance,
+      invoiceCount,
+      openCount,
       invoices: invoices.map((inv) => {
         const total = Number(inv.total);
         const amountPaid = Number(inv.amountPaid);

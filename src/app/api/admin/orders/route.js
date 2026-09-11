@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireAdmin } from '@/lib/auth';
+import { requireStaff } from '@/lib/auth';
+import { ORDER_INCLUDE, serializeOrder } from '@/lib/orderSerialize';
 
+// Any back-office staff member (admin/manager/cashier) works the Orders page.
+// Editing and voiding are manager-tier and gated in their own routes.
 export async function GET(request) {
-  const auth = await requireAdmin(prisma);
+  const auth = await requireStaff(prisma);
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { searchParams } = new URL(request.url);
@@ -18,35 +21,9 @@ export async function GET(request) {
     const orders = await prisma.order.findMany({
       where: Object.keys(where).length ? where : undefined,
       orderBy: { createdAt: 'desc' },
-      include: {
-        customer: { select: { name: true, phone: true } },
-        staff: { select: { name: true, email: true } },
-        waiter: { select: { name: true, email: true } },
-      },
+      include: ORDER_INCLUDE,
     });
-
-    return NextResponse.json(orders.map((o) => ({
-      id: o.id,
-      reference: o.reference,
-      status: o.status,
-      total: o.total.toString(),
-      address: o.address,
-      orderType: o.orderType,
-      tableNumber: o.tableNumber,
-      source: o.source,
-      paymentMethod: o.paymentMethod,
-      paymentStatus: o.paymentStatus,
-      discount: o.discount?.toString() ?? '0',
-      deliveryFee: o.deliveryFee?.toString() ?? '0',
-      contactName: o.contactName,
-      contactPhone: o.contactPhone,
-      staff: o.staff ? (o.staff.name || o.staff.email) : null,
-      waiter: o.waiter ? (o.waiter.name || o.waiter.email) : null,
-      items: o.items,
-      paymentTransactionId: o.paymentTransactionId,
-      createdAt: o.createdAt,
-      customer: o.customer,
-    })));
+    return NextResponse.json(orders.map(serializeOrder));
   } catch (err) {
     console.error('GET /api/admin/orders:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireRole, MANAGER_ROLES } from '@/lib/auth';
 import { tagSchema } from '@/lib/validations';
 
 export async function PUT(request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, MANAGER_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const { id } = await params;
     const body = await request.json();
     const parsed = tagSchema.partial().safeParse(body);
@@ -24,8 +24,8 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(_request, { params }) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireRole(prisma, MANAGER_ROLES);
+    if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status });
     const { id } = await params;
     await prisma.tag.delete({ where: { id: parseInt(id) } });
     return NextResponse.json({ success: true });
