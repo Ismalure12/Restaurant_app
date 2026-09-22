@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './menu.css';
 
 @tailwind base;
 @tailwind components;
@@ -344,13 +345,18 @@
   .show-more .sm-arr svg { @apply w-4 h-4 text-white; }
 
   /* ====== TAGS ====== */
+  /* Each variant is a token pair the contrast gate checks (--x on --x-soft),
+     so tags stay legible in dark as well as light. They previously used the
+     near-black brand/green-deep on a translucent tint, which disappeared
+     against a dark surface, and .spicy pinned a light background in both. */
   .tag {
-    @apply text-[9.5px] uppercase rounded-md font-semibold text-blue;
+    @apply text-[9.5px] uppercase rounded-md font-semibold;
     letter-spacing: .14em; padding: 4px 8px;
-    background: rgba(133,13,51,.08);
+    color: var(--primary-ink);
+    background: var(--primary-soft);
   }
-  .tag.green { color: var(--green-deep); background: rgba(163,23,67,.10); }
-  .tag.spicy { color: var(--spicy); background: var(--spicy, #fbe9e2); background-color: #fbe9e2; }
+  .tag.green { color: var(--pos); background: var(--pos-soft); }
+  .tag.spicy { color: var(--neg); background: var(--neg-soft); }
 
   /* ====== CATEGORY HERO ====== */
   .cat-hero {
