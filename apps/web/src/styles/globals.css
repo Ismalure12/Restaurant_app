@@ -1,3 +1,5 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,37 +11,33 @@
    both now map onto maroon shades.
    ============================================================ */
 :root {
-  --blue: #850D33;
-  --blue-deep: #6E0B2A;
-  --blue-soft: #FBE9EF;
-  --green: #A31743;
-  --green-deep: #7A0F30;
-  --green-soft: #F7E4EB;
-  --green-mint: #E9B9C8;
-  --cream: #FAFAF8;
-  --cream-2: #f3f2ec;
-  --ink: #15172b;
-  --ink-2: #4a4d63;
-  --muted: #8a8c9e;
-  --spicy: #b54a2f;
-  --amber: #b67a1c;
-  --amber-soft: #fff4dc;
-  --rose: #b03a3a;
-  --rose-soft: #fbe9e9;
-  --shadow-card: 0 1px 2px rgba(110,11,42,.05), 0 10px 30px -14px rgba(110,11,42,.16);
-  --shadow-lift: 0 18px 50px -18px rgba(21,23,43,.18);
-  --line: rgba(133,13,51,0.10);
-  --line-soft: rgba(21,23,43,0.06);
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
-  --ease-inout: cubic-bezier(0.76, 0, 0.24, 1);
+  /* Legacy alias layer. The --blue/--green NAMES are kept so the menu's
+     existing var() usages resolve, but every value now comes from the one
+     token layer (tokens.css) instead of a palette defined here. */
+  --blue: var(--brand-700);
+  --blue-deep: var(--brand-800);
+  --blue-soft: var(--brand-50);
+  --green: var(--brand-600);
+  --green-deep: var(--brand-800);
+  --green-soft: var(--brand-100);
+  --green-mint: var(--brand-300);
+  --cream: var(--canvas);
+  --cream-2: var(--surface-2);
+  --spicy: var(--neg);
+  --amber: var(--warn);
+  --amber-soft: var(--warn-soft);
+  --rose: var(--neg);
+  --rose-soft: var(--neg-soft);
+  --shadow-card: var(--shadow-sm);
+  --shadow-lift: var(--shadow-lg);
+  --line-soft: var(--line-2);
 }
 
 @layer base {
   *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
   body {
-    background: #e9e8e3;
+    background: var(--canvas);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -2192,55 +2190,36 @@ body:has(.conn-banner) [data-sonner-toaster][data-y-position="top"] { --offset-t
    to the design palette so existing .adm-* rules recolour with no churn.
    ============================================================ */
 html[data-admin] {
-  /* design tokens */
-  --surface: #ffffff; --surface-2: #f9faf9; --surface-3: #f2f4f2;
-  --primary: #1f6b4f; --primary-2: #2a8a66; --primary-deep: #154b38;
-  --primary-ink: #14543d; --primary-soft: #e7f1ec; --primary-line: #cfe3d8;
-  --gold: #b5862c; --gold-2: #caa45a; --gold-soft: #f6eed9; --gold-line: #e8d8af;
-  --sky: #2f6db0; --sky-soft: #e3edf7;
-  --ring: 0 0 0 3px rgba(31,107,79,.16);
+  /* The admin used to run a separate emerald + gold palette here. It now
+     inherits the same token layer as the public menu; only the legacy var
+     NAMES survive, so the existing .adm-* rules recolour with no churn. */
+  --primary-2: var(--brand-600);
+  --primary-deep: var(--brand-800);
+  --gold: var(--warn); --gold-2: var(--warn); --gold-soft: var(--warn-soft); --gold-line: var(--warn-line);
+  --sky: var(--info); --sky-soft: var(--info-soft);
 
-  /* legacy admin vars → design palette */
-  --blue: #1f6b4f; --blue-deep: #154b38; --blue-soft: #e7f1ec;
-  --green: #1f6b4f; --green-deep: #154b38; --green-soft: #e7f1ec; --green-mint: #8ee3bf;
-  --cream: #f4f6f4; --cream-2: #eef1ee;
-  --ink: #11211a; --ink-2: #2c3b34; --muted: #69756e;
-  --line: #e4e9e4; --line-soft: #e7ece7;
-  --rose: #c0432e; --rose-soft: #f8e6e1; --spicy: #c0432e;
-  --amber: #b9831c; --amber-soft: #f8edd6;
-  --shadow-card: 0 1px 2px rgba(20,40,30,.05);
-  --shadow-lift: 0 2px 4px rgba(20,40,30,.05), 0 10px 28px -14px rgba(20,40,30,.16);
+  --blue: var(--primary); --blue-deep: var(--brand-800); --blue-soft: var(--primary-soft);
+  --green: var(--pos); --green-deep: var(--pos); --green-soft: var(--pos-soft); --green-mint: var(--pos);
+  --cream: var(--canvas); --cream-2: var(--surface-2);
+  --line-soft: var(--line-2);
+  --rose: var(--neg); --rose-soft: var(--neg-soft); --spicy: var(--neg);
+  --amber: var(--warn); --amber-soft: var(--warn-soft);
+  --shadow-card: var(--shadow-sm);
+  --shadow-lift: var(--shadow);
 
-  /* Geist powers the admin */
-  --font-cormorant: var(--font-geist), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-inter: var(--font-geist), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-cormorant: var(--font-display);
+  --font-inter: var(--font-ui);
+  --font-mono: var(--font-mono);
 }
-html[data-admin][data-theme="dark"] {
-  --surface: #131a17; --surface-2: #182019; --surface-3: #1d2620;
-  --primary: #46c08c; --primary-2: #59d39d; --primary-deep: #2a8a66;
-  --primary-ink: #8ee3bf; --primary-soft: rgba(70,192,140,.13); --primary-line: rgba(70,192,140,.26);
-  --gold: #d8b265; --gold-2: #e6c987; --gold-soft: rgba(216,178,101,.12); --gold-line: rgba(216,178,101,.28);
-  --sky: #79ade6; --sky-soft: rgba(121,173,230,.13);
-  --ring: 0 0 0 3px rgba(70,192,140,.22);
 
-  --blue: #46c08c; --blue-deep: #59d39d; --blue-soft: rgba(70,192,140,.13);
-  --green: #46c08c; --green-deep: #59d39d; --green-soft: rgba(70,192,140,.13); --green-mint: #8ee3bf;
-  --cream: #0f1512; --cream-2: #1d2620;
-  --ink: #e9efe9; --ink-2: #cdd6cf; --muted: #8f9a92;
-  --line: #243029; --line-soft: #223027;
-  --rose: #e98a76; --rose-soft: rgba(233,138,118,.13); --spicy: #e98a76;
-  --amber: #e2b765; --amber-soft: rgba(226,183,101,.12);
-  --shadow-card: 0 1px 2px rgba(0,0,0,.3);
-  --shadow-lift: 0 2px 6px rgba(0,0,0,.32), 0 16px 40px -20px rgba(0,0,0,.6);
-  color-scheme: dark;
-}
+/* Dark is defined once, in tokens.css, on [data-theme='dark'] — the admin
+   adds nothing of its own beyond the legacy aliases above, which resolve
+   through the same vars and so follow the theme automatically. */
+
 
 /* Page background — soft emerald radial wash (matches design) */
 .adm-shell {
-  background-color: var(--cream);
-  background-image: radial-gradient(120% 90% at 100% 0%,
-    color-mix(in srgb, var(--primary) 5%, var(--cream)) 0%, var(--cream) 48%, var(--cream) 100%);
+  background-color: var(--canvas);
   background-attachment: fixed;
   color: var(--ink);
 }
@@ -2248,7 +2227,7 @@ html[data-admin][data-theme="dark"] {
 /* Dark mode needs dark text on the bright-emerald solids */
 html[data-admin][data-theme="dark"] .adm-btn-primary,
 html[data-admin][data-theme="dark"] .adm-btn-success,
-html[data-admin][data-theme="dark"] .adm-tabset button.active { color: #06140e; }
+html[data-admin][data-theme="dark"] .adm-tabset button.active { color: var(--primary-on); }
 
 /* Ledger flavour — mono numerals + tighter radii */
 html[data-admin] .adm-kpi-v,
@@ -2287,6 +2266,117 @@ html[data-admin] .adm-sw.on::after { transform: translateX(17px); }
 /* Sidebar nav-group label + badge (design .nav-label / .nl-badge) */
 html[data-admin] .adm-nav-label { font-size: 10px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); padding: 14px 12px 6px; }
 html[data-admin] .adm-nav-badge { margin-left: auto; font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; background: var(--primary); color: #fff; border-radius: 20px; padding: 1px 7px; min-width: 18px; text-align: center; }
-html[data-admin][data-theme="dark"] .adm-nav-badge { color: #06140e; }
+html[data-admin][data-theme="dark"] .adm-nav-badge { color: var(--primary-on); }
 html[data-admin] .adm-nav-badge.amber { background: var(--amber); }
 
+
+/* ============================================================
+   SYSTEM STATES — 404, error, loading
+   One shared shell for every "the page isn't the page" moment, on both the
+   public menu and the admin. Tokens only, so each follows the active theme.
+   ============================================================ */
+.state-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6) var(--sp-4);
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+.state-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--sp-10) var(--sp-8);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.state-code {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-display);
+  font-size: var(--t-6xl);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--primary-ink);
+}
+.state-icon {
+  width: 52px;
+  height: 52px;
+  margin-bottom: var(--sp-2);
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+}
+.state-icon svg { width: 23px; height: 23px; }
+.state-icon-neg { background: var(--neg-soft); color: var(--neg); }
+.state-title {
+  margin: 0;
+  font-size: var(--t-xl);
+  font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+.state-body {
+  margin: 0;
+  max-width: 34ch;
+  font-size: var(--t-base);
+  line-height: var(--lh-loose);
+  color: var(--muted);
+}
+.state-ref {
+  margin: var(--sp-1) 0 0;
+  padding: 4px 9px;
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-2xs);
+  color: var(--muted);
+}
+.state-cta {
+  margin-top: var(--sp-4);
+  min-height: 44px;
+  padding: 0 var(--sp-5);
+  border: none;
+  border-radius: var(--r-md);
+  background: var(--primary);
+  color: var(--primary-on);
+  font-family: inherit;
+  font-size: var(--t-base);
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.state-cta:hover { background: var(--primary-hover); }
+.state-cta:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.state-loading { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
+.state-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-full);
+  border: 2.5px solid var(--line-strong);
+  border-top-color: var(--primary);
+  animation: state-spin 720ms linear infinite;
+}
+.state-loading-text {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+@keyframes state-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .state-spinner { animation-duration: 2.4s; }
+}

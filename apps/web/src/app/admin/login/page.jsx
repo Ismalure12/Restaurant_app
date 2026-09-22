@@ -21,7 +21,7 @@ function LoginField({ id, label, form, name, children }) {
     <div>
       <label htmlFor={id} className="adm-label">{label}</label>
       {children({ id, onBlur, 'aria-invalid': error ? true : undefined, 'aria-required': true, 'aria-describedby': message ? msgId : undefined })}
-      {message && <div id={msgId} role={error ? 'alert' : undefined} style={{ marginTop: 6, fontSize: 13, lineHeight: 1.35, color: error ? '#b4234a' : '#6b7a72' }}>{message}</div>}
+      {message && <div id={msgId} role={error ? 'alert' : undefined} style={{ marginTop: 6, fontSize: 13, lineHeight: 1.35, color: error ? 'var(--neg)' : 'var(--muted)' }}>{message}</div>}
     </div>
   );
 }
@@ -109,14 +109,8 @@ export default function AdminLoginPage() {
   return (
     <div
       style={{
-        // Keep the admin login on the emerald/gold "Ledger" theme (the public
-        // --blue/--green tokens are now maroon), scoped to this subtree only.
-        '--blue': '#1f6b4f', '--blue-deep': '#154b38', '--blue-soft': '#e7f1ec',
-        '--green': '#1f6b4f', '--green-deep': '#154b38', '--green-soft': '#e7f1ec',
         minHeight: '100vh',
         background: 'var(--cream)',
-        backgroundImage:
-          'radial-gradient(circle at 0% 0%, rgba(31,107,79,0.08) 0%, transparent 45%), radial-gradient(circle at 100% 100%, rgba(181,134,44,0.07) 0%, transparent 45%)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '24px 16px',
       }}

@@ -1,67 +1,77 @@
 'use client';
 
-import { useEffect } from 'react';
-
+/**
+ * Last-resort boundary: this replaces the root layout, so globals.css (and
+ * therefore every design token) is NOT loaded here. The palette below is the
+ * only place in the app allowed to hardcode colour — the values are the light
+ * theme's tokens copied literally, and they must be updated with them.
+ *   --canvas #FAF9F7 · --surface #FFFFFF · --line #E4E0DA · --ink #1A1618
+ *   --muted #6B6165 · --neg #B53426 · --neg-soft #FBE9E6 · --primary #850D33
+ */
 export default function GlobalError({ error, reset }) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
-
   return (
-    <html>
-      <body style={{
-        margin: 0,
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        background: '#FAFAF8',
-        fontFamily: 'Inter, system-ui, sans-serif',
-      }}>
+    <html lang="en">
+      <body style={{ margin: 0 }}>
         <div style={{
-          background: '#fff',
-          borderRadius: 20,
-          border: '1px solid #e8e8e6',
-          padding: '40px 32px',
-          maxWidth: 440,
-          width: '100%',
-          textAlign: 'center',
-          boxShadow: '0 8px 32px -8px rgba(21,23,43,0.12)',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px 16px',
+          background: '#FAF9F7',
+          color: '#1A1618',
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
         }}>
           <div style={{
-            width: 56, height: 56, borderRadius: '50%',
-            background: '#fbe9e2', color: '#c0440a',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 20px',
+            width: '100%',
+            maxWidth: 420,
+            padding: '40px 32px',
+            background: '#FFFFFF',
+            border: '1px solid #E4E0DA',
+            borderRadius: 18,
+            boxShadow: '0 2px 4px rgba(26,22,24,.04), 0 8px 24px -12px rgba(26,22,24,.12)',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 8,
           }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
+            <span style={{
+              width: 52, height: 52, marginBottom: 8, borderRadius: '50%',
+              background: '#FBE9E6', color: '#B53426',
+              display: 'grid', placeItems: 'center',
+            }} aria-hidden="true">
+              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+              </svg>
+            </span>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em' }}>
+              The app failed to load
+            </h1>
+            <p style={{ margin: 0, maxWidth: '34ch', fontSize: 14, lineHeight: 1.65, color: '#6B6165' }}>
+              Nothing was charged and nothing was saved. Reloading usually clears it.
+            </p>
+            {error?.digest && (
+              <p style={{
+                margin: '4px 0 0', padding: '4px 9px', borderRadius: 6,
+                background: '#F5F3F0', fontFamily: 'ui-monospace, Menlo, monospace',
+                fontSize: 11, color: '#6B6165',
+              }}>
+                ref {error.digest}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={reset}
+              style={{
+                marginTop: 16, minHeight: 44, padding: '0 20px', border: 'none',
+                borderRadius: 10, background: '#850D33', color: '#FFFFFF',
+                fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Reload
+            </button>
           </div>
-          <h1 style={{
-            fontFamily: 'Georgia, serif',
-            fontSize: 28, fontWeight: 600, color: '#15172b',
-            margin: '0 0 8px',
-          }}>
-            Something went wrong
-          </h1>
-          <p style={{ fontSize: 13.5, color: '#8a8a8a', margin: '0 0 24px', lineHeight: 1.6 }}>
-            A critical error occurred. Please refresh the page.
-          </p>
-          <button
-            onClick={reset}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '10px 22px',
-              background: '#850D33', color: '#fff',
-              border: 'none', borderRadius: 10,
-              fontSize: 13.5, fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            Try again
-          </button>
         </div>
       </body>
     </html>

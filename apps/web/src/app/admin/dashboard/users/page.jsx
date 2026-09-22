@@ -25,7 +25,15 @@ const ROLE_OPTIONS = [
   { value: 'waiter', label: 'Waiter — Register + performance' },
 ];
 const ROLE_LABEL = { admin: 'Admin', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter', user: 'User' };
-const GRAD = { admin: ['#1f6b4f', '#154b38'], manager: ['#1f6b4f', '#154b38'], cashier: ['#2f6db0', '#1f4f80'], waiter: ['#b5862c', '#8a6a1f'], user: ['#69756e', '#4a544e'] };
+// Role identity, drawn from the token layer so it follows the theme. Admin and
+// manager share the brand; the rest take distinct categorical slots.
+const GRAD = {
+  admin:   ['var(--brand-700)', 'var(--brand-900)'],
+  manager: ['var(--brand-700)', 'var(--brand-900)'],
+  cashier: ['var(--chart-3)', 'var(--chart-3)'],
+  waiter:  ['var(--chart-2)', 'var(--chart-2)'],
+  user:    ['var(--muted)', 'var(--muted)'],
+};
 
 const initials = (s) => (s || '').trim().split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || 'HJ';
 const emptyForm = { role: 'cashier', name: '', phone: '', email: '', password: '', isActive: true, monthlySalary: '' };

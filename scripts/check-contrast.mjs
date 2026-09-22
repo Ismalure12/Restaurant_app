@@ -83,6 +83,9 @@ for (const [theme, scope] of [['light', light], ['dark', dark]]) {
   check(`${theme}  --primary-ink on --primary-soft`, c('--primary-ink'), c('--primary-soft'), 4.5);
   for (const k of ['pos', 'neg', 'warn', 'info']) {
     check(`${theme}  --${k} on --${k}-soft`, c(`--${k}`), c(`--${k}-soft`), 4.5);
+    // Text sitting ON a filled semantic chip/button. These invert between
+    // themes, so each fill carries its own on-colour rather than a bare #fff.
+    check(`${theme}  --${k}-on on --${k}`, c(`--${k}-on`), c(`--${k}`), 4.5);
   }
 }
 

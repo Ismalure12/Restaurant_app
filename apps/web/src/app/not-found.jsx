@@ -1,56 +1,17 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Page not found — Maqaaxi Pos' };
+
 export default function NotFound() {
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
-      background: 'var(--cream)',
-      fontFamily: 'var(--font-inter), Inter, sans-serif',
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 20,
-        border: '1px solid var(--line-soft)',
-        padding: '48px 36px',
-        maxWidth: 440,
-        width: '100%',
-        textAlign: 'center',
-        boxShadow: '0 8px 32px -8px rgba(21,23,43,0.12)',
-      }}>
-        <div style={{
-          fontFamily: 'var(--font-cormorant), serif',
-          fontSize: 72, fontWeight: 700, color: 'var(--blue)',
-          lineHeight: 1, marginBottom: 12,
-        }}>
-          404
-        </div>
-        <h1 style={{
-          fontFamily: 'var(--font-cormorant), serif',
-          fontSize: 28, fontWeight: 600, color: 'var(--ink)',
-          margin: '0 0 8px',
-        }}>
-          Page not found
-        </h1>
-        <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: '0 0 28px', lineHeight: 1.6 }}>
-          The page you&apos;re looking for doesn&apos;t exist or has been moved.
+    <div className="state-page">
+      <div className="state-card">
+        <p className="state-code">404</p>
+        <h1 className="state-title">We can&rsquo;t find that page</h1>
+        <p className="state-body">
+          The link may be old, or the item it pointed to was removed.
         </p>
-        <Link
-          href="/"
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '10px 22px',
-            background: 'var(--blue)', color: '#fff',
-            borderRadius: 10, textDecoration: 'none',
-            fontFamily: 'var(--font-inter), Inter, sans-serif',
-            fontSize: 13.5, fontWeight: 600,
-          }}
-        >
-          Back to menu
-        </Link>
+        <Link href="/" className="state-cta">Back to the menu</Link>
       </div>
     </div>
   );

@@ -15,7 +15,20 @@ import { useEffect, useId, useState } from 'react';
  *   <StackBar segments fmt />                   one 100% bar (channel split)
  *   <Legend items />
  */
-export const PALETTE = ['var(--primary)', 'var(--gold)', 'var(--sky)', 'var(--rose)', 'var(--amber)', '#8a6fb5', '#5f9ea0', '#9aa39d'];
+// Categorical series, fixed order — colour follows the entity, never its rank,
+// so filtering a series never repaints the survivors. A 7th series folds into
+// --chart-other rather than generating a hue. Both themes are validated for
+// CVD separation; see scripts/check-contrast.mjs and the tokens file.
+export const PALETTE = [
+  'var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)',
+  'var(--chart-4)', 'var(--chart-5)', 'var(--chart-6)',
+];
+export const CHART_OTHER = 'var(--chart-other)';
+
+// Slot 7+ is NOT a generated or recycled hue — cycling would give two series
+// the same colour and silently break identity. Anything past the palette folds
+// into the neutral "other" slot.
+export const seriesColor = (i) => PALETTE[i] || CHART_OTHER;
 
 const nice = (max) => {
   if (max <= 0) return 1;
@@ -51,7 +64,7 @@ export function LineArea({ rows, series, xKey = 'day', xTick = (r) => String(r[x
   const padL = 40;
   const padB = 22;
   const padT = 8;
-  const cols = series.map((s, i) => ({ color: PALETTE[i % PALETTE.length], ...s }));
+  const cols = series.map((s, i) => ({ color: seriesColor(i), ...s }));
   const max = nice(Math.max(...rows.flatMap((r) => cols.map((s) => Number(r[s.key]) || 0)), 0));
   const min = Math.min(0, ...rows.flatMap((r) => cols.map((s) => Number(r[s.key]) || 0)));
   const span = (max - min) || 1;
@@ -119,7 +132,7 @@ export function Donut({ segments, fmt = (n) => String(n), centre, centreLabel, s
   const lens = data.map((d) => (d.value / total) * C);
   const rings = data.map((d, i) => ({
     ...d,
-    color: d.color || PALETTE[i % PALETTE.length],
+    color: d.color || seriesColor(i),
     dash: `${Math.max(lens[i] - 1.5, 0.5)} ${C}`,
     offset: -lens.slice(0, i).reduce((a, b) => a + b, 0),
   }));
@@ -349,7 +362,7 @@ export function Sparkline({ values, height = 30, color = 'var(--primary)' }) {
  *   segments: [{ label, value, sub?, color? }]
  */
 export function StackBar({ segments, fmt = (n) => String(n), empty = 'No sales in this range.' }) {
-  const data = (segments || []).filter((s) => s.value > 0).map((s, i) => ({ ...s, color: s.color || PALETTE[i % PALETTE.length] }));
+  const data = (segments || []).filter((s) => s.value > 0).map((s, i) => ({ ...s, color: s.color || seriesColor(i) }));
   const total = data.reduce((s, d) => s + d.value, 0);
   if (!total) return <div className="sub r6-empty">{empty}</div>;
   const pct = (v) => Math.round((v / total) * 100);
