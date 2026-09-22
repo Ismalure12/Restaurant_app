@@ -1,0 +1,29 @@
+# Local / Lightsail Postgres for Maqaaxi Pos. Own compose project and port so it
+# never collides with other stacks on the machine (5432 is often taken).
+#   docker compose up -d postgres
+#   DATABASE_URL=postgresql://maqaaxi:<POSTGRES_PASSWORD>@localhost:5433/maqaaxi
+# Set POSTGRES_PASSWORD in a root `.env.docker` (not committed) or the shell.
+name: maqaaxi
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: maqaaxi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: maqaaxi
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - maqaaxi_pgdata:/var/lib/postgresql
+    # Sized for a 1 GB Lightsail box that also runs the API, web and nginx.
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "effective_cache_size=384MB"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U maqaaxi -d maqaaxi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  maqaaxi_pgdata:

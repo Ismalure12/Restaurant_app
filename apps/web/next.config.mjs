@@ -1,0 +1,34 @@
+// The API is the separate Express app in apps/api. Every /api/*
+// request is proxied there same-origin, so httpOnly cookies keep working and
+// client code calls relative /api/... URLs unchanged.
+// Rewrites are fixed when `next build` / `next dev` starts — changing
+// API_ORIGIN needs a rebuild (or dev restart), not just a `next start` restart.
+// proxyTimeout only applies when Next itself proxies (next dev / next start);
+// on Vercel the platform proxies external rewrites with its own ~120s cap.
+const DEV_API_ORIGIN = 'http://localhost:4100'; // `npm run dev:all` default
+
+const apiOrigin = (process.env.API_ORIGIN || (process.env.NODE_ENV === 'production' ? '' : DEV_API_ORIGIN)).replace(/\/+$/, '');
+if (!apiOrigin) {
+  throw new Error('API_ORIGIN is required in production (URL of the Express API, e.g. https://api.example.com)');
+}
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.public.blob.vercel-storage.com',
+      },
+    ],
+  },
+  // Default proxy timeout is 30s; payment/initiate waits up to 270s on Waafi.
+  experimental: { proxyTimeout: 300_000 },
+  async rewrites() {
+    return {
+      beforeFiles: [{ source: '/api/:path*', destination: `${apiOrigin}/api/:path*` }],
+    };
+  },
+};
+
+export default nextConfig;

@@ -4,11 +4,13 @@ node_modules
 .pnp.js
 
 # next.js
-/.next/
-/out/
+# (unanchored: the apps live under apps/)
+.next/
+out/
 
 # production
 /build
+dist/
 
 # misc
 .DS_Store
@@ -19,6 +21,7 @@ npm-debug.log*
 
 # env
 .env
+.env.docker
 .env*.local
 
 # vercel
@@ -36,11 +39,18 @@ image.png
 /Kfg-menu/*
 
 # test + tooling artifacts
-/test-results/
-/browser-test-output/
-/playwright-report/
+test-results/
+browser-test-output/
+playwright-report/
 /tmp/
 
 # local data / handoff bundles
 *.zip
 cats.json
+
+# local database dumps (contain customer data)
+.db-dumps/
+*.dump
+
+# local backups (contain customer data)
+/backups/

@@ -2,42 +2,26 @@
   "name": "maqaaxi-pos",
   "version": "0.1.0",
   "private": true,
+  "description": "Maqaaxi Pos — Next.js web app (apps/web) + Express API (apps/api)",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "check:admin-css": "node scripts/check-admin-css.mjs"
-  },
-  "dependencies": {
-    "@neondatabase/serverless": "^1.0.2",
-    "@prisma/adapter-neon": "^7.8.0",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
-    "@tanstack/react-query": "^5.100.14",
-    "@vercel/blob": "^2.3.2",
-    "bcryptjs": "^3.0.3",
-    "dotenv": "^17.3.1",
-    "jose": "^6.2.2",
-    "next": "^16.2.6",
-    "nodemailer": "^8.0.4",
-    "pg": "^8.20.0",
-    "playwright": "^1.58.2",
-    "prisma": "^7.8.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "resend": "^6.10.0",
-    "sonner": "^2.0.7",
-    "ws": "^8.20.0",
-    "sharp": "^0.34.5",
-    "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
-    "@playwright/test": "^1.59.1",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.6",
-    "postcss": "^8.5.15",
-    "tailwindcss": "^3.4.19"
+    "dev": "node scripts/dev-all.mjs",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace apps/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspace apps/api",
+    "typecheck": "npm run typecheck --workspace apps/api",
+    "lint": "npm run lint --workspace apps/web",
+    "test:e2e": "npm run test:e2e --workspace apps/web",
+    "db:generate": "npm run db:generate --workspace apps/api",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:deploy": "npm run db:deploy --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api"
   }
 }

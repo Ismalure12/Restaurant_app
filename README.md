@@ -1,52 +1,46 @@
 # Maqaaxi Pos — Digital Menu & Restaurant Ops
 
-A resellable digital-menu and restaurant-operations product (Maqaaxi Pos). Customers scan a QR
-code, browse the menu, build a cart, and pay via Waafi/EVC; staff manage the catalog,
-orders, inventory, finance, and a point-of-sale register through a protected admin
-dashboard.
+A resellable digital-menu and restaurant-operations product. Customers scan a QR code,
+browse the menu, build a cart, and pay through Sifalo Pay (EVC/ZAAD/Sahal, eDahab, Premier
+Wallet, cards). Staff manage the catalog, orders, inventory, finance and a point-of-sale
+register from a protected admin dashboard.
 
-## Stack
-- **Next.js 16** (App Router, Turbopack) · **JavaScript/JSX** (no TypeScript)
-- **Tailwind CSS** (public menu + admin dashboard)
-- **Neon Postgres** + **Prisma ORM**
-- **Vercel** (hosting + Blob storage for images)
-- **Waafi/EVC** payment gateway
+## Two apps, one repo (npm workspaces)
+| | `apps/web` | `apps/api` |
+|---|---|---|
+| What | Next.js 16 frontend (customer menu + admin dashboard) | Express 5 + TypeScript API |
+| Talks to | the API only, over `/api/*` | Neon Postgres (Prisma 7), Sifalo, Vercel Blob, email |
+| Env | `apps/web/.env` — just `API_ORIGIN`, **no secrets** | `apps/api/.env` — database, JWT, Sifalo, Blob, email |
+| Port (dev) | 3100 | 4100 |
+
+The web app never touches the database. It calls relative `/api/...` URLs; in development
+Next proxies them to `API_ORIGIN`, and in production nginx routes `/api` to the API.
 
 ## Getting started
 ```bash
-npm install
-cp .env.example .env   # then fill in real values
-npx prisma generate
-npm run dev            # http://localhost:3000
+npm install                                  # installs both workspaces + generates the Prisma client
+cp apps/api/.env.example apps/api/.env       # fill in the real values
+cp apps/web/.env.example apps/web/.env
+npm run dev                                  # API :4100 + web http://localhost:3100
 ```
 
-## Scripts
+## Scripts (run from the root)
 | Command | Purpose |
 |---------|---------|
-| `npm run dev` | Start the dev server |
-| `npm run build` | Production build |
-| `npm run start` | Run the production build |
-| `npm run lint` | Lint (see note below) |
+| `npm run dev` | Both apps (`dev:web` / `dev:api` for one) |
+| `npm run build` | Build both |
+| `npm test` | API integration tests (vitest) |
+| `npm run typecheck` | API TypeScript check |
+| `npm run test:e2e` | Playwright suite (web) |
+| `npm run db:migrate` / `db:deploy` / `db:seed` / `db:generate` | Prisma, run in `apps/api` |
 
-> Next 16 removed `next lint`; lint changed files directly with `npx eslint <files>`.
+> Next 16 removed `next lint`; lint web files with `npx eslint <files>` from `apps/web`.
 
-## Seeding
-```bash
-# Catalog (categories, items, options, extras, tags, banners)
-source <(grep -v '^#' .env | sed 's/^/export /') && node prisma/seed-royal.js
+## Structure
+- `apps/web/src/app/` — routes: public menu (`page.jsx`), admin dashboard (`admin/`)
+- `apps/web/src/components/`, `hooks/`, `lib/` — UI, client state, fetch helpers, page access rules
+- `apps/api/src/routes/` — one module per endpoint (`table.ts` registers them)
+- `apps/api/src/lib/` — auth, Zod validations, pricing, Sifalo payments, email
+- `apps/api/prisma/` — schema, migrations, seed
 
-# Staff logins (admin/manager/cashier)
-node scripts/seed-staff.mjs
-```
-
-## Structure (high level)
-- `src/app/` — routes: public menu (`page.jsx`), admin dashboard (`admin/`), API (`api/`)
-- `src/components/` — UI: `ui/` primitives, `menu/` customer menu, `admin/` dashboard
-- `src/hooks/` — client state/interaction hooks
-- `src/lib/` — services & utils (Prisma, auth, Zod validations, Waafi, email, slug)
-- `src/styles/` — global styles + design tokens (`tailwind.config.js`)
-- `prisma/` — schema + seed scripts
-
-## Environment variables
-See `.env.example` for the full list. **Never commit `.env`** — it holds database,
-JWT, payment, and email secrets.
+**Never commit a `.env`.** Only `apps/api/.env` holds secrets.
