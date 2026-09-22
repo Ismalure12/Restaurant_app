@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getCategory, getMenu } from '@/lib/menuServer';
+import { safeGetCategory, safeGetMenu } from '@/lib/menuServer';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
 import TagPills from '@/components/ui/TagPills';
 import { FMT } from '@/lib/menu/format';
@@ -8,17 +8,14 @@ import { FMT } from '@/lib/menu/format';
 // The menu changes rarely, so every category is prerendered at build time and
 // revalidated with the menu fetch.
 export async function generateStaticParams() {
-  try {
-    const { categories } = await getMenu();
-    return categories.map((c) => ({ category: c.slug }));
-  } catch {
-    return []; // API unreachable at build time — pages render on demand instead.
-  }
+  // API unreachable or malformed at build time — pages render on demand.
+  const menu = await safeGetMenu();
+  return (menu?.categories || []).map((c) => ({ category: c.slug }));
 }
 
 export async function generateMetadata({ params }) {
   const { category: slug } = await params;
-  const category = await getCategory(slug);
+  const category = await safeGetCategory(slug);
   if (!category) return { title: 'Not found — Maqaaxi' };
   return {
     title: `${category.name} — Maqaaxi`,
@@ -28,8 +25,9 @@ export async function generateMetadata({ params }) {
 
 export default async function CategoryPage({ params }) {
   const { category: slug } = await params;
-  const category = await getCategory(slug);
+  const category = await safeGetCategory(slug);
   if (!category) notFound();
+  const items = Array.isArray(category.items) ? category.items : [];
 
   return (
     <section className="mx-section">
@@ -40,15 +38,15 @@ export default async function CategoryPage({ params }) {
           {category.sub && <p className="mx-section-sub">{category.sub}</p>}
         </div>
         <span className="mx-meta">
-          {category.items.length} {category.items.length === 1 ? 'dish' : 'dishes'}
+          {items.length} {items.length === 1 ? 'dish' : 'dishes'}
         </span>
       </div>
 
-      {category.items.length === 0 ? (
+      {items.length === 0 ? (
         <p className="mx-empty-note">Nothing in this section right now.</p>
       ) : (
         <ul className="mx-dish-grid">
-          {category.items.map((item) => (
+          {items.map((item) => (
             <li key={item.id}>
               <Link href={`/menu/${category.slug}/${item.id}`} className="mx-dish-card">
                 <span className="mx-dish-media">

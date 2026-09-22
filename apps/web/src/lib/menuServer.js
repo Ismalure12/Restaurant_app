@@ -19,14 +19,28 @@ function apiOrigin() {
   return origin;
 }
 
-/** The whole public menu. Throws on failure so the segment's error.jsx shows. */
+/**
+ * The whole public menu. Throws on failure so the segment's error.jsx shows.
+ *
+ * The shape is checked, not just the status: a 200 carrying a malformed or
+ * partial body would otherwise leave `categories` undefined and blow up later
+ * inside a .map() — a 500 for the customer instead of the degraded menu.
+ */
 export async function getMenu() {
   const res = await fetch(`${apiOrigin()}/api/menu`, {
     // Matches the old `export const revalidate = 300` on the menu page.
     next: { revalidate: 300, tags: ['menu'] },
   });
   if (!res.ok) throw new Error(`GET /api/menu failed: ${res.status}`);
-  return res.json();
+
+  const body = await res.json().catch(() => null);
+  if (!body || !Array.isArray(body.categories)) {
+    throw new Error('GET /api/menu returned an unexpected shape');
+  }
+  return {
+    categories: body.categories,
+    socialLinks: Array.isArray(body.socialLinks) ? body.socialLinks : [],
+  };
 }
 
 /**
@@ -52,6 +66,13 @@ export async function getCategory(slug) {
   return categories.find((c) => c.slug === slug) || null;
 }
 
+/** As getCategory, but null rather than throwing when the API is unreachable. */
+export async function safeGetCategory(slug) {
+  const menu = await safeGetMenu();
+  if (!menu) return null;
+  return menu.categories.find((c) => c.slug === slug) || null;
+}
+
 /**
  * One item by id, with its category. MenuItem has no slug column, so the id is
  * the stable public handle; the category slug in the URL is checked so a stale
@@ -59,7 +80,7 @@ export async function getCategory(slug) {
  */
 export async function getItem(categorySlug, itemId) {
   const category = await getCategory(categorySlug);
-  if (!category) return null;
+  if (!category || !Array.isArray(category.items)) return null;
   const item = category.items.find((i) => String(i.id) === String(itemId));
   return item ? { item, category } : null;
 }

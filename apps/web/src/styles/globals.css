@@ -2006,8 +2006,10 @@
 .adm-pill .dot  { width:5px; height:5px; border-radius:50%; background:currentColor; display:inline-block; }
 
 /* Button variants */
-.adm-btn-success { background:var(--green); color:#fff; box-shadow:0 10px 22px -12px rgba(30,152,98,.6); }
-.adm-btn-success:not(:disabled):hover { background:var(--green-deep); }
+/* --pos inverts between themes, so the on-colour travels with it rather
+   than being pinned to white, and the glow comes from the shadow scale. */
+.adm-btn-success { background:var(--pos); color:var(--pos-on); box-shadow:var(--shadow-sm); }
+.adm-btn-success:not(:disabled):hover { filter:brightness(.94); }
 .adm-btn-danger-ghost { background:var(--surface); color:var(--rose); border-color:rgba(176,58,58,.25); }
 .adm-btn-danger-ghost:not(:disabled):hover { background:var(--rose-soft); }
 
@@ -2232,7 +2234,6 @@ html[data-admin] {
 
 /* Dark mode needs dark text on the bright-emerald solids */
 html[data-admin][data-theme="dark"] .adm-btn-primary,
-html[data-admin][data-theme="dark"] .adm-btn-success,
 html[data-admin][data-theme="dark"] .adm-tabset button.active { color: var(--primary-on); }
 
 /* Ledger flavour — mono numerals + tighter radii */
