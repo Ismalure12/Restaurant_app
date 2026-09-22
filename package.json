@@ -22,6 +22,7 @@
     "db:generate": "npm run db:generate --workspace apps/api",
     "db:migrate": "npm run db:migrate --workspace apps/api",
     "db:deploy": "npm run db:deploy --workspace apps/api",
-    "db:seed": "npm run db:seed --workspace apps/api"
+    "db:seed": "npm run db:seed --workspace apps/api",
+    "check:contrast": "node scripts/check-contrast.mjs"
   }
 }

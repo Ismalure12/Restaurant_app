@@ -1,0 +1,179 @@
+/* ============================================================================
+   MAQAAXI POS — DESIGN TOKENS
+   The single source of truth for the public menu AND the admin dashboard.
+   Nothing in this file is a component; nothing outside this file defines a
+   raw colour. Both themes are contrast-verified — see scripts/check-contrast.mjs
+   (npm run check:contrast). Change a value here, re-run that script.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand ramp — monochrome maroon, anchored on Goodir #850D33 -------- */
+  --brand-50:  #FDF4F7;
+  --brand-100: #FBE4EC;
+  --brand-200: #F6C9D8;
+  --brand-300: #EDA0BA;
+  --brand-400: #DE6E92;
+  --brand-500: #C63E6C;
+  --brand-600: #A31743;   /* action  */
+  --brand-700: #850D33;   /* primary */
+  --brand-800: #6E0B2A;   /* deep    */
+  --brand-900: #520920;
+  --brand-950: #330512;
+
+  /* ---- Type families ---------------------------------------------------- */
+  --font-display: var(--font-fraunces), 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-ui:      var(--font-instrument), 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:    var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- Type scale — one dial for the whole product ---------------------- */
+  --t-2xs: 0.6875rem;  /* 11 */
+  --t-xs:  0.75rem;    /* 12 */
+  --t-sm:  0.8125rem;  /* 13 */
+  --t-base:0.875rem;   /* 14 */
+  --t-md:  0.9375rem;  /* 15 */
+  --t-lg:  1.0625rem;  /* 17 */
+  --t-xl:  1.25rem;    /* 20 */
+  --t-2xl: 1.5rem;     /* 24 */
+  --t-3xl: 1.875rem;   /* 30 */
+  --t-4xl: 2.25rem;    /* 36 */
+  --t-5xl: 2.75rem;    /* 44 */
+  --t-6xl: 3.5rem;     /* 56 */
+  /* iOS Safari zooms the page when an input is below 16px. Never override. */
+  --t-input: 1rem;     /* 16 */
+
+  --lh-tight: 1.15;
+  --lh-snug:  1.3;
+  --lh-normal:1.5;
+  --lh-loose: 1.65;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug:  -0.011em;
+  --tracking-wide:  0.02em;
+  --tracking-caps:  0.08em;
+
+  /* ---- Spacing — 4px base ----------------------------------------------- */
+  --sp-1: 0.25rem;  --sp-2: 0.5rem;   --sp-3: 0.75rem;  --sp-4: 1rem;
+  --sp-5: 1.25rem;  --sp-6: 1.5rem;   --sp-7: 1.75rem;  --sp-8: 2rem;
+  --sp-10:2.5rem;   --sp-12:3rem;     --sp-16:4rem;     --sp-20:5rem;
+
+  /* ---- Radii ------------------------------------------------------------ */
+  --r-xs: 6px;  --r-sm: 8px;  --r-md: 10px; --r-lg: 14px;
+  --r-xl: 18px; --r-2xl:24px; --r-full:999px;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease-out:   cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in:    cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-inout: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring:cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;  --dur-base: 200ms;
+  --dur-slow: 320ms;  --dur-slower: 500ms;
+
+  /* ---- Layout ----------------------------------------------------------- */
+  --side-w: 264px;
+  --topbar-h: 68px;
+  --content-max: 1440px;
+  --prose-max: 68ch;
+  --z-base:0; --z-sticky:20; --z-nav:30; --z-overlay:40;
+  --z-modal:50; --z-toast:60; --z-tooltip:70;
+}
+
+/* ============================================================================
+   LIGHT THEME (default)
+   ========================================================================== */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --canvas:    #FAF9F7;
+  --surface:   #FFFFFF;
+  --surface-2: #F5F3F0;
+  --surface-3: #EDEAE5;
+  --inset:     #F7F5F2;
+
+  --ink:   #1A1618;   /* 17.3:1 on surface — headings, primary text          */
+  --ink-2: #3F3739;   /* 10.2:1 — body                                       */
+  --muted: #6B6165;   /*  5.7:1 — secondary text, labels                     */
+  --faint: #8D8287;   /*  3.6:1 — decorative / non-essential ONLY            */
+
+  --line:        #E4E0DA;
+  --line-2:      #EFECE7;
+  --line-strong: #D2CCC3;
+
+  --primary:      var(--brand-700);
+  --primary-hover:var(--brand-800);
+  --primary-ink:  var(--brand-700);   /* brand used as TEXT   — 8.6:1        */
+  --primary-on:   #FFFFFF;            /* text ON a brand fill — 8.6:1        */
+  --primary-soft: var(--brand-50);
+  --primary-line: var(--brand-200);
+  --primary-ghost:rgba(133, 13, 51, 0.06);
+
+  --pos:  #167042;  --pos-soft:  #E6F2EB;  --pos-line:  #C2DFCF;
+  --neg:  #B53426;  --neg-soft:  #FBE9E6;  --neg-line:  #F0CCC5;
+  --warn: #855700;  --warn-soft: #FAF0DC;  --warn-line: #EBD9AE;
+  --info: #1B639F;  --info-soft: #E7F0F8;  --info-line: #C5DBEE;
+
+  --shadow-xs: 0 1px 2px rgba(26, 22, 24, 0.05);
+  --shadow-sm: 0 1px 3px rgba(26, 22, 24, 0.06), 0 1px 2px rgba(26, 22, 24, 0.04);
+  --shadow:    0 2px 4px rgba(26, 22, 24, 0.04), 0 8px 24px -12px rgba(26, 22, 24, 0.12);
+  --shadow-lg: 0 12px 40px -16px rgba(26, 22, 24, 0.20);
+  --shadow-xl: 0 24px 64px -24px rgba(26, 22, 24, 0.26);
+  --shadow-brand: 0 10px 28px -12px rgba(133, 13, 51, 0.40);
+  --ring: 0 0 0 3px rgba(133, 13, 51, 0.20);
+
+  --scrim: rgba(26, 22, 24, 0.44);
+  --skeleton-base: #EDEAE5;
+  --skeleton-sheen: rgba(255, 255, 255, 0.72);
+}
+
+/* ============================================================================
+   DARK THEME — a true peer of light, not an inversion.
+   Surfaces stay NEUTRAL (warm-grey, never maroon-tinted); the brand appears
+   only on accents, and as brand-300 because brand-700 is unreadable here.
+   ========================================================================== */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas:    #121011;
+  --surface:   #1A1719;
+  --surface-2: #221E20;
+  --surface-3: #2B2629;
+  --inset:     #161314;
+
+  --ink:   #F4F1F2;   /* 15.9:1 on surface */
+  --ink-2: #D8D2D4;   /* 11.6:1            */
+  --muted: #A69DA1;   /*  6.3:1            */
+  --faint: #8B8286;   /*  4.2:1 — decorative only */
+
+  --line:        #332D30;
+  --line-2:      #272225;
+  --line-strong: #473F43;
+
+  --primary:      var(--brand-300);   /* fills + accents readable on dark    */
+  --primary-hover:var(--brand-200);
+  --primary-ink:  var(--brand-300);   /* brand as TEXT — 8.0:1 on surface    */
+  --primary-on:   #1A1719;            /* text ON a brand fill — 8.8:1        */
+  --primary-soft: #2A1119;
+  --primary-line: #4A2130;
+  --primary-ghost:rgba(237, 160, 186, 0.08);
+
+  --pos:  #4ED18C;  --pos-soft:  #10281C;  --pos-line:  #1E4634;
+  --neg:  #FF8A78;  --neg-soft:  #2E1614;  --neg-line:  #4E2521;
+  --warn: #E5B458;  --warn-soft: #2A2012;  --warn-line: #4A3820;
+  --info: #6FB4F0;  --info-soft: #12202E;  --info-line: #1F3B54;
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.36);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.44), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow:    0 2px 6px rgba(0, 0, 0, 0.40), 0 16px 40px -20px rgba(0, 0, 0, 0.70);
+  --shadow-lg: 0 18px 50px -18px rgba(0, 0, 0, 0.76);
+  --shadow-xl: 0 28px 72px -26px rgba(0, 0, 0, 0.84);
+  --shadow-brand: 0 10px 28px -12px rgba(0, 0, 0, 0.6);
+  --ring: 0 0 0 3px rgba(237, 160, 186, 0.28);
+
+  --scrim: rgba(0, 0, 0, 0.64);
+  --skeleton-base: #251F22;
+  --skeleton-sheen: rgba(255, 255, 255, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; --dur-slower: 1ms; }
+}
