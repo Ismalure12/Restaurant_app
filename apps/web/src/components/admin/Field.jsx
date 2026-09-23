@@ -8,7 +8,7 @@ import { Children, Fragment, cloneElement, isValidElement, useId } from 'react';
  *   requirement  quiet grey, what is needed before saving   (shown until the field is touched)
  *   hint         quiet grey, always-on help text
  *
- * <Field label="Name" required {...form.fieldProps('name')}><input className="input" .../></Field>
+ * <Field label="Name" required {...form.fieldProps('name')}><Input .../></Field>
  *
  * The FIRST element child gets id / aria-invalid / aria-describedby /
  * aria-required, the blur handler and the red outline — merged with its own
@@ -62,7 +62,7 @@ export default function Field({ label, required = false, error, requirement, hin
         return child;
       }
       const describedBy = [own['aria-describedby'], a11y['aria-describedby']].filter(Boolean).join(' ') || undefined;
-      const cls = [own.className, error && native && NATIVE_FIELDS.has(child.type) ? 'input-err' : ''].filter(Boolean).join(' ');
+      const cls = [own.className, error && native && NATIVE_FIELDS.has(child.type) ? '!border-mq-danger' : ''].filter(Boolean).join(' ');
       return cloneElement(child, {
         ...a11y,
         'aria-invalid': own['aria-invalid'] ?? a11y['aria-invalid'],
@@ -75,16 +75,16 @@ export default function Field({ label, required = false, error, requirement, hin
   }
 
   return (
-    <div className={`ff fld ${className}`.trim()}>
+    <div className={`flex flex-col gap-1.5 min-w-0 ${className}`.trim()}>
       {label && (
-        <label htmlFor={reaches ? id : htmlFor}>
+        <label htmlFor={reaches ? id : htmlFor} className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">
           {label}
-          {required && <span className="fld-req" aria-hidden="true"> *</span>}
+          {required && <span className="text-mq-danger" aria-hidden="true"> *</span>}
         </label>
       )}
       {control}
       {message && (
-        <div id={msgId} className={error ? 'field-err' : 'fld-note'} role={error ? 'alert' : undefined}>
+        <div id={msgId} className={error ? 'text-xs font-medium text-mq-danger-ink' : 'text-xs text-mq-muted'} role={error ? 'alert' : undefined}>
           {message}
         </div>
       )}

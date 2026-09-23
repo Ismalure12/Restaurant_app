@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import useStaffList from '@/hooks/useStaffList';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
-import { Card, Empty, ErrorNote, FilterSelect, PeriodPicker, useReportParams } from '@/components/admin/reports/ReportKit';
+import { ActiveFilters, FilterSelect, FiltersButton, PeriodPicker, useReportParams } from '@/components/admin/reports/ReportKit';
+import { Chip, EmptyRow, ErrorState, LoadMoreBar, RowSkeletons, SearchInput, Table, Th, Td, Tr, Toolbar } from '@/components/admin/ui';
+import { SettingsCard } from '@/components/admin/settings/shared';
 
 // Plain-language names for the actions the API records (lib/db/audit.ts callers).
 const ACTIONS = {
@@ -58,14 +59,26 @@ function metaLines(meta, prefix = '') {
   return out;
 }
 
+// Action chip tone (status channel): undoing / removing is danger, reopening a
+// closed period is warn, closing / posting / paying is ok, other changes plain.
+function actionTone(a) {
+  if (/(void|delete|discard|dismiss|owner_out)/.test(a)) return 'danger';
+  if (/reopen/.test(a)) return 'warn';
+  if (/(close|post|payment|owner_in|opening)/.test(a)) return 'ok';
+  if (/create|start/.test(a)) return 'info';
+  return 'off';
+}
+
 function Details({ meta }) {
   const lines = metaLines(meta);
-  if (!lines.length) return <span className="sub">—</span>;
-  if (lines.length === 1) return <span className="al-meta-one">{lines[0]}</span>;
+  if (!lines.length) return <span className="text-mq-muted">—</span>;
+  if (lines.length === 1) return <span className="break-words">{lines[0]}</span>;
   return (
-    <details className="al-meta">
-      <summary>{lines.length} details</summary>
-      <ul>{lines.map((l, i) => <li key={i}>{l}</li>)}</ul>
+    <details className="group">
+      <summary className="cursor-pointer select-none text-[12.5px] font-semibold text-mq-cta hover:text-mq-primary list-none [&::-webkit-details-marker]:hidden">
+        {lines.length} details <span className="inline-block transition-transform group-open:rotate-90">›</span>
+      </summary>
+      <ul className="m-0 mt-1.5 pl-4 flex flex-col gap-0.5 text-[12.5px] text-mq-on-tint list-disc">{lines.map((l, i) => <li key={i} className="break-words">{l}</li>)}</ul>
     </details>
   );
 }
@@ -98,46 +111,50 @@ export default function AuditLogPage() {
 
   return (
     <>
-      <div className="toolbar rpt-toolbar al-toolbar">
+      <Toolbar>
         <PeriodPicker preset={preset} range={range} set={set} />
-        <FilterSelect label="Item" value={filters.entity} options={entities} onChange={(v) => set({ entity: v })} />
-        <FilterSelect label="Who" value={filters.actorId} options={people} onChange={(v) => set({ actorId: v })} />
-        <label className="search al-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search action or item #" aria-label="Search the audit log" maxLength={80} />
-        </label>
-      </div>
-      {q.isError && <ErrorNote error={q.error} />}
+        <FiltersButton active={(filters.entity ? 1 : 0) + (filters.actorId ? 1 : 0)} onClear={() => set({ entity: '', actorId: '' })}>
+          <FilterSelect label="Item" value={filters.entity} options={entities} onChange={(v) => set({ entity: v })} all="Everything" />
+          <FilterSelect label="Who" value={filters.actorId} options={people} onChange={(v) => set({ actorId: v })} all="Everyone" />
+        </FiltersButton>
+        <SearchInput className="flex-[1_1_200px] h-[38px]" value={term} onChange={setTerm} placeholder="Search action or item #" aria-label="Search the audit log" maxLength={80} />
+      </Toolbar>
+      <ActiveFilters
+        onClear={() => set({ entity: '', actorId: '' })}
+        items={[
+          filters.entity && { key: 'entity', label: `Item: ${entities.find((e) => e.value === filters.entity)?.label || filters.entity}`, onRemove: () => set({ entity: '' }) },
+          filters.actorId && { key: 'actorId', label: `Who: ${people.find((p) => p.value === filters.actorId)?.label || '…'}`, onRemove: () => set({ actorId: '' }) },
+        ].filter(Boolean)}
+      />
+      {q.isError && <ErrorState error={q.error} onRetry={() => q.refetch()} title="Couldn’t load the audit log" />}
 
-      <Card eyebrow="Who changed what" title="Audit log" flush>
-        {q.isLoading ? <RowsSkeleton className="card-pad" rows={6} /> : rows.length === 0 ? <Empty>Nothing was recorded for these filters.</Empty> : (
-          <div className="table-wrap">
-            <table className="table al-table">
-              <thead><tr><th>When</th><th>Who</th><th>What</th><th>Item</th><th>Details</th></tr></thead>
-              <tbody>
-                {rows.map((r) => {
-                  const href = itemHref(r);
-                  const item = `${entityLabel(r.entity)}${r.entityId ? ` #${r.entityId}` : ''}`;
-                  return (
-                    <tr key={r.id}>
-                      <td className="mono al-when" data-label="When">{when(r.at)}</td>
-                      <td data-label="Who">{r.actor ? <><span className="strong">{r.actor.name}</span><div className="sub">{r.actor.role}</div></> : <span className="sub">System</span>}</td>
-                      <td className="strong al-what" data-label="What">{actionLabel(r.action)}</td>
-                      <td data-label="Item">{href ? <Link href={href}>{item}</Link> : item}</td>
-                      <td className="al-details" data-label="Details"><Details meta={r.meta} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+      <SettingsCard flush title="Audit log" sub="Who changed what, and when">
+        {q.isLoading ? <RowSkeletons rows={6} /> : (
+          <Table minW={760} maxH={620} label="Audit log">
+            <thead><tr><Th>When</Th><Th>Who</Th><Th>What</Th><Th>Item</Th><Th>Details</Th></tr></thead>
+            <tbody>
+              {rows.length === 0 ? <EmptyRow cols={5}>Nothing was recorded for these filters.</EmptyRow> : rows.map((r) => {
+                const href = itemHref(r);
+                const item = `${entityLabel(r.entity)}${r.entityId ? ` #${r.entityId}` : ''}`;
+                return (
+                  <Tr key={r.id}>
+                    <Td mono className="whitespace-nowrap !align-top">{when(r.at)}</Td>
+                    <Td className="!align-top">
+                      {r.actor
+                        ? <span className="flex flex-col gap-px"><span className="font-semibold text-mq-ink">{r.actor.name}</span><span className="text-[11.5px] text-mq-muted capitalize">{r.actor.role}</span></span>
+                        : <span className="text-mq-muted">System</span>}
+                    </Td>
+                    <Td className="!align-top"><Chip small tone={actionTone(r.action)} dot={false}>{actionLabel(r.action)}</Chip></Td>
+                    <Td className="align-top whitespace-nowrap">{href ? <Link href={href} className="font-semibold text-mq-cta hover:text-mq-primary">{item}</Link> : <span className="text-mq-ink">{item}</span>}</Td>
+                    <Td className="align-top max-w-[360px] text-mq-on-tint"><Details meta={r.meta} /></Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </Table>
         )}
-      </Card>
-      {q.hasNextPage && (
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <button type="button" className="btn btn-ghost" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>
-        </div>
-      )}
+        <LoadMoreBar shown={rows.length} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => q.fetchNextPage()} noun={rows.length === 1 ? 'entry' : 'entries'} />
+      </SettingsCard>
     </>
   );
 }

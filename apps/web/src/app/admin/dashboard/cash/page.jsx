@@ -10,25 +10,31 @@ import { reportSaveError } from '@/lib/saveError';
 import { useFormValidation } from '@/lib/formValidation';
 import { transferSchema, ownerSchema } from '@/lib/schemas/cash';
 import Field from '@/components/admin/Field';
-import { KpiRowSkeleton, RowsSkeleton } from '@/components/admin/Skeletons';
 import DateRange from '@/components/admin/DateRange';
 import DayCloseTab from '@/components/admin/dayclose/DayCloseTab';
-import { money } from '@/lib/money';
 import IfCan from '@/components/admin/IfCan';
+import { money } from '@/lib/money';
+import { PALETTE } from '@/components/admin/reports/Charts';
+import {
+  Page, Toolbar, Button, Card, CardHeader, Chip, Kpi, KpiGrid, KpiSkeletons, Select, Segmented,
+  Table, Th, Td, Tr, TotalRow, EmptyRow, LoadMoreBar, RowSkeletons, ErrorState, EmptyState, Alert, Modal, ModalSpacer,
+  inputCls, selectCls, textareaCls, useBreakpoint, cx,
+} from '@/components/admin/ui';
 
-
-// "+$5.00" / "-$5.00" for movements.
-const signed = (n) => (Number(n) < 0 ? '-' : '+') + money(Math.abs(Number(n)));
+// "+$5.00" / "−$5.00" for movements.
+const signed = (n) => (Number(n) < 0 ? '−' : '+') + money(Math.abs(Number(n)));
 const pad = (n) => String(n).padStart(2, '0');
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-const KIND_NAME = { cash: 'Cash', wallet: 'Mobile wallet', card: 'Card', bank: 'Bank', gateway: 'Online payments' };
+const acctName = (a) => (a.kind === 'cash' ? 'Cash' : a.label);
+const KIND_NAME = { cash: 'Cash', wallet: 'Wallet', card: 'Card', bank: 'Bank', gateway: 'Online' };
 const ENTRY_KIND = {
   sale: 'Sale', invoice_payment: 'Account payment', refund: 'Refund', adjustment: 'Sale correction', expense: 'Expense',
   salary: 'Salary', transfer: 'Transfer', owner_in: 'Owner put in', owner_out: 'Owner took out', over_short: 'Count difference',
 };
 const TABS = [['balances', 'Balances'], ['book', 'Cash book'], ['collections', 'Collections'], ['transfers', 'Transfers & owner'], ['day-close', 'Day close']];
-const WalletIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4" /><path d="M4 6v12a2 2 0 0 0 2 2h14v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></svg>;
-const CloseIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>;
+const stamp = (d) => new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const shortDay = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+const amountTone = (n) => (Number(n) < 0 ? 'text-mq-danger-ink' : Number(n) > 0 ? 'text-mq-ok-ink' : 'text-mq-muted');
 
 // The one place account balances are read — every tab needs the account list.
 function useBalances() {
@@ -39,97 +45,113 @@ export default function CashRoute() {
   return <Suspense fallback={null}><CashPage /></Suspense>;
 }
 
+/**
+ * Money › Cash & accounts: Balances · Cash book · Collections · Transfers &
+ * owner · Day close (?tab=). Transfer money / Owner money sit in the header
+ * for people who may act on this page.
+ */
 function CashPage() {
   const sp = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const bp = useBreakpoint();
   const tab = TABS.some(([k]) => k === sp.get('tab')) ? sp.get('tab') : 'balances';
   const accountParam = sp.get('account') || '';
   const dayParam = /^\d{4}-\d{2}-\d{2}$/.test(sp.get('day') || '') ? sp.get('day') : '';
+  const [dialog, setDialog] = useState(null); // 'transfer' | 'owner'
 
-  const go = (t, extra = {}) => {
+  const hrefOf = (t, extra = {}) => {
     const q = new URLSearchParams();
     if (t !== 'balances') q.set('tab', t);
     Object.entries(extra).forEach(([k, v]) => v && q.set(k, v));
     const s = q.toString();
-    router.replace(s ? `${pathname}?${s}` : pathname, { scroll: false });
+    return s ? `${pathname}?${s}` : pathname;
   };
+  const go = (t, extra) => router.replace(hrefOf(t, extra), { scroll: false });
 
+  // Design: the section switch is a segmented control, the money actions sit at the right.
   return (
-    <div className="wrap cash">
-      <div className="toolbar">
-        <div className="seg" role="tablist" aria-label="Cash & accounts">
-          {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'active' : ''} onClick={() => go(k)}>{l}</button>)}
-        </div>
-      </div>
+    <Page>
+      <Toolbar>
+        <Segmented label="Cash & accounts" value={tab} options={TABS.map(([k, l]) => ({ value: k, label: l, href: hrefOf(k) }))} />
+        <span className="flex-1" />
+        <IfCan page="cash">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Button variant="secondary" size={bp === 'phone' ? 'lg' : 'md'} icon="transfer" onClick={() => setDialog('transfer')}>Transfer money</Button>
+            <Button variant="primary" size={bp === 'phone' ? 'lg' : 'md'} icon="plus" onClick={() => setDialog('owner')}>Owner money</Button>
+          </div>
+        </IfCan>
+      </Toolbar>
       {tab === 'balances' && <BalancesTab />}
       {tab === 'book' && <CashBookTab accountParam={accountParam} onAccount={(id) => go('book', { account: id })} />}
       {tab === 'collections' && <CollectionsTab />}
       {tab === 'transfers' && <TransfersTab />}
       {tab === 'day-close' && <DayCloseTab dayParam={dayParam} onDay={(d) => go('day-close', { day: d })} />}
-    </div>
+      {dialog === 'transfer' && <TransferDialog onClose={() => setDialog(null)} />}
+      {dialog === 'owner' && <OwnerDialog onClose={() => setDialog(null)} />}
+    </Page>
   );
 }
 
-function ErrorBox({ onRetry, what }) {
+function OpeningPrompt({ children }) {
   return (
-    <div className="card-pad">
-      <div className="adm-error-banner">Couldn&rsquo;t load {what}. <button className="btn btn-ghost btn-sm" onClick={onRetry}>Try again</button></div>
-    </div>
+    <Alert
+      tone="info"
+      title="Set opening balances"
+      action={<Button href="/admin/dashboard/settings/money" variant="primary" size="sm">Set opening balances</Button>}
+    >
+      {children}
+    </Alert>
   );
 }
 
 // ── Balances ────────────────────────────────────────────────────────────
 function BalancesTab() {
   const q = useBalances();
+  if (q.isLoading) return <><KpiSkeletons count={2} min={210} /><KpiSkeletons count={4} min={260} /></>;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Couldn’t load the balances" />;
   const data = q.data;
-  if (q.isLoading) return <><KpiRowSkeleton count={4} /></>;
-  if (q.isError) return <div className="card"><ErrorBox what="balances" onRetry={() => q.refetch()} /></div>;
   const accounts = (data?.accounts || []).filter((a) => a.isActive);
   const noOpening = !data?.openingDate;
 
   return (
     <>
-      {noOpening && (
-        <div className="card card-pad-lg cash-prompt" style={{ marginBottom: 16 }}>
-          <div>
-            <div className="ttl">Set opening balances</div>
-            <div className="note">Balances start from the money each account held on your opening date. Enter them in Settings to see what every account holds now.</div>
-          </div>
-          <Link href="/admin/dashboard/settings/money" className="btn btn-primary">Set opening balances</Link>
-        </div>
-      )}
-      {!noOpening && (
-        <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
-          <div className="kpi">
-            <div className="kpi-top"><div className="kpi-ic green">{WalletIc}</div><span className="kpi-k">Total across accounts</span></div>
-            <div className="kpi-v">{money(data.total)}</div>
-            <div className="kpi-foot"><span>Since {data.openingDate}</span></div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-top"><div className="kpi-ic amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" /><path d="M18 9l-5 5-3-3-4 4" /></svg></div><span className="kpi-k">Net today</span></div>
-            <div className={`kpi-v ${Number(data.today) < 0 ? 'cash-neg' : ''}`}>{signed(data.today)}</div>
-            <div className="kpi-foot"><span>all accounts, money in minus out</span></div>
-          </div>
-        </div>
+      {noOpening ? (
+        <OpeningPrompt>Balances start from the money each account held on your opening date. Enter them in Settings to see what every account holds now.</OpeningPrompt>
+      ) : (
+        <KpiGrid min={210}>
+          <Kpi label="Total across accounts" value={money(data.total)} foot={`${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'} · since ${shortDay(data.openingDate)}`} />
+          <Kpi
+            label="Net today"
+            value={<span className={Number(data.today) < 0 ? 'text-mq-danger-ink' : undefined}>{signed(data.today)}</span>}
+            foot="money in less money out, all accounts"
+          />
+        </KpiGrid>
       )}
       {accounts.length === 0 ? (
-        <div className="card"><div className="empty"><div className="empty-ring">{WalletIc}</div><p className="empty-title">No accounts yet</p><p className="empty-sub">Add business accounts in Settings.</p></div></div>
+        <Card><EmptyState icon="cash" title="No accounts yet" action={<Button href="/admin/dashboard/settings/money" variant="soft" size="sm">Open Settings › Money</Button>}>Add business accounts in Settings.</EmptyState></Card>
       ) : (
-        <div className="cash-grid">
+        <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))' }}>
           {accounts.map((a, i) => (
-            <Link key={a.id} href={`/admin/dashboard/cash?tab=book&account=${a.id}`} className="card card-pad-lg cash-acct reveal" style={{ animationDelay: `${i * 0.04}s` }}>
-              <div className="cash-acct-top">
-                <div>
-                  <div className="ttl">{a.kind === 'cash' ? 'Cash' : a.label}</div>
-                  <div className="note">{KIND_NAME[a.kind] || a.kind}{a.number ? ` · ${a.number}` : ''}</div>
-                </div>
-              </div>
-              <div className={`cash-bal ${a.balance != null && Number(a.balance) < 0 ? 'cash-neg' : ''}`}>{a.balance == null ? '—' : money(a.balance)}</div>
-              <div className="cash-acct-foot">
-                <span className={Number(a.today) < 0 ? 'cash-neg' : 'cash-pos'}>{signed(a.today)} today</span>
-                <span className="cash-link">Cash book →</span>
-              </div>
+            <Link
+              key={a.id}
+              href={`/admin/dashboard/cash?tab=book&account=${a.id}`}
+              className="flex flex-col gap-2.5 p-[18px] bg-white border border-mq-line rounded-xl shadow-mq-card text-mq-ink transition-[border-color,box-shadow] hover:border-mq-focus hover:shadow-mq-md focus-visible:outline-none focus-visible:shadow-mq-focus"
+            >
+              <span className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-[3px] flex-none" style={{ background: PALETTE[i % PALETTE.length] }} aria-hidden="true" />
+                <span className="text-sm font-semibold truncate">{acctName(a)}</span>
+                <span className="ml-auto text-[11px] font-semibold uppercase tracking-[.08em] text-mq-muted">{KIND_NAME[a.kind] || a.kind}</span>
+              </span>
+              <span className={cx('font-mq-mono tabular-nums text-[28px] font-medium tracking-[-.03em] leading-[1.1] break-words', a.balance != null && Number(a.balance) < 0 && 'text-mq-danger-ink')}>
+                {a.balance == null ? '—' : money(a.balance)}
+              </span>
+              <span className="flex justify-between gap-2 text-[12.5px]">
+                <span className="text-mq-on-tint font-mq-mono truncate">{a.number || KIND_NAME[a.kind] || ''}</span>
+                {Number(a.today) === 0
+                  ? <span className="text-mq-muted whitespace-nowrap">no movement today</span>
+                  : <span className={cx('font-semibold whitespace-nowrap font-mq-mono tabular-nums', amountTone(a.today))}>{signed(a.today)} today</span>}
+              </span>
             </Link>
           ))}
         </div>
@@ -143,12 +165,12 @@ function CashBookTab({ accountParam, onAccount }) {
   const bal = useBalances();
   const accounts = bal.data?.accounts || [];
   const accountId = accountParam || (accounts[0] ? String(accounts[0].id) : '');
-  const [range, setRange] = useState(() => ({ from: todayISO(), to: todayISO() }));
-  const onRange = useCallback((from, to) => setRange((r) => (r.from === from && r.to === to ? r : { from, to })), []);
+  const [range, setRange] = useState(null);
+  const onRange = useCallback((from, to) => setRange((r) => (r && r.from === from && r.to === to ? r : { from, to })), []);
 
   const list = useInfiniteQuery({
-    queryKey: ['account-entries', accountId, range.from, range.to],
-    enabled: Boolean(accountId),
+    queryKey: ['account-entries', accountId, range?.from, range?.to],
+    enabled: Boolean(accountId && range),
     initialPageParam: null,
     placeholderData: keepPreviousData,
     queryFn: ({ pageParam }) => {
@@ -174,73 +196,75 @@ function CashBookTab({ accountParam, onAccount }) {
       if (openingDate && r.day >= openingDate) { acc = Math.round((acc + r.amount) * 100) / 100; run.push(acc); } else run.push(null);
     }
   }
-  const csvHref = accountId ? `/api/admin/accounts/${accountId}/entries?${new URLSearchParams({ from: range.from, to: range.to, format: 'csv' })}` : '#';
+  const csvHref = accountId && range ? `/api/admin/accounts/${accountId}/entries?${new URLSearchParams({ from: range.from, to: range.to, format: 'csv' })}` : undefined;
+  const loading = bal.isLoading || (accountId && (!range || list.isLoading));
 
   return (
     <>
-      <div className="toolbar">
-        <select className="input" value={accountId} onChange={(e) => onAccount(e.target.value)} aria-label="Account">
-          {accounts.map((a) => <option key={a.id} value={a.id}>{a.kind === 'cash' ? 'Cash' : a.label}{a.isActive ? '' : ' (inactive)'}</option>)}
-        </select>
-        <DateRange defaultPreset="today" onChange={onRange} />
-        <div style={{ flex: 1 }} />
-        <a className="btn btn-ghost" href={csvHref} download>Download CSV</a>
-      </div>
+      {bal.isError || list.isError ? null : loading ? <KpiSkeletons count={4} min={210} /> : totals ? (
+        <KpiGrid min={210}>
+          <Kpi label="Opening" value={money(totals.opening)} foot={`on ${shortDay(totals.from)}`} />
+          <Kpi label="Money in" value={<span className="text-mq-ok-ink">+{money(totals.moneyIn)}</span>} foot="sales, payments, transfers in" />
+          <Kpi label="Money out" value={<span className="text-mq-danger-ink">−{money(totals.moneyOut)}</span>} foot="expenses, refunds, transfers out" />
+          <Kpi label="Closing" value={money(totals.closing)} foot={`on ${shortDay(totals.to)}`} />
+        </KpiGrid>
+      ) : accountId && !openingDate && first ? (
+        <OpeningPrompt>Opening balances aren’t set yet, so there is no opening or closing balance to show.</OpeningPrompt>
+      ) : null}
 
-      {bal.isLoading || (list.isLoading && accountId) ? (
-        <div className="card"><RowsSkeleton rows={5} className="card-pad" /></div>
-      ) : bal.isError || list.isError ? (
-        <div className="card"><ErrorBox what="the cash book" onRetry={() => { bal.refetch(); list.refetch(); }} /></div>
-      ) : !accountId ? (
-        <div className="card"><div className="empty"><div className="empty-ring">{WalletIc}</div><p className="empty-title">No accounts yet</p></div></div>
-      ) : (
-        <>
-          {totals ? (
-            <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
-              <div className="kpi"><div className="kpi-top"><span className="kpi-k">Opening</span></div><div className="kpi-v">{money(totals.opening)}</div><div className="kpi-foot"><span>on {totals.from}</span></div></div>
-              <div className="kpi"><div className="kpi-top"><span className="kpi-k">Money in</span></div><div className="kpi-v cash-pos">{money(totals.moneyIn)}</div></div>
-              <div className="kpi"><div className="kpi-top"><span className="kpi-k">Money out</span></div><div className="kpi-v cash-neg">{money(totals.moneyOut)}</div></div>
-              <div className="kpi"><div className="kpi-top"><span className="kpi-k">Closing</span></div><div className="kpi-v">{money(totals.closing)}</div><div className="kpi-foot"><span>on {totals.to}</span></div></div>
-            </div>
-          ) : !openingDate ? (
-            <div className="card card-pad-lg cash-prompt" style={{ marginBottom: 16 }}>
-              <div className="note">Opening balances aren&rsquo;t set yet, so there is no opening or closing balance to show.</div>
-              <Link href="/admin/dashboard/settings/money" className="btn btn-primary">Set opening balances</Link>
-            </div>
-          ) : null}
-
-          <div className="card reveal" style={{ overflow: 'hidden' }}>
-            <div className="card-h"><div><div className="ttl">Cash book</div><div className="note">{rows.length} {rows.length === 1 ? 'movement' : 'movements'} loaded · {range.from === range.to ? range.from : `${range.from} to ${range.to}`}</div></div></div>
-            {rows.length === 0 ? (
-              <div className="empty"><div className="empty-ring">{WalletIc}</div><p className="empty-title">No movements</p><p className="empty-sub">Nothing went in or out of this account in the chosen days.</p></div>
-            ) : (
-              <div className="table-wrap">
-                <table className="table" style={{ marginTop: 12 }}>
-                  <thead><tr><th>When</th><th>What</th><th>Note</th><th>Order</th><th>Collected by</th><th className="num">Amount</th><th className="num">Balance</th></tr></thead>
-                  <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={r.id}>
-                        <td className="muted" style={{ whiteSpace: 'nowrap' }}>{r.day} · {new Date(r.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td><span className="pill pill-ghost">{ENTRY_KIND[r.kind] || r.kind}</span></td>
-                        <td className="muted">{r.note || '—'}</td>
-                        <td>{r.order ? <Link href={`/admin/dashboard/sales/${r.order.id}`} className="cash-link">{r.order.code}</Link> : <span className="muted">—</span>}</td>
-                        <td className="muted">{r.collectedBy || '—'}</td>
-                        <td className={`num strong ${r.amount < 0 ? 'cash-neg' : 'cash-pos'}`}>{signed(r.amount)}</td>
-                        <td className="num">{run[i] == null ? '—' : money(run[i])}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          {list.hasNextPage && (
-            <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <button className="btn btn-ghost" onClick={() => list.fetchNextPage()} disabled={list.isFetchingNextPage}>{list.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>
-            </div>
+      <Card className="overflow-hidden">
+        <CardHeader
+          title="Cash book"
+          count={first ? rows.length : null}
+          actions={(
+            <>
+              <DateRange defaultPreset="today" onChange={onRange} />
+              <Select
+                size="sm"
+                className="w-auto min-w-[150px]"
+                value={accountId}
+                onChange={(e) => onAccount(e.target.value)}
+                aria-label="Account"
+                disabled={!accounts.length}
+              >
+                {accounts.map((a) => <option key={a.id} value={a.id}>{acctName(a)}{a.isActive ? '' : ' (inactive)'}</option>)}
+              </Select>
+              {csvHref && <Button href={csvHref} variant="secondary" size="xs" icon="download" download>Export CSV</Button>}
+            </>
           )}
-        </>
-      )}
+        />
+        {bal.isError || list.isError ? (
+          <div className="p-4"><ErrorState error={bal.error || list.error} onRetry={() => { bal.refetch(); list.refetch(); }} /></div>
+        ) : loading ? <RowSkeletons rows={5} /> : !accountId ? (
+          <EmptyState icon="cash" title="No accounts yet">Add business accounts in Settings › Money.</EmptyState>
+        ) : (
+          <Table maxH={440} minW={860} label="Cash book">
+            <thead>
+              <tr><Th>When</Th><Th>What</Th><Th>Note</Th><Th>Order</Th><Th>Collected by</Th><Th align="right">Amount</Th><Th align="right">Balance</Th></tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <EmptyRow cols={7}>Nothing went in or out of this account in the chosen days.</EmptyRow>
+              ) : rows.map((r, i) => (
+                <Tr key={r.id}>
+                  <Td className="whitespace-nowrap">{stamp(r.at)}</Td>
+                  <Td strong className="whitespace-nowrap">{ENTRY_KIND[r.kind] || r.kind}</Td>
+                  <Td className="text-mq-on-tint">{r.note || '—'}</Td>
+                  <Td mono className="whitespace-nowrap">
+                    {r.order ? <Link href={`/admin/dashboard/sales/${r.order.id}`} className="text-mq-cta font-semibold hover:text-mq-primary">{r.order.code}</Link> : '—'}
+                  </Td>
+                  <Td>{r.collectedBy || '—'}</Td>
+                  <Td money className={cx('font-semibold', amountTone(r.amount))}>{signed(r.amount)}</Td>
+                  <Td money>{run[i] == null ? '—' : money(run[i])}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+        {!loading && !list.isError && accountId && (
+          <LoadMoreBar shown={rows.length} hasMore={!!list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => list.fetchNextPage()} noun={rows.length === 1 ? 'movement' : 'movements'} />
+        )}
+      </Card>
     </>
   );
 }
@@ -255,100 +279,150 @@ function CollectionsTab() {
   });
   const data = q.data;
   return (
-    <>
-      <div className="toolbar">
-        <div className="ff" style={{ margin: 0 }}>
-          <input className="input" type="date" value={day} max={todayISO()} onChange={(e) => e.target.value && setDay(e.target.value)} aria-label="Day" />
-        </div>
-      </div>
-      <div className="card reveal" style={{ overflow: 'hidden' }}>
-        <div className="card-h">
-          <div>
-            <div className="ttl">Collected on {day}</div>
-            <div className="note">Everything collected is handed over to the business automatically at day&rsquo;s end.</div>
-          </div>
-        </div>
-        {q.isLoading ? <RowsSkeleton rows={4} className="card-pad" />
-          : q.isError ? <ErrorBox what="collections" onRetry={() => q.refetch()} />
-          : !data || data.rows.length === 0 ? (
-            <div className="empty"><div className="empty-ring">{WalletIc}</div><p className="empty-title">Nothing collected</p><p className="empty-sub">No staff member took payments on this day.</p></div>
-          ) : (
-            <div className="table-wrap">
-              <table className="table" style={{ marginTop: 12 }}>
-                <thead><tr><th>Person</th>{data.accounts.map((a) => <th key={a.id} className="num">{a.kind === 'cash' ? 'Cash' : a.label}</th>)}<th className="num">Total</th></tr></thead>
-                <tbody>
-                  {data.rows.map((r) => (
-                    <tr key={r.staffId}>
-                      <td><span className="strong">{r.name}</span> <span className="pill pill-ghost" style={{ textTransform: 'capitalize' }}>{r.role}</span></td>
-                      {data.accounts.map((a) => <td key={a.id} className="num">{r.byAccount[a.id] != null ? money(r.byAccount[a.id]) : <span className="muted">—</span>}</td>)}
-                      <td className="num strong">{money(r.total)}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td className="strong">Total</td>
-                    {data.accounts.map((a) => <td key={a.id} className="num strong">{money(data.totals[a.id])}</td>)}
-                    <td className="num strong">{money(data.total)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-      </div>
-    </>
+    <Card className="overflow-hidden">
+      <CardHeader
+        title="Collections"
+        sub="Handed over to the business automatically."
+        actions={(
+          <input
+            className={inputCls({ size: 'sm', className: 'w-auto' })}
+            type="date"
+            value={day}
+            max={todayISO()}
+            onChange={(e) => e.target.value && setDay(e.target.value)}
+            aria-label="Day"
+          />
+        )}
+      />
+      {q.isLoading ? <RowSkeletons rows={4} /> : q.isError ? (
+        <div className="p-4"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>
+      ) : !data || data.rows.length === 0 ? (
+        <EmptyState icon="user" title="Nothing collected">No staff member took payments on {shortDay(day)}.</EmptyState>
+      ) : (
+        <Table maxH={440} minW={420 + data.accounts.length * 110} label="Collections">
+          <thead>
+            <tr><Th>Person</Th>{data.accounts.map((a) => <Th key={a.id} align="right">{acctName(a)}</Th>)}<Th align="right">Total</Th></tr>
+          </thead>
+          <tbody>
+            {data.rows.map((r) => (
+              <Tr key={r.staffId}>
+                <Td strong><span className="inline-flex items-center gap-2">{r.name}<Chip tone="plain" dot={false} small className="capitalize">{r.role}</Chip></span></Td>
+                {data.accounts.map((a) => <Td key={a.id} money>{r.byAccount[a.id] != null ? money(r.byAccount[a.id]) : <span className="text-mq-muted">—</span>}</Td>)}
+                <Td money className="font-semibold">{money(r.total)}</Td>
+              </Tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <TotalRow>
+              <Td>Total</Td>
+              {data.accounts.map((a) => <Td key={a.id} money>{money(data.totals[a.id])}</Td>)}
+              <Td money>{money(data.total)}</Td>
+            </TotalRow>
+          </tfoot>
+        </Table>
+      )}
+    </Card>
   );
 }
 
 // ── Transfers & owner ───────────────────────────────────────────────────
+const MOVE_KIND = { transfer: ['Transfer', 'info'], owner_out: ['Drawings', 'warn'], owner_in: ['Capital', 'ok'] };
+
 function TransfersTab() {
-  const [dialog, setDialog] = useState(null); // 'transfer' | 'owner'
+  const [range, setRange] = useState(null);
+  const onRange = useCallback((from, to) => setRange((r) => (r && r.from === from && r.to === to ? r : { from, to })), []);
+  const list = useInfiniteQuery({
+    queryKey: ['account-transfers', range?.from, range?.to],
+    enabled: Boolean(range),
+    initialPageParam: null,
+    placeholderData: keepPreviousData,
+    queryFn: ({ pageParam }) => {
+      const p = new URLSearchParams({ from: range.from, to: range.to });
+      if (pageParam) p.set('cursor', pageParam);
+      return fetchJson(`/api/admin/accounts/transfers?${p}`);
+    },
+    getNextPageParam: (last) => last.nextCursor || undefined,
+  });
+  const rows = list.data?.pages.flatMap((p) => p.rows || []) ?? [];
+  const loading = !range || list.isLoading;
+
   return (
-    <>
-      <div className="cash-grid">
-        <div className="card card-pad-lg">
-          <div className="ttl">Transfer between accounts</div>
-          <p className="note" style={{ margin: '6px 0 14px' }}>Move money between two business accounts: cash to the bank, a payout from online payments, wallet money withdrawn to cash.</p>
-          <IfCan page="cash"><button className="btn btn-primary" onClick={() => setDialog('transfer')}>New transfer</button></IfCan>
-        </div>
-        <div className="card card-pad-lg">
-          <div className="ttl">Owner money</div>
-          <p className="note" style={{ margin: '6px 0 14px' }}>Record the owner putting money in (capital) or taking money out (drawings). Kept apart from expenses so profit stays honest.</p>
-          <IfCan page="cash"><button className="btn btn-primary" onClick={() => setDialog('owner')}>Record owner money</button></IfCan>
-        </div>
-      </div>
-      <p className="note" style={{ marginTop: 14 }}>Every transfer and owner entry appears in the account&rsquo;s Cash book.</p>
-      {dialog === 'transfer' && <TransferDialog onClose={() => setDialog(null)} />}
-      {dialog === 'owner' && <OwnerDialog onClose={() => setDialog(null)} />}
-    </>
+    <Card className="overflow-hidden">
+      <CardHeader
+        title="Transfers & owner money"
+        count={list.data ? rows.length : null}
+        actions={<DateRange defaultPreset="30d" onChange={onRange} />}
+      />
+      {list.isError ? (
+        <div className="p-4"><ErrorState error={list.error} onRetry={() => list.refetch()} /></div>
+      ) : loading ? <RowSkeletons rows={4} /> : (
+        <Table maxH={440} minW={720} label="Transfers and owner money">
+          <thead><tr><Th>When</Th><Th>Kind</Th><Th>From → to</Th><Th>Note</Th><Th align="right">Amount</Th></tr></thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <EmptyRow cols={5}>No transfers or owner money in these days. Every one also appears in its account’s Cash book.</EmptyRow>
+            ) : rows.map((r) => {
+              const [label, tone] = MOVE_KIND[r.kind] || [r.kind, 'off'];
+              return (
+                <Tr key={r.id}>
+                  <Td className="whitespace-nowrap">{stamp(r.at)}</Td>
+                  <Td><Chip tone={tone} small>{label}</Chip></Td>
+                  <Td className="whitespace-nowrap">{r.from?.label || 'Owner'} → {r.to?.label || 'Owner'}</Td>
+                  <Td className="text-mq-on-tint">{r.note || '—'}{r.by && <span className="text-mq-muted"> · {r.by}</span>}</Td>
+                  <Td money>{money(r.amount)}</Td>
+                </Tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      )}
+      {!loading && !list.isError && (
+        <LoadMoreBar shown={rows.length} hasMore={!!list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => list.fetchNextPage()} noun={rows.length === 1 ? 'entry' : 'entries'} />
+      )}
+    </Card>
   );
 }
 
+// ── Dialogs ─────────────────────────────────────────────────────────────
 function useRefreshMoney() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ['account-balances'] });
-    qc.invalidateQueries({ queryKey: ['money-accounts'] });
-    qc.invalidateQueries({ queryKey: ['account-entries'] });
+    ['account-balances', 'money-accounts', 'account-entries', 'account-transfers'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
-}
-
-function Modal({ title, eyebrow, onClose, busy, children }) {
-  return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">{eyebrow}</div><div className="h-1" style={{ marginTop: 3 }}>{title}</div></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">{CloseIc}</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
 }
 
 function AccountOptions({ accounts, skipGateway }) {
   return accounts.filter((a) => a.isActive && !(skipGateway && a.kind === 'gateway')).map((a) => (
-    <option key={a.id} value={a.id}>{a.kind === 'cash' ? 'Cash' : a.label}</option>
+    <option key={a.id} value={a.id}>{acctName(a)}</option>
   ));
+}
+
+function DialogFooter({ formId, busy, disabled, label, busyLabel, onClose }) {
+  return (
+    <>
+      <ModalSpacer />
+      <Button variant="secondary" size="lg" onClick={onClose} disabled={busy}>Cancel</Button>
+      <Button variant="primary" size="lg" type="submit" form={formId} disabled={busy || disabled}>{busy ? busyLabel : label}</Button>
+    </>
+  );
+}
+
+function AmountDayNote({ f, setF, form }) {
+  return (
+    <>
+      <div className="grid grid-cols-1 tab:grid-cols-2 gap-3.5">
+        <Field label="Amount ($)" required {...form.fieldProps('amount')}>
+          <input className={inputCls({ size: 'lg', mono: true })} type="number" min="0" step="0.01" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="0.00" />
+        </Field>
+        <Field label="Date" required {...form.fieldProps('day')}>
+          <input className={inputCls({ size: 'lg' })} type="date" value={f.day} max={todayISO()} onChange={(e) => setF({ ...f, day: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="Note" {...form.fieldProps('note')}>
+        <textarea className={textareaCls('min-h-[64px]')} rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Optional" />
+      </Field>
+    </>
+  );
 }
 
 function TransferDialog({ onClose }) {
@@ -360,9 +434,7 @@ function TransferDialog({ onClose }) {
   const save = useMutation({
     mutationFn: (payload) => fetchJson('/api/admin/accounts/transfer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
     onSuccess: (d) => { notify.success(`Moved ${money(d.amount)} from ${d.from} to ${d.to}`, { title: 'Could not move the money' }); refresh(); onClose(); },
-    onError: (e) => {
-      reportSaveError(e, { form, title: 'Could not move the money' });
-    },
+    onError: (e) => reportSaveError(e, { form, title: 'Could not move the money' }),
   });
   const submit = (e) => {
     e.preventDefault();
@@ -371,27 +443,25 @@ function TransferDialog({ onClose }) {
     save.mutate({ fromAccountId: Number(f.from), toAccountId: Number(f.to), amount: Number(f.amount), day: f.day || undefined, note: f.note.trim() || null });
   };
   return (
-    <Modal title="Transfer money" eyebrow="Between accounts" onClose={onClose} busy={save.isPending}>
-      <form noValidate onSubmit={submit} style={{ display: 'contents' }}>
-        <div className="modal-b">
-          <div className="form-grid">
-            <Field label="From" required {...form.fieldProps('from')}>
-              <select className="input" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} /></select>
-            </Field>
-            <Field label="To" required {...form.fieldProps('to')}>
-              <select className="input" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} skipGateway /></select>
-            </Field>
-          </div>
-          <div className="form-grid">
-            <Field label="Amount ($)" required {...form.fieldProps('amount')}><input className="input" type="number" min="0" step="0.01" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="0.00" /></Field>
-            <Field label="Date" required {...form.fieldProps('day')}><input className="input" type="date" value={f.day} max={todayISO()} onChange={(e) => setF({ ...f, day: e.target.value })} /></Field>
-          </div>
-          <Field label="Note" {...form.fieldProps('note')}><textarea className="input" rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Optional" /></Field>
+    <Modal
+      title="Transfer money"
+      eyebrow="Between accounts"
+      sub="Cash to the bank, a payout from online payments, wallet money withdrawn to cash."
+      icon="transfer"
+      onClose={onClose}
+      busy={save.isPending}
+      footer={<DialogFooter formId="cash-transfer" busy={save.isPending} disabled={bal.isLoading || !form.valid} label="Transfer" busyLabel="Saving…" onClose={onClose} />}
+    >
+      <form id="cash-transfer" noValidate onSubmit={submit} className="flex flex-col gap-3.5">
+        <div className="grid grid-cols-1 tab:grid-cols-2 gap-3.5">
+          <Field label="From" required {...form.fieldProps('from')}>
+            <select className={selectCls({ size: 'lg' })} value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} /></select>
+          </Field>
+          <Field label="To" required {...form.fieldProps('to')}>
+            <select className={selectCls({ size: 'lg' })} value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} skipGateway /></select>
+          </Field>
         </div>
-        <div className="modal-f">
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={save.isPending || bal.isLoading || !form.valid}>{save.isPending ? 'Saving…' : 'Transfer'}</button>
-        </div>
+        <AmountDayNote f={f} setF={setF} form={form} />
       </form>
     </Modal>
   );
@@ -406,9 +476,7 @@ function OwnerDialog({ onClose }) {
   const save = useMutation({
     mutationFn: (payload) => fetchJson('/api/admin/accounts/owner', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
     onSuccess: (d) => { notify.success(d.direction === 'in' ? `Owner put in ${money(d.amount)} (${d.account})` : `Owner took out ${money(d.amount)} (${d.account})`, { title: 'Could not record the owner money' }); refresh(); onClose(); },
-    onError: (e) => {
-      reportSaveError(e, { form, title: 'Could not record the owner money' });
-    },
+    onError: (e) => reportSaveError(e, { form, title: 'Could not record the owner money' }),
   });
   const submit = (e) => {
     e.preventDefault();
@@ -417,27 +485,30 @@ function OwnerDialog({ onClose }) {
     save.mutate({ accountId: Number(f.account), direction: f.direction, amount: Number(f.amount), day: f.day || undefined, note: f.note.trim() || null });
   };
   return (
-    <Modal title="Owner money" eyebrow="Capital & drawings" onClose={onClose} busy={save.isPending}>
-      <form noValidate onSubmit={submit} style={{ display: 'contents' }}>
-        <div className="modal-b">
-          <div className="seg" role="radiogroup" aria-label="Direction" style={{ alignSelf: 'flex-start' }}>
-            <button type="button" role="radio" aria-checked={f.direction === 'in'} className={f.direction === 'in' ? 'active' : ''} onClick={() => setF({ ...f, direction: 'in' })}>Owner puts money in</button>
-            <button type="button" role="radio" aria-checked={f.direction === 'out'} className={f.direction === 'out' ? 'active' : ''} onClick={() => setF({ ...f, direction: 'out' })}>Owner takes money out</button>
-          </div>
-          <Field label="Account" required {...form.fieldProps('account')}>
-            <select className="input" value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} skipGateway /></select>
-          </Field>
-          <div className="form-grid">
-            <Field label="Amount ($)" required {...form.fieldProps('amount')}><input className="input" type="number" min="0" step="0.01" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} placeholder="0.00" /></Field>
-            <Field label="Date" required {...form.fieldProps('day')}><input className="input" type="date" value={f.day} max={todayISO()} onChange={(e) => setF({ ...f, day: e.target.value })} /></Field>
-          </div>
-          <Field label="Note" {...form.fieldProps('note')}><textarea className="input" rows={2} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="Optional" /></Field>
-        </div>
-        <div className="modal-f">
-          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={save.isPending || bal.isLoading || !form.valid}>{save.isPending ? 'Saving…' : 'Save'}</button>
-        </div>
+    <Modal
+      title="Owner money"
+      eyebrow="Capital & drawings"
+      sub="Kept apart from expenses so profit stays honest."
+      icon="cash"
+      onClose={onClose}
+      busy={save.isPending}
+      footer={<DialogFooter formId="cash-owner" busy={save.isPending} disabled={bal.isLoading || !form.valid} label="Save" busyLabel="Saving…" onClose={onClose} />}
+    >
+      <form id="cash-owner" noValidate onSubmit={submit} className="flex flex-col gap-3.5">
+        <Segmented
+          label="Direction"
+          size="lg"
+          className="self-start"
+          value={f.direction}
+          onChange={(v) => setF({ ...f, direction: v })}
+          options={[{ value: 'in', label: 'Owner puts money in' }, { value: 'out', label: 'Owner takes money out' }]}
+        />
+        <Field label="Account" required {...form.fieldProps('account')}>
+          <select className={selectCls({ size: 'lg' })} value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}><option value="">Choose…</option><AccountOptions accounts={accounts} skipGateway /></select>
+        </Field>
+        <AmountDayNote f={f} setF={setF} form={form} />
       </form>
     </Modal>
   );
 }
+

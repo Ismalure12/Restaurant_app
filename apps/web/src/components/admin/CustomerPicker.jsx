@@ -7,10 +7,21 @@ import { reportSaveError } from '@/lib/saveError';
 import { useFormValidation } from '@/lib/formValidation';
 import { customerSchema } from '@/lib/schemas/customers';
 import Field from '@/components/admin/Field';
+import { Button, Chip, SearchInput, inputCls } from '@/components/admin/ui';
 import { money } from '@/lib/money';
 
 
 const looksLikePhone = (s) => /^[\d\s+()-]+$/.test(s) && /\d/.test(s);
+
+function Person({ c }) {
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="text-sm font-semibold text-mq-ink truncate">{c.name}</div>
+      <div className="font-mq-mono tabular-nums text-xs text-mq-muted truncate">{c.phone}</div>
+    </div>
+  );
+}
+const Owes = ({ c }) => (Number(c.owedBalance) > 0 ? <Chip tone="danger" small>owes {money(c.owedBalance)}</Chip> : null);
 
 /**
  * Search-and-select-or-create customer picker, shared by the POS "Invoice"
@@ -21,8 +32,8 @@ const looksLikePhone = (s) => /^[\d\s+()-]+$/.test(s) && /\d/.test(s);
  * reference a customer that doesn't exist yet.
  *
  * Results render inline below the search box rather than as a floating
- * dropdown: both hosts are scroll containers (.modal-b, .ticket-foot) that
- * would clip an absolutely-positioned list.
+ * dropdown: both hosts are scroll containers (a dialog body, the ticket
+ * footer) that would clip an absolutely-positioned list.
  *
  * Props: customerId (number|null), customer ({id,name,phone,address,owedBalance?}|null),
  * onChange(({customerId, customer}) => void), disabled (bool), error (string|null).
@@ -93,80 +104,83 @@ export default function CustomerPicker({ customerId, customer, onChange, disable
     if (creating) submitCreate();
   };
 
+  const errNote = error ? <div className="text-xs font-medium text-mq-danger-ink" role="alert">{error}</div> : null;
+
   if (customerId && customer) {
     return (
-      <div className="cpk" onKeyDown={onEnter}>
-        <div className="cpk-sel">
-          <div className="cpk-main">
-            <div className="cpk-nm">{customer.name}</div>
-            <div className="cpk-ph">{customer.phone}</div>
-          </div>
-          {customer.owedBalance > 0 && <span className="pill pill-rose"><span className="pdot" />owes {money(customer.owedBalance)}</span>}
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange({ customerId: null, customer: null })} disabled={disabled}>Change</button>
+      <div className="flex flex-col gap-1.5" onKeyDown={onEnter}>
+        <div className="flex items-center gap-2.5 min-h-12 pl-3.5 pr-1.5 py-1.5 bg-white border border-mq-primary rounded-lg">
+          <Person c={customer} />
+          <Owes c={customer} />
+          <Button variant="ghost" size="sm" onClick={() => onChange({ customerId: null, customer: null })} disabled={disabled}>Change</Button>
         </div>
-        {error && <div className="field-err">{error}</div>}
+        {errNote}
       </div>
     );
   }
 
   if (creating) {
     return (
-      <div className="cpk" onKeyDown={onEnter}>
-        <div className="cpk-new">
-          <div className="eyebrow">New customer</div>
-          <div className="row2">
-            <Field label="Full name" required {...cform.fieldProps('name')}>
-              <input className="input" placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
-            </Field>
-            <Field label="Phone" required {...cform.fieldProps('phone')}>
-              <input className="input" type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </Field>
-          </div>
-          <Field label="Address" {...cform.fieldProps('address')}>
-            <input className="input" placeholder="Address (optional)" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          </Field>
-          <div className="acts">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCreating(false)} disabled={createMutation.isPending}>Cancel</button>
-            <button type="button" className="btn btn-primary btn-sm" disabled={createMutation.isPending || !cform.valid} onClick={submitCreate}>
-              {createMutation.isPending ? 'Saving…' : 'Save customer'}
-            </button>
-          </div>
+      <div className="flex flex-col gap-3 p-3.5 bg-white border border-mq-line rounded-xl" onKeyDown={onEnter}>
+        <div className="text-[10.5px] font-semibold uppercase tracking-[.12em] text-mq-muted">New customer</div>
+        <Field label="Full name" required {...cform.fieldProps('name')}>
+          <input className={inputCls({ size: 'xl' })} placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+        </Field>
+        <Field label="Phone" required {...cform.fieldProps('phone')}>
+          <input className={inputCls({ size: 'xl', mono: true })} type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+        </Field>
+        <Field label="Address" {...cform.fieldProps('address')}>
+          <input className={inputCls({ size: 'xl' })} placeholder="Address (optional)" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button size="sm" onClick={() => setCreating(false)} disabled={createMutation.isPending}>Cancel</Button>
+          <Button size="sm" variant="primary" disabled={createMutation.isPending || !cform.valid} onClick={submitCreate}>
+            {createMutation.isPending ? 'Saving…' : 'Save customer'}
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="cpk" onKeyDown={onEnter} onBlur={onBlur}>
-      <div className="cpk-search">
-        <div className="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-          <input id={id} aria-describedby={describedBy} aria-invalid={ariaInvalid} placeholder="Search customer by name or phone" aria-label="Search customers" value={query} disabled={disabled} onChange={(e) => setQuery(e.target.value)} />
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" disabled={disabled} onClick={() => startCreate(query)}>+ New</button>
+    <div className="flex flex-col gap-2" onKeyDown={onEnter} onBlur={onBlur}>
+      <div className="flex items-center gap-2">
+        <SearchInput
+          className="flex-1 !h-[46px]"
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={ariaInvalid}
+          placeholder="Search customer by name or phone"
+          aria-label="Search customers"
+          value={query}
+          disabled={disabled}
+          onChange={setQuery}
+        />
+        <Button variant="soft" icon="plus" className="!h-[46px]" disabled={disabled} onClick={() => startCreate(query)}>New</Button>
       </div>
 
       {searching && (
-        <div className="cpk-list" role="listbox" aria-label="Matching customers">
+        <div className="flex flex-col bg-white border border-mq-line rounded-lg overflow-hidden" role="listbox" aria-label="Matching customers">
           {isFetching && results.length === 0 ? (
-            <div className="cpk-msg">Searching…</div>
+            <div className="px-3.5 py-3 text-[13px] text-mq-muted">Searching…</div>
           ) : results.length === 0 ? (
-            <div className="cpk-msg">
-              <span>No customer matches &ldquo;{debounced}&rdquo;</span>
-              <button type="button" className="btn btn-soft btn-sm" onClick={() => startCreate(debounced)}>Create customer</button>
+            <div className="flex items-center gap-2.5 flex-wrap px-3.5 py-3 text-[13px] text-mq-muted">
+              <span className="flex-1 min-w-0">No customer matches &ldquo;{debounced}&rdquo;</span>
+              <Button variant="soft" size="xs" onClick={() => startCreate(debounced)}>Create customer</Button>
             </div>
           ) : results.map((row) => (
-            <button type="button" role="option" aria-selected="false" key={row.id} className="cpk-row" onClick={() => select(row)}>
-              <div className="cpk-main">
-                <div className="cpk-nm">{row.name}</div>
-                <div className="cpk-ph">{row.phone}</div>
-              </div>
-              {row.owedBalance > 0 && <span className="pill pill-rose"><span className="pdot" />owes {money(row.owedBalance)}</span>}
+            <button
+              type="button" role="option" aria-selected="false" key={row.id}
+              className="flex items-center gap-2.5 min-h-12 px-3.5 py-2 text-left border-b border-mq-chip last:border-b-0 hover:bg-mq-cream focus-visible:outline-none focus-visible:bg-mq-soft"
+              onClick={() => select(row)}
+            >
+              <Person c={row} />
+              <Owes c={row} />
             </button>
           ))}
         </div>
       )}
-      {error && <div className="field-err">{error}</div>}
+      {errNote}
     </div>
   );
 }

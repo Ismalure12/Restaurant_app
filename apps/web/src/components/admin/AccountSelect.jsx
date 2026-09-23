@@ -1,6 +1,7 @@
 'use client';
 
 import useMoneyAccounts, { accountName, payableAccounts } from '@/hooks/useMoneyAccounts';
+import { selectCls } from '@/components/admin/ui/Controls';
 
 /**
  * "Paid from" — which business account money leaves (expenses, salaries,
@@ -10,9 +11,9 @@ export default function AccountSelect({ id, value, onChange, disabled, label = '
   const { accounts } = useMoneyAccounts();
   const options = payableAccounts(accounts);
   return (
-    <div className="ff">
-      <label htmlFor={id}>{label}</label>
-      <select id={id} className="input" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <label htmlFor={id} className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">{label}</label>
+      <select id={id} className={selectCls()} value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
         <option value="" disabled>Choose an account…</option>
         {options.map((a) => <option key={a.id} value={a.id}>{accountName(a)}{a.number ? ` · ${a.number}` : ''}</option>)}
       </select>

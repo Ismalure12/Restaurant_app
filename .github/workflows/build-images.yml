@@ -1,0 +1,93 @@
+# Build the API and web images and push them to GHCR. The Lightsail box is a
+# 1 GB instance that also runs Postgres and nginx — it must never build images
+# itself, it only pulls what this workflow produced.
+name: Build images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  quality:
+    name: Typecheck, tests, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      # `npm run lint` still points at the `next lint` subcommand Next 16
+      # removed, so it always fails. Call eslint directly — and from apps/web,
+      # because that is where eslint.config.mjs lives.
+      #
+      # Reporting only: main currently has 2 pre-existing
+      # react-hooks/set-state-in-effect errors (ImgWithFallback.jsx,
+      # useOrderContext.js). Blocking on them would block every deploy. Drop
+      # continue-on-error once they are fixed.
+      - run: npx eslint src
+        working-directory: apps/web
+        continue-on-error: true
+
+  build:
+    name: Build ${{ matrix.app }}
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      # GHCR rejects uppercase image names and the owner is "Ismalure12".
+      - name: Compute image name
+        id: img
+        run: echo "name=${REGISTRY}/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/maqaaxi-${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ steps.img.outputs.name }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          # Both Dockerfiles build from the repo root: one workspace lockfile.
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # next.config.mjs bakes the /api rewrite at build time and throws
+          # when it is empty in production. http://api:4000 is the compose
+          # service name; nginx normally routes /api before Next sees it.
+          build-args: |
+            API_ORIGIN=http://api:4000
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max

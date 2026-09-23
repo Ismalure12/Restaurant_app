@@ -1,0 +1,27 @@
+{
+  "name": "maqaaxi-pos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Maqaaxi Pos — Next.js web app (apps/web) + Express API (apps/api)",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-all.mjs",
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace apps/api",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspace apps/api",
+    "typecheck": "npm run typecheck --workspace apps/api",
+    "lint": "npm run lint --workspace apps/web",
+    "test:e2e": "npm run test:e2e --workspace apps/web",
+    "db:generate": "npm run db:generate --workspace apps/api",
+    "db:migrate": "npm run db:migrate --workspace apps/api",
+    "db:deploy": "npm run db:deploy --workspace apps/api",
+    "db:seed": "npm run db:seed --workspace apps/api"
+  }
+}

@@ -1,0 +1,41 @@
+# Production overlay: adds the API and web containers on top of the postgres
+# service in the root docker-compose.yml. Always pass BOTH files, so the
+# project name, network and the maqaaxi_pgdata volume stay the same:
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml \
+#     --env-file .env.docker up -d
+#
+# Images are built by GitHub Actions and pulled from GHCR — never built on the
+# 1 GB Lightsail box. Neither container is published to the internet: nginx on
+# the host is the only public listener.
+
+services:
+  api:
+    image: ${API_IMAGE:-ghcr.io/ismalure12/maqaaxi-api:latest}
+    restart: unless-stopped
+    # Relative to the PROJECT directory (the repo root, i.e. the first -f file),
+    # not to this file's folder. Verified with `docker compose config`.
+    env_file:
+      - deploy/api.env
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # index.ts drains SSE streams and in-flight requests on SIGTERM, then hard
+    # exits at 320s. Give it more room than docker's 10s default.
+    stop_grace_period: 130s
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/ismalure12/maqaaxi-web:latest}
+    restart: unless-stopped
+    # No env_file on purpose: the web app holds no secrets, and its one setting
+    # (API_ORIGIN) is baked into the image at build time by next.config.mjs —
+    # a runtime variable here would be silently ignored. See DEPLOYMENT.md § E.
+    environment:
+      PORT: "3100"
+    ports:
+      - "127.0.0.1:3100:3100"
+    depends_on:
+      api:
+        condition: service_healthy

@@ -1,79 +1,22 @@
+import { Page, KpiSkeletons, Skeleton, Card } from '@/components/admin/ui';
+
 export default function MenuItemsLoading() {
   return (
-    <div>
-      {/* Header skeleton */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="skeleton rounded" style={{ height: '28px', width: '130px' }} />
-        <div className="skeleton rounded-lg" style={{ height: '38px', width: '100px' }} />
+    <Page>
+      <KpiSkeletons count={4} min={210} />
+      <div className="flex gap-2.5 flex-wrap">
+        <Skeleton className="h-[38px] flex-[1_1_220px] rounded-lg" />
+        <Skeleton className="h-10 w-[170px] rounded-lg" />
+        <Skeleton className="h-[38px] w-[110px] rounded-lg" />
       </div>
-
-      {/* Filter skeleton */}
-      <div className="mb-4">
-        <div className="skeleton rounded-lg" style={{ height: '38px', width: '180px' }} />
-      </div>
-
-      {/* Desktop table skeleton */}
-      <div className="hidden md:block bg-white rounded-lg border overflow-hidden" style={{ borderColor: '#E5E5E5' }}>
-        {/* Table header */}
-        <div className="flex border-b px-4 py-3 gap-4" style={{ borderColor: '#E5E5E5', backgroundColor: '#F9FAFB' }}>
-          <div className="skeleton rounded" style={{ height: '14px', width: '60px' }} />
-          <div className="skeleton rounded" style={{ height: '14px', width: '70px' }} />
-          <div className="skeleton rounded" style={{ height: '14px', width: '50px' }} />
-          <div className="skeleton rounded" style={{ height: '14px', width: '50px' }} />
-          <div className="skeleton rounded" style={{ height: '14px', width: '50px' }} />
-          <div className="skeleton rounded ml-auto" style={{ height: '14px', width: '60px' }} />
-        </div>
-        {/* Table rows */}
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center px-4 py-3 gap-4 border-b last:border-0"
-            style={{ borderColor: '#E5E5E5' }}
-          >
-            <div className="flex items-center gap-2">
-              <div className="skeleton rounded shrink-0" style={{ height: '32px', width: '32px' }} />
-              <div className="skeleton rounded" style={{ height: '16px', width: '110px' }} />
-            </div>
-            <div className="skeleton rounded" style={{ height: '16px', width: '80px' }} />
-            <div className="skeleton rounded" style={{ height: '16px', width: '50px' }} />
-            <div className="skeleton rounded" style={{ height: '16px', width: '30px' }} />
-            <div className="skeleton rounded-full" style={{ height: '24px', width: '60px' }} />
-            <div className="flex gap-2 ml-auto">
-              <div className="skeleton rounded" style={{ height: '16px', width: '30px' }} />
-              <div className="skeleton rounded" style={{ height: '16px', width: '40px' }} />
-            </div>
-          </div>
+      <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(224px, 100%), 1fr))' }}>
+        {Array.from({ length: 8 }, (_, n) => (
+          <Card key={n} className="overflow-hidden">
+            <Skeleton className="h-28 !rounded-none" />
+            <div className="flex flex-col gap-2 p-3.5"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="h-5 w-1/3 mt-3" /></div>
+          </Card>
         ))}
       </div>
-
-      {/* Mobile cards skeleton */}
-      <div className="md:hidden space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-white rounded-lg border p-3" style={{ borderColor: '#E5E5E5' }}>
-            <div className="flex gap-3">
-              {/* Image thumbnail skeleton */}
-              <div className="skeleton rounded-lg shrink-0" style={{ width: '64px', height: '64px' }} />
-              <div className="flex-1">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="skeleton rounded" style={{ height: '16px', width: '100px' }} />
-                  <div className="skeleton rounded-full shrink-0" style={{ height: '20px', width: '54px' }} />
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="skeleton rounded" style={{ height: '12px', width: '60px' }} />
-                  <div className="skeleton rounded" style={{ height: '12px', width: '50px' }} />
-                  <div className="skeleton rounded" style={{ height: '12px', width: '55px' }} />
-                </div>
-              </div>
-            </div>
-            <div className="border-t pt-2 mt-2" style={{ borderColor: '#E5E5E5' }}>
-              <div className="flex gap-3">
-                <div className="skeleton rounded" style={{ height: '14px', width: '30px' }} />
-                <div className="skeleton rounded" style={{ height: '14px', width: '40px' }} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </Page>
   );
 }

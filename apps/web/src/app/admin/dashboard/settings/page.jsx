@@ -3,10 +3,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAccess from '@/hooks/useAccess';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import { RowSkeletons } from '@/components/admin/ui';
 
-// Settings is four pages (sidebar dropdown): General · Money · Staff access ·
-// Audit log. Old links to /settings land on the first one this role can open.
+// Settings has four sections (General · Money · Staff access · Audit log), each
+// with its own URL. Old links to /settings land on the first one this role can open.
 export default function SettingsIndex() {
   const router = useRouter();
   const { role, canView } = useAccess();
@@ -14,5 +14,5 @@ export default function SettingsIndex() {
     if (!role) return;
     router.replace(`/admin/dashboard/settings/${canView('settings') ? 'general' : 'access'}`);
   }, [role, canView, router]);
-  return <RowsSkeleton rows={3} height={80} />;
+  return <RowSkeletons rows={3} />;
 }

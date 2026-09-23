@@ -1,120 +1,102 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
-import { KpiRowSkeleton, RowsSkeleton } from '@/components/admin/Skeletons';
+import { money } from '@/lib/money';
+import {
+  Page, Card, CardHeader, Kpi, KpiGrid, KpiSkeletons, Table, Th, Td, Tr, TotalRow, EmptyState, RowSkeletons, ErrorState, Overline,
+} from '@/components/admin/ui';
 
-const fmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const money = (n) => `$${fmt(n)}`;
-const MoneyIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
-const ListIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /></svg>;
-const ChartIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 3v18h18" /><path d="M7 14l3-3 3 3 5-6" /></svg>;
+const count = (n) => Number(n || 0).toLocaleString('en-US');
+const plural = (n, one, many) => `${count(n)} ${Number(n) === 1 ? one : many}`;
+const shortDay = (d) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const when = (d) => new Date(d).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const service = (o) => {
+  const type = o.orderType === 'dine_in' ? 'Dine-in' : o.orderType === 'delivery' ? 'Delivery' : (o.orderType || '').replace('_', '-');
+  return o.tableNumber ? `${type} · ${/^\d+$/.test(String(o.tableNumber)) ? `Table ${o.tableNumber}` : o.tableNumber}` : type;
+};
 
+/**
+ * Home › My Performance (cashier / waiter): my own salary, my sales, what
+ * customers paid me today (handed over automatically) and my recent orders.
+ * Every number is the caller's own — the API reads the session, never a param.
+ */
 export default function PerformancePage() {
-  const [me, setMe] = useState(null);
-  useEffect(() => { fetch('/api/auth/me').then((r) => r.json()).then(setMe).catch(() => {}); }, []);
-  const { data, isLoading } = useQuery({ queryKey: ['my-performance'], queryFn: () => fetchJson('/api/admin/me/performance') });
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => fetchJson('/api/auth/me'), staleTime: 5 * 60 * 1000 });
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: ['my-performance'], queryFn: () => fetchJson('/api/admin/me/performance') });
   const d = data || {};
-
-  const kpis = [
-    { k: 'Sales today', money: d.todaySales, sub: `${d.todayOrders || 0} orders`, ic: 'green', icon: MoneyIc },
-    { k: 'Orders today', count: d.todayOrders ?? 0, sub: 'closed today', ic: 'sky', icon: ListIc },
-    { k: 'Sales · 7 days', money: d.weekSales, sub: `${d.weekOrders || 0} orders`, ic: 'gold', icon: ChartIc },
-    { k: 'All-time sales', money: d.totalSales, sub: `${d.totalOrders || 0} orders`, ic: 'ink', icon: MoneyIc },
-  ];
   const recent = d.recent || [];
   // Own salary only (the API reads the caller's id, never a parameter).
   const { data: salary } = useQuery({ queryKey: ['my-salary'], queryFn: () => fetchJson('/api/admin/me/salary') });
   const thisMonth = salary?.months?.[0];
+  const lastMonth = salary?.months?.[1];
 
   return (
-    <div className="wrap">
-      {salary && (salary.salary > 0 || thisMonth?.payment) && (
-        <div className="salary-line reveal">
-          <div>
-            <div className="eyebrow">Salary · {thisMonth.label}</div>
-            <div className="h-2">{thisMonth.payment ? `Paid ${money(thisMonth.payment.amount)}` : 'Not paid yet'}</div>
-          </div>
-          <div className="sub">
+    <Page narrow>
+      {salary && thisMonth && (salary.salary > 0 || thisMonth.payment) && (
+        <Card className="flex items-center justify-between gap-3.5 flex-wrap px-4 py-3.5">
+          <span className="flex flex-col gap-0.5">
+            <Overline>Salary · {thisMonth.label}</Overline>
+            <span className={thisMonth.payment ? 'text-[17px] font-semibold text-mq-ok-ink' : 'text-[17px] font-semibold text-mq-ink'}>
+              {thisMonth.payment ? <>Paid <span className="font-mq-mono">{money(thisMonth.payment.amount)}</span></> : 'Not paid yet'}
+            </span>
+          </span>
+          <span className="text-[13px] text-mq-on-tint text-right">
             {thisMonth.payment
-              ? `on ${new Date(thisMonth.payment.paidAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}${thisMonth.payment.note ? ` · ${thisMonth.payment.note}` : ''}`
-              : salary.salary > 0 ? `Monthly salary ${money(salary.salary)}` : ''}
-            {salary.months[1]?.payment && <div>{salary.months[1].label}: paid {money(salary.months[1].payment.amount)}</div>}
-          </div>
-        </div>
+              ? `on ${shortDay(thisMonth.payment.paidAt)}${thisMonth.payment.note ? ` · ${thisMonth.payment.note}` : ''}`
+              : salary.salary > 0 ? <>Monthly salary <span className="font-mq-mono">{money(salary.salary)}</span></> : null}
+            {lastMonth?.payment && <> · {lastMonth.label}: paid <span className="font-mq-mono">{money(lastMonth.payment.amount)}</span></>}
+          </span>
+        </Card>
       )}
-      {isLoading ? <KpiRowSkeleton count={4} style={{ marginBottom: 16 }} /> : (
-        <div className="kpi-row reveal" style={{ marginBottom: 16 }}>
-          {kpis.map((kpi) => (
-            <div key={kpi.k} className="kpi">
-              <div className="kpi-top"><div className={`kpi-ic ${kpi.ic}`}>{kpi.icon}</div><span className="kpi-k">{kpi.k}</span></div>
-              <div className="kpi-v">{kpi.money !== undefined ? <><small>$</small>{fmt(kpi.money)}</> : kpi.count}</div>
-              <div className="kpi-foot"><span>{kpi.sub}</span></div>
-            </div>
-          ))}
-        </div>
+
+      {isError ? <ErrorState error={error} onRetry={refetch} /> : isLoading ? <KpiSkeletons count={4} min={210} /> : (
+        <KpiGrid min={210}>
+          <Kpi label="Sales today" value={money(d.todaySales)} foot={plural(d.todayOrders, 'order', 'orders')} />
+          <Kpi label="Orders today" value={count(d.todayOrders)} foot="closed today" />
+          <Kpi label="Sales · 7 days" value={money(d.weekSales)} foot={plural(d.weekOrders, 'order', 'orders')} />
+          <Kpi label="All-time sales" value={money(d.totalSales)} foot={plural(d.totalOrders, 'order', 'orders')} />
+        </KpiGrid>
       )}
 
       {d.collectedToday && (
-        <div className="card reveal" style={{ marginBottom: 16, animationDelay: '.05s' }}>
-          <div className="card-h">
-            <div>
-              <div className="ttl">Today I collected</div>
-              <div className="note">Money customers paid you today. It is handed over to the business automatically at the end of the day.</div>
-            </div>
-            <div className="h-2">{money(d.collectedToday.total)}</div>
-          </div>
-          <div className="card-pad">
-            {d.collectedToday.accounts.length === 0 ? <p className="sub">Nothing collected yet today.</p> : (
-              <div className="table-wrap">
-                <table className="table">
-                  <tbody>
-                    {d.collectedToday.accounts.map((a) => (
-                      <tr key={a.id}><td className="strong">{a.kind === 'cash' ? 'Cash' : a.label}</td><td className="num">{money(a.amount)}</td></tr>
-                    ))}
-                    <tr><td className="strong">Total</td><td className="num strong">{money(d.collectedToday.total)}</td></tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+        <Card className="overflow-hidden">
+          <CardHeader title="Today I collected" sub="Handed over to the business automatically at the end of the day" />
+          {d.collectedToday.accounts.length === 0 ? (
+            <EmptyState icon="cash" title="Nothing collected yet today">Money customers pay you shows up here.</EmptyState>
+          ) : (
+            <Table label="Today I collected">
+              <tbody>
+                {d.collectedToday.accounts.map((a) => (
+                  <Tr key={a.id}><Td>{a.kind === 'cash' ? 'Cash' : a.label}</Td><Td money>{money(a.amount)}</Td></Tr>
+                ))}
+                <TotalRow><Td>Total</Td><Td money>{money(d.collectedToday.total)}</Td></TotalRow>
+              </tbody>
+            </Table>
+          )}
+        </Card>
       )}
 
-      <div className="card reveal" style={{ overflow: 'hidden', animationDelay: '.08s' }}>
-        <div className="card-h">
-          <div>
-            <div className="ttl">Recent orders</div>
-            <div className="note" style={{ textTransform: 'capitalize' }}>{me ? `${me.name || me.email} · ${me.role || ''}` : 'Your sales'}</div>
-          </div>
-        </div>
-        {isLoading ? (
-          <RowsSkeleton rows={4} className="card-pad" />
-        ) : recent.length === 0 ? (
-          <div className="empty">
-            <div className="empty-ring">{ListIc}</div>
-            <p className="empty-title">No orders yet</p>
-            <p className="empty-sub">Orders you take or serve will show up here. Ring one up in the Register.</p>
-          </div>
+      <Card className="overflow-hidden">
+        <CardHeader title="My recent orders" sub={me ? `${me.name || me.email}${me.role ? ` · ${me.role[0].toUpperCase()}${me.role.slice(1)}` : ''}` : undefined} />
+        {isLoading ? <RowSkeletons rows={4} /> : recent.length === 0 ? (
+          <EmptyState icon="orders" title="No orders yet">Orders you take or serve will show up here. Ring one up in the Register.</EmptyState>
         ) : (
-          <div className="table-wrap">
-            <table className="table" style={{ marginTop: 12 }}>
-              <thead><tr><th>Order</th><th>Service</th><th>When</th><th className="num">Total</th></tr></thead>
-              <tbody>
-                {recent.map((o) => (
-                  <tr key={o.id}>
-                    <td className="mono strong">{o.code || `#${o.id}`}</td>
-                    <td className="muted" style={{ textTransform: 'capitalize' }}>{(o.orderType || '').replace('_', '-')}{o.tableNumber ? ` · Table ${o.tableNumber}` : ''}</td>
-                    <td className="muted">{new Date(o.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="num">{money(o.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table label="My recent orders" minW={480} maxH={480}>
+            <thead><tr><Th>Order</Th><Th>Service</Th><Th>When</Th><Th align="right">Total</Th></tr></thead>
+            <tbody>
+              {recent.map((o) => (
+                <Tr key={o.id}>
+                  <Td mono className="text-mq-ink">{o.code || `#${o.id}`}</Td>
+                  <Td>{service(o)}</Td>
+                  <Td mono muted>{when(o.createdAt)}</Td>
+                  <Td money>{money(o.total)}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         )}
-      </div>
-    </div>
+      </Card>
+    </Page>
   );
 }

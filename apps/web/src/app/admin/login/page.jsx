@@ -1,27 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchJson } from '@/lib/apiError';
 import { useFormValidation } from '@/lib/formValidation';
 import { forgotSchema, loginSchema, resetSchema } from '@/lib/schemas/auth';
+import Image from 'next/image';
+import { Alert, Button, inputCls } from '@/components/admin/ui';
 
 const jsonPost = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-/**
- * A labelled input for the sign-in screens. The requirement / error text sits
- * directly under the box (this page is outside the dashboard, so it keeps its
- * own `adm-*` look rather than the dashboard's <Field>).
- */
+const INPUT = inputCls({ size: 'xl' });
+
+/** A labelled input for the sign-in screens; the requirement / error text sits under the box. */
 function LoginField({ id, label, form, name, children }) {
   const { error, requirement, onBlur } = form.fieldProps(name);
   const message = error || requirement;
   const msgId = `${id}-msg`;
   return (
-    <div>
-      <label htmlFor={id} className="adm-label">{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">{label}</label>
       {children({ id, onBlur, 'aria-invalid': error ? true : undefined, 'aria-required': true, 'aria-describedby': message ? msgId : undefined })}
-      {message && <div id={msgId} role={error ? 'alert' : undefined} style={{ marginTop: 6, fontSize: 13, lineHeight: 1.35, color: error ? '#b4234a' : '#6b7a72' }}>{message}</div>}
+      {message && <div id={msgId} role={error ? 'alert' : undefined} className={error ? 'text-xs font-medium text-mq-danger-ink' : 'text-xs text-mq-muted'}>{message}</div>}
     </div>
   );
 }
@@ -31,7 +31,11 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [expired, setExpired] = useState(false);
   const router = useRouter();
+  // ?expired=1 — sent here by the dashboard when the session ran out.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- read the URL once on mount
+  useEffect(() => { setExpired(new URLSearchParams(window.location.search).get('expired') === '1'); }, []);
 
   // null | 'email' | 'code' | 'done'
   const [resetStep, setResetStep] = useState(null);
@@ -106,128 +110,68 @@ export default function AdminLoginPage() {
     resetForm.reset();
   };
 
+  const heading = resetStep === 'done' ? 'All set' : resetStep ? 'Reset your password' : 'Sign in';
+  const sub = resetStep === 'email' ? 'Enter your email and we’ll send you a 6-digit code.'
+    : resetStep === 'code' ? 'Enter the code we sent you, then choose a new password.'
+      : resetStep === 'done' ? 'You can now sign in with your new password.'
+        : 'Maqaaxi Pos · staff sign-in';
+
   return (
-    <div
-      style={{
-        // Keep the admin login on the emerald/gold "Ledger" theme (the public
-        // --blue/--green tokens are now maroon), scoped to this subtree only.
-        '--blue': '#1f6b4f', '--blue-deep': '#154b38', '--blue-soft': '#e7f1ec',
-        '--green': '#1f6b4f', '--green-deep': '#154b38', '--green-soft': '#e7f1ec',
-        minHeight: '100vh',
-        background: 'var(--cream)',
-        backgroundImage:
-          'radial-gradient(circle at 0% 0%, rgba(31,107,79,0.08) 0%, transparent 45%), radial-gradient(circle at 100% 100%, rgba(181,134,44,0.07) 0%, transparent 45%)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px 16px',
-      }}
-    >
-      <div className="adm-card adm-card-pad-lg" style={{ width: '100%', maxWidth: 420 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <div className="adm-brand-mark"><span>MP</span></div>
+    <main className="min-h-screen grid place-items-center px-4 py-6 bg-mq-canvas font-mq text-mq-ink antialiased">
+      <div className="w-full max-w-[380px] flex flex-col gap-5 bg-white border border-mq-line rounded-2xl shadow-mq-md px-6 py-7">
+        <div className="flex flex-col items-center text-center gap-3">
+          <span className="grid place-items-center w-[52px] h-[52px] rounded-[15px] bg-white border border-mq-line overflow-hidden">
+            <Image src="/admin/logo-icon.png" alt="Maqaaxi Pos" width={38} height={38} className="object-contain" style={{ width: 38, height: 38 }} priority />
+          </span>
           <div>
-            <div style={{
-              fontFamily: 'var(--font-cormorant), serif',
-              color: 'var(--blue)', fontSize: 22, fontWeight: 600, lineHeight: 1.05,
-            }}>
-              Maqaaxi Pos
-            </div>
-            <span className="adm-brand-sub">Staff dashboard</span>
+            <h1 className="m-0 text-[22px] font-semibold tracking-[-.02em]">{heading}</h1>
+            <p className="m-0 mt-1 text-[13px] text-mq-muted">{sub}</p>
           </div>
         </div>
 
-        <h1 className="adm-h1" style={{ fontSize: 28, marginBottom: 4 }}>
-          {resetStep === 'done' ? 'All set.' :
-           resetStep ? 'Reset your password' :
-           <>Welcome <em>back.</em></>}
-        </h1>
-        <p className="adm-sub" style={{ marginBottom: 22 }}>
-          {resetStep === 'email' ? 'Enter your email and we’ll send you a 6-digit code.' :
-           resetStep === 'code' ? 'Enter the code we sent you, then choose a new password.' :
-           resetStep === 'done' ? 'You can now sign in with your new password.' :
-           'Sign in to run the register, orders and the menu.'}
-        </p>
-
         {!resetStep && (
           <>
-            <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {expired && !error && <Alert tone="warn" title="Your session ended">Sign in again to carry on.</Alert>}
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3.5">
               <LoginField id="email" label="Email" form={loginForm} name="email">
                 {(a11y) => (
-                  <input
-                    {...a11y}
-                    type="email"
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="adm-input"
-                    placeholder="you@example.com"
-                  />
+                  <input {...a11y} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className={INPUT} placeholder="you@example.com" />
                 )}
               </LoginField>
               <LoginField id="password" label="Password" form={loginForm} name="password">
                 {(a11y) => (
-                  <input
-                    {...a11y}
-                    type="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="adm-input"
-                    placeholder="••••••••"
-                  />
+                  <input {...a11y} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={INPUT} placeholder="••••••••" />
                 )}
               </LoginField>
-              {error && <div className="adm-error-banner" role="alert">{error}</div>}
-              <button type="submit" disabled={loading || !loginForm.valid} className="adm-btn adm-btn-primary" style={{ height: 46, marginTop: 4 }}>
+              {error && <Alert tone="danger">{error}</Alert>}
+              <Button type="submit" variant="primary" size="xl" block disabled={loading || !loginForm.valid} className="mt-1">
                 {loading ? 'Signing in…' : 'Sign in'}
-              </button>
+              </Button>
             </form>
-            <button
-              type="button"
-              onClick={() => setResetStep('email')}
-              className="adm-link"
-              style={{ display: 'block', margin: '16px auto 0' }}
-            >
-              Forgot password?
+            <button type="button" onClick={() => setResetStep('email')} className="self-center text-[13px] font-semibold text-mq-cta hover:text-mq-primary">
+              Forgot your password?
             </button>
           </>
         )}
 
         {resetStep === 'email' && (
-          <form onSubmit={handleForgotEmail} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <form onSubmit={handleForgotEmail} noValidate className="flex flex-col gap-3.5">
             <LoginField id="resetEmail" label="Email" form={forgotForm} name="email">
               {(a11y) => (
-                <input
-                  {...a11y}
-                  type="email"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  className="adm-input"
-                  placeholder="you@example.com"
-                />
+                <input {...a11y} type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className={INPUT} placeholder="you@example.com" />
               )}
             </LoginField>
-            {resetError && <div className="adm-error-banner" role="alert">{resetError}</div>}
-            <button type="submit" disabled={resetLoading || !forgotForm.valid} className="adm-btn adm-btn-primary" style={{ height: 46 }}>
+            {resetError && <Alert tone="danger">{resetError}</Alert>}
+            <Button type="submit" variant="primary" size="xl" block disabled={resetLoading || !forgotForm.valid}>
               {resetLoading ? 'Sending…' : 'Send reset code'}
-            </button>
-            <button type="button" onClick={exitReset} className="adm-link" style={{ display: 'block', margin: '4px auto 0', color: 'var(--muted)' }}>
-              Back to sign in
-            </button>
+            </Button>
+            <button type="button" onClick={exitReset} className="self-center text-[13px] font-semibold text-mq-muted hover:text-mq-ink">Back to sign in</button>
           </form>
         )}
 
         {resetStep === 'code' && (
-          <form onSubmit={handleResetPassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {resetSuccess && (
-              <div style={{
-                fontFamily: 'var(--font-inter), Inter, sans-serif',
-                fontSize: 13, color: 'var(--green-deep)',
-                background: 'var(--green-soft)',
-                padding: '10px 14px', borderRadius: 12,
-              }}>
-                {resetSuccess}
-              </div>
-            )}
+          <form onSubmit={handleResetPassword} noValidate className="flex flex-col gap-3.5">
+            {resetSuccess && <Alert tone="ok">{resetSuccess}</Alert>}
             <LoginField id="resetCode" label="6-digit code" form={resetForm} name="code">
               {(a11y) => (
                 <input
@@ -238,51 +182,31 @@ export default function AdminLoginPage() {
                   maxLength={6}
                   value={resetCode}
                   onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="adm-input"
-                  style={{ textAlign: 'center', letterSpacing: '0.3em', fontVariantNumeric: 'tabular-nums' }}
+                  className={`${INPUT} text-center tracking-[.3em] font-mq-mono tabular-nums`}
                   placeholder="000000"
                 />
               )}
             </LoginField>
             <LoginField id="newPassword" label="New password" form={resetForm} name="newPassword">
               {(a11y) => (
-                <input
-                  {...a11y}
-                  type="password"
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="adm-input"
-                  placeholder="At least 6 characters"
-                />
+                <input {...a11y} type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={INPUT} placeholder="At least 6 characters" />
               )}
             </LoginField>
-            {resetError && <div className="adm-error-banner" role="alert">{resetError}</div>}
-            <button type="submit" disabled={resetLoading || !resetForm.valid} className="adm-btn adm-btn-primary" style={{ height: 46 }}>
+            {resetError && <Alert tone="danger">{resetError}</Alert>}
+            <Button type="submit" variant="primary" size="xl" block disabled={resetLoading || !resetForm.valid}>
               {resetLoading ? 'Resetting…' : 'Reset password'}
-            </button>
-            <button type="button" onClick={exitReset} className="adm-link" style={{ display: 'block', margin: '4px auto 0', color: 'var(--muted)' }}>
-              Back to sign in
-            </button>
+            </Button>
+            <button type="button" onClick={exitReset} className="self-center text-[13px] font-semibold text-mq-muted hover:text-mq-ink">Back to sign in</button>
           </form>
         )}
 
         {resetStep === 'done' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{
-              fontFamily: 'var(--font-inter), Inter, sans-serif',
-              fontSize: 13, color: 'var(--green-deep)',
-              background: 'var(--green-soft)',
-              padding: '12px 14px', borderRadius: 12, textAlign: 'center',
-            }}>
-              {resetSuccess}
-            </div>
-            <button onClick={exitReset} className="adm-btn adm-btn-primary" style={{ height: 46 }}>
-              Back to sign in
-            </button>
+          <div className="flex flex-col gap-3.5">
+            <Alert tone="ok">{resetSuccess}</Alert>
+            <Button variant="primary" size="xl" block onClick={exitReset}>Back to sign in</Button>
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

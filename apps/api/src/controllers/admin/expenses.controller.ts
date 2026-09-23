@@ -11,21 +11,37 @@ import { assertOpenAt, sendHttpError } from '../../lib/closing/dayClose.js';
 import { ensureCategory, CATEGORY_KINDS } from '../../lib/money/expenseCategories.js';
 import { searchParams as getSearchParams } from '../../utils/query.js';
 import { audit } from '../../lib/db/audit.js';
+import { localStamp, num, round2, sendCsv } from '../../lib/reports/common.js';
+import { env } from '../../config/env.js';
 
 const DAY = 86400000;
 
 /**
  * Expense ledger for managers. Filters: q (category/note), category, from, to.
  * Cursor-paginated. The first page also carries the figures the Expenses page
- * header needs — computed with aggregate/groupBy, never by loading every row.
+ * header needs — computed with aggregate/groupBy, never by loading every row:
+ * this month, the last 30 days and the 30 before them (prev30Total), the top
+ * categories, every entry's count and the first entry's date (firstAt).
+ * ?format=csv exports every matching row (newest first, capped at CSV_CAP).
  */
+const CSV_CAP = 10_000;
+const listQuery = z.object({
+  q: z.string().trim().max(80, 'Search is too long').optional(),
+  category: z.string().trim().max(80, 'Category is too long').optional(),
+  format: z.enum(['csv'], { error: 'format must be csv' }).optional(),
+});
 export async function listExpenses(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'expenses', 'view');
   if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
   const searchParams = getSearchParams(req);
-  const q = (searchParams.get('q') || '').trim();
-  const category = (searchParams.get('category') || '').trim();
+  const parsed = listQuery.safeParse({
+    q: searchParams.get('q') || undefined, category: searchParams.get('category') || undefined, format: searchParams.get('format') || undefined,
+  });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid query' });
+  const q = parsed.data.q || '';
+  const category = parsed.data.category || '';
+  const csv = parsed.data.format === 'csv';
   // A date-only "from" means the start of that day. (parseExpenseDate anchors
   // form dates at noon, which would drop that morning's expenses from the range.)
   const fromRaw = searchParams.get('from');
@@ -46,6 +62,13 @@ export async function listExpenses(req: Request, res: Response) {
   const where: Prisma.ExpenseWhereInput = and.length ? { AND: and } : {};
 
   try {
+    if (csv) {
+      const all = await prisma.expense.findMany({ where, orderBy: [{ incurredAt: 'desc' }, { id: 'desc' }], take: CSV_CAP, include: EXPENSE_INCLUDE });
+      return sendCsv(res, 'expenses.csv', ['Date', 'Category', 'Note', 'Paid from', 'Recorded by', 'Amount'],
+        all.map(serializeExpense).map((e) => [
+          localStamp(e.incurredAt, env.BUSINESS_TZ).slice(0, 10), e.category, e.note ?? '', e.paidFrom ?? '', e.recordedBy ?? '', e.amount,
+        ]));
+    }
     const rows = await prisma.expense.findMany({
       where,
       orderBy: [{ incurredAt: 'desc' }, { id: 'desc' }],
@@ -61,11 +84,13 @@ export async function listExpenses(req: Request, res: Response) {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const last30 = new Date(now.getTime() - 30 * DAY);
-      const [inView, month, days30, count, topCategories, categories] = await Promise.all([
+      const prev30 = new Date(now.getTime() - 60 * DAY);
+      const [inView, month, days30, days30before, all, topCategories, categories] = await Promise.all([
         prisma.expense.aggregate({ where, _sum: { amount: true }, _count: { _all: true } }),
         prisma.expense.aggregate({ where: { incurredAt: { gte: monthStart } }, _sum: { amount: true }, _count: { _all: true } }),
         prisma.expense.aggregate({ where: { incurredAt: { gte: last30 } }, _sum: { amount: true } }),
-        prisma.expense.count(),
+        prisma.expense.aggregate({ where: { incurredAt: { gte: prev30, lt: last30 } }, _sum: { amount: true } }),
+        prisma.expense.aggregate({ _count: { _all: true }, _min: { incurredAt: true } }),
         prisma.expense.groupBy({ by: ['category'], where: { incurredAt: { gte: last30 } }, _sum: { amount: true }, orderBy: { _sum: { amount: 'desc' } }, take: 5 }),
         prisma.expense.groupBy({ by: ['category'], orderBy: { category: 'asc' }, take: 200 }),
       ]);
@@ -74,7 +99,9 @@ export async function listExpenses(req: Request, res: Response) {
         monthTotal: Number(month._sum.amount || 0).toFixed(2),
         monthCount: month._count._all,
         last30Total: Number(days30._sum.amount || 0).toFixed(2),
-        totalCount: count,
+        prev30Total: round2(num(days30before._sum.amount)).toFixed(2),
+        totalCount: all._count._all,
+        firstAt: all._min.incurredAt ?? null,
         topCategories: topCategories.map((c) => ({ category: c.category, total: Number(c._sum.amount || 0).toFixed(2) })),
       };
       result.categories = categories.map((c) => c.category);

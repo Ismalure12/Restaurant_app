@@ -1,104 +1,125 @@
 const { test, expect } = require('@playwright/test');
+const { requireWrites, watchErrors } = require('./helpers');
 
-test.describe('Public Menu Page', () => {
-  test('P1 — Homepage loads with header, category tabs, and menu carousels', async ({ page }) => {
+const money = (n) => `$${Number(n).toFixed(2)}`;
+
+// The first dish of the first category that has dishes, with the price the
+// detail screen starts at: base + first option of each group (the default pick).
+async function firstDish(request) {
+  const menu = await (await request.get('/api/menu')).json();
+  const cat = menu.categories.find((c) => c.items.length);
+  const item = cat.items[0];
+  const start = Number(item.price) + (item.optionGroups || []).reduce((s, g) => s + Number(g.options?.[0]?.priceAdd || 0), 0);
+  return { menu, cat, item, start };
+}
+
+test.describe('Public menu', () => {
+  test('P1 — home shows the menu rail and one section per category', async ({ page, request }) => {
+    const errors = watchErrors(page);
+    const { menu } = await firstDish(request);
+    const withItems = menu.categories.filter((c) => c.items.length);
+
     await page.goto('/');
-
-    // Header present
-    const header = page.locator('header');
-    await expect(header).toBeVisible();
-
-    // Logo image loads
-    const logo = header.locator('img[alt="Maqaaxi Pos"]');
-    await expect(logo).toBeVisible();
-
-    // Sign-in link
-    const signIn = header.locator('a[href="/admin/login"]');
-    await expect(signIn).toBeVisible();
+    await expect(page.locator('.home-topbar')).toBeVisible();
+    await expect(page.locator('.cat-tile')).toHaveCount(withItems.length);
+    await expect(page.locator('#homeSections > section.section')).toHaveCount(withItems.length);
+    await expect(page.locator('.foot-info')).toBeVisible();
+    expect(errors).toEqual([]);
   });
 
-  test('P2 — Category tabs render and are clickable', async ({ page }) => {
+  test('P2 — search filters dishes and says when nothing matches', async ({ page, request }) => {
+    const { item } = await firstDish(request);
     await page.goto('/');
+    const search = page.getByPlaceholder(/Search dishes/);
+    await search.fill(item.name);
+    await expect(page.locator('.search-results')).toContainText(item.name);
+    await search.fill('zzz-no-such-dish');
+    await expect(page.locator('.search-results .none')).toContainText('No dishes match');
+  });
 
-    const nav = page.locator('nav.sticky');
-    await expect(nav).toBeVisible();
+  test('P3 — a category tile opens that category screen', async ({ page, request }) => {
+    const { cat } = await firstDish(request);
+    await page.goto('/');
+    await page.locator('.cat-tile').filter({ hasText: cat.name }).click();
+    await expect(page.locator('section.screen.active')).toContainText(cat.items[0].name);
+  });
 
-    // At least one tab button exists
-    const tabs = nav.locator('button');
-    const count = await tabs.count();
-    expect(count).toBeGreaterThan(0);
+  test('P4 — dish detail → basket: the line total is base + option + extras, times quantity', async ({ page, request }) => {
+    const errors = watchErrors(page);
+    const { item, start } = await firstDish(request);
+    await page.goto('/');
+    await page.locator('.search input').fill(item.name);
+    await page.locator('.search-results').getByText(item.name).first().click();
 
-    // Click second tab (if exists) and verify scroll
-    if (count > 1) {
-      const secondTab = tabs.nth(1);
-      const tabText = await secondTab.textContent();
-      await secondTab.click();
+    const detail = page.locator('.page.open .detail');
+    await expect(detail.locator('.detail-name')).toHaveText(item.name);
+    await expect(page.locator('.detail-cta .total-mini .v')).toHaveText(money(start));
 
-      // The section with matching id should exist
-      const section = page.locator(`section[id]`).nth(1);
-      await expect(section).toBeVisible();
+    // Tick the first extra (if any) and make it two.
+    let unit = start;
+    const extra = item.extras?.[0];
+    if (extra) {
+      await detail.locator('.extra').first().click();
+      unit += Number(extra.priceAdd);
     }
+    await detail.getByRole('button', { name: 'increase' }).click();
+    await expect(page.locator('.detail-cta .total-mini .v')).toHaveText(money(unit * 2));
+
+    await page.getByRole('button', { name: /Add to basket/ }).click();
+    await expect(page.locator('.cart-fab.visible')).toBeVisible();
+    await page.getByRole('button', { name: 'Open basket' }).click();
+
+    const line = page.locator('.cart-item').first();
+    await expect(line.locator('.ci-name')).toHaveText(item.name);
+    await expect(line.locator('.ci-qty .val')).toHaveText('2');
+    await expect(line.locator('.ci-price')).toHaveText(money(unit * 2));
+    await expect(page.locator('.cart-summary .summary-row.total')).toContainText(money(unit * 2));
+
+    // Minus → one left; Remove → empty basket.
+    await line.getByRole('button', { name: '−' }).click();
+    await expect(line.locator('.ci-price')).toHaveText(money(unit));
+    await line.getByRole('button', { name: 'Remove' }).click();
+    await expect(page.locator('.cart-empty')).toBeVisible();
+    expect(errors).toEqual([]);
   });
 
-  test('P4 — Menu carousel renders with items per category', async ({ page }) => {
+  test('P5 — checkout form validates before sending anything', async ({ page, request }) => {
+    const { item } = await firstDish(request);
+    let checkoutCalls = 0;
+    await page.route('**/api/checkout', (r) => { checkoutCalls += 1; return r.continue(); });
+
     await page.goto('/');
+    await page.locator('.search input').fill(item.name);
+    await page.locator('.search-results').getByRole('button', { name: 'Add', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Open basket' }).click();
+    await page.getByRole('button', { name: /Proceed to checkout/ }).click();
+    await expect(page.locator('.co-title')).toBeVisible();
 
-    // Look for carousel sections — each has a category heading and scrollable row
-    const sections = page.locator('section[id]');
-    const sectionCount = await sections.count();
-
-    if (sectionCount > 0) {
-      // First section should have a heading
-      const heading = sections.first().locator('h2');
-      await expect(heading).toBeVisible();
-
-      // Should have scrollable items
-      const items = sections.first().locator('.shrink-0.flex.flex-col.items-center');
-      const itemCount = await items.count();
-      expect(itemCount).toBeGreaterThan(0);
-    }
+    await page.locator('.place-order').click();
+    await expect(page.getByText('Please enter your full name.')).toBeVisible();
+    expect(checkoutCalls).toBe(0);
   });
 
-  test('P5 — Carousel scroll container exists and items are in a horizontal row', async ({ page }) => {
+  test('P6 — checkout reaches the API with a server-accepted total (payment stubbed)', async ({ page, request }) => {
+    requireWrites(); // creates a PaymentSession row
+    const { item } = await firstDish(request);
+    // Never reach the real gateway: answer initiate ourselves with a failure.
+    await page.route('**/api/payment/initiate', (r) => r.fulfill({ status: 502, contentType: 'application/json', body: '{"error":"stubbed"}' }));
+
     await page.goto('/');
+    await page.locator('.search input').fill(item.name);
+    await page.locator('.search-results').getByRole('button', { name: 'Add', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Open basket' }).click();
+    await page.getByRole('button', { name: /Proceed to checkout/ }).click();
 
-    const scrollContainer = page.locator('section[id] .overflow-x-auto').first();
-    await expect(scrollContainer).toBeVisible();
-
-    // Items should be laid out horizontally (flex row)
-    const display = await scrollContainer.evaluate(el => getComputedStyle(el).display);
-    expect(display).toBe('flex');
-
-    // Should contain multiple items
-    const items = scrollContainer.locator('.shrink-0');
-    const count = await items.count();
-    expect(count).toBeGreaterThan(1);
-
-    // If there's overflow, verify it scrolls (on desktop with few items it may not overflow)
-    const hasOverflow = await scrollContainer.evaluate(el => el.scrollWidth > el.clientWidth);
-    if (hasOverflow) {
-      await scrollContainer.evaluate(el => el.scrollBy({ left: 200 }));
-      await page.waitForTimeout(300);
-      const scrollLeft = await scrollContainer.evaluate(el => el.scrollLeft);
-      expect(scrollLeft).toBeGreaterThan(0);
-    }
-  });
-
-  test('P7 — Header has logo and sign-in link', async ({ page }) => {
-    await page.goto('/');
-
-    const logo = page.locator('header img[alt="Maqaaxi Pos"]');
-    await expect(logo).toBeVisible();
-
-    const signInLink = page.locator('a[href="/admin/login"]');
-    await expect(signInLink).toBeVisible();
-    await expect(signInLink).toContainText('Sign in');
-  });
-
-  test('P8 — Footer renders', async ({ page }) => {
-    await page.goto('/');
-
-    const footer = page.locator('footer');
-    await expect(footer).toBeVisible();
+    await page.locator('#co-name').fill('E2E Guest');
+    await page.getByPlaceholder('7454776').fill('7454776');
+    await page.locator('#co-table').fill('7');
+    const checkout = page.waitForResponse((r) => r.url().endsWith('/api/checkout'));
+    await page.locator('.place-order').click();
+    const res = await checkout;
+    expect(res.status()).toBe(200);
+    expect((await res.json()).reference).toMatch(/^ord-/);
+    await expect(page.getByText('Payment could not be started. Please try again.')).toBeVisible();
   });
 });

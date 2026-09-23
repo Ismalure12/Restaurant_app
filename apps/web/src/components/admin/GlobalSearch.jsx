@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
+import Icon from '@/components/admin/ui/icons';
 
-const icon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>;
 
 /**
  * The topbar search: one box for order IDs, receipt numbers, customers,
@@ -69,10 +69,17 @@ export default function GlobalSearch() {
 
   let idx = -1;
   return (
-    <div className={`gs${mobileOpen ? ' gs-mobile-open' : ''}`} ref={boxRef}>
-      <button type="button" className="icon-btn gs-trigger" onClick={() => { setMobileOpen(true); setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }} aria-label="Search">{icon}</button>
-      <div className="search gs-box">
-        {icon}
+    <div ref={boxRef} className={`relative flex-none ${mobileOpen ? 'max-desk:fixed max-desk:inset-x-0 max-desk:top-0 max-desk:z-50 max-desk:p-2.5 max-desk:bg-mq-canvas max-desk:border-b max-desk:border-mq-line' : ''}`}>
+      <button
+        type="button"
+        className={`desk:hidden grid place-items-center w-9 h-9 rounded-lg border border-mq-line bg-white text-mq-muted hover:bg-mq-canvas hover:text-mq-ink ${mobileOpen ? 'hidden' : ''}`}
+        onClick={() => { setMobileOpen(true); setOpen(true); setTimeout(() => inputRef.current?.focus(), 0); }}
+        aria-label="Search"
+      >
+        <Icon name="search" size={16} stroke={1.9} />
+      </button>
+      <div className={`${mobileOpen ? 'flex' : 'hidden'} desk:flex items-center gap-2 h-9 px-[11px] bg-white border border-mq-line rounded-lg w-full desk:w-[280px] focus-within:border-mq-focus focus-within:shadow-mq-focus`}>
+        <span className="text-mq-muted"><Icon name="search" size={15} stroke={1.9} /></span>
         <input
           ref={inputRef}
           value={q}
@@ -85,25 +92,29 @@ export default function GlobalSearch() {
           aria-expanded={open && Boolean(dq)}
           aria-controls="gs-results"
           aria-autocomplete="list"
+          className="flex-1 min-w-0 border-0 outline-none bg-transparent text-base text-mq-ink placeholder:text-mq-muted"
         />
-        <kbd>⌘K</kbd>
-        <button type="button" className="gs-close" onClick={() => { setMobileOpen(false); setOpen(false); }} aria-label="Close search">×</button>
+        <kbd className="max-desk:hidden font-mq-mono text-[10.5px] text-mq-muted border border-mq-line rounded-[5px] px-[5px] py-px bg-mq-cream flex-none">⌘K</kbd>
+        <button type="button" className="desk:hidden grid place-items-center w-7 h-7 rounded-md text-mq-muted hover:bg-mq-chip" onClick={() => { setMobileOpen(false); setOpen(false); }} aria-label="Close search">
+          <Icon name="x" size={14} stroke={2.2} />
+        </button>
       </div>
       {open && dq && (
-        <div className="gs-pop" id="gs-results" role="listbox">
-          {isError ? <div className="gs-empty">Search failed — try again.</div>
-            : groups.length === 0 ? <div className="gs-empty">{isFetching || data?.q !== dq ? 'Searching…' : `Nothing matches “${dq}”.`}</div>
+        <div id="gs-results" role="listbox" className="absolute right-0 top-[calc(100%+6px)] z-50 w-[min(420px,calc(100vw-20px))] max-h-[min(70vh,520px)] overflow-y-auto bg-white border border-mq-line rounded-xl shadow-mq-lg p-1.5 animate-mq-in motion-reduce:animate-none">
+          {isError ? <div className="px-3 py-4 text-[13px] text-mq-muted">Search failed — try again.</div>
+            : groups.length === 0 ? <div className="px-3 py-4 text-[13px] text-mq-muted">{isFetching || data?.q !== dq ? 'Searching…' : `Nothing matches “${dq}”.`}</div>
               : groups.map((g) => (
-                <div className="gs-group" key={g.key}>
-                  <div className="gs-label">{g.label}</div>
+                <div key={g.key} className="py-1">
+                  <div className="px-2.5 pt-1.5 pb-1 text-[10.5px] font-semibold uppercase tracking-[.12em] text-mq-muted">{g.label}</div>
                   {g.items.map((it) => {
                     idx += 1;
                     const i = idx;
                     return (
-                      <button type="button" role="option" aria-selected={i === active} key={it.id} className={`gs-item${i === active ? ' on' : ''}`}
+                      <button type="button" role="option" aria-selected={i === active} key={it.id}
+                        className={`w-full flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-lg text-left ${i === active ? 'bg-mq-soft' : 'hover:bg-mq-canvas'}`}
                         onMouseEnter={() => setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => go(it)}>
-                        <span className="gs-t">{it.title}</span>
-                        <span className="gs-s">{it.sub}</span>
+                        <span className={`text-[13.5px] font-medium ${i === active ? 'text-mq-primary' : 'text-mq-ink'}`}>{it.title}</span>
+                        {it.sub && <span className="text-xs text-mq-muted">{it.sub}</span>}
                       </button>
                     );
                   })}

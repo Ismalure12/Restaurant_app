@@ -13,6 +13,7 @@ beforeEach(() => {
   db.order.findMany.mockResolvedValue([]);
   db.order.aggregate.mockResolvedValue({ _sum: { total: '42.50' }, _count: { _all: 3 } });
   db.order.groupBy.mockResolvedValue([]);
+  db.orderItem.groupBy.mockResolvedValue([]);
   db.order.count.mockResolvedValue(0);
   db.adminUser.findMany.mockResolvedValue([]);
   db.inventoryItem.findMany.mockResolvedValue([]);
@@ -49,7 +50,7 @@ describe('GET /api/admin/sales — POS › Sales history', () => {
   it('a manager gets count/total on the first page only', async () => {
     const cookie = await tokenFor('manager');
     const res = await request(app).get('/api/admin/sales').set('Cookie', cookie);
-    expect(res.body.summary).toEqual({ count: 3, total: 42.5 });
+    expect(res.body.summary).toMatchObject({ count: 3, total: 42.5 });
     db.order.aggregate.mockClear();
     const next = await request(app).get('/api/admin/sales?cursor=9').set('Cookie', cookie);
     expect(next.body).not.toHaveProperty('summary');
@@ -84,7 +85,7 @@ describe('GET /api/admin/sales — POS › Sales history', () => {
 
   it('bad input → 400 before any read', async () => {
     const cookie = await tokenFor('manager');
-    for (const qs of ['status=all', `q=${'x'.repeat(81)}`, 'from=2026-02-30', 'account=bitcoin']) {
+    for (const qs of ['status=open', `q=${'x'.repeat(81)}`, 'from=2026-02-30', 'account=bitcoin']) {
       expect((await request(app).get(`/api/admin/sales?${qs}`).set('Cookie', cookie)).status).toBe(400);
     }
     expect(db.order.findMany).not.toHaveBeenCalled();
@@ -100,7 +101,7 @@ describe('GET /api/admin/sales/items — Sales history › Items sold', () => {
   it('anonymous 401; bad input 400 before any read', async () => {
     expect((await request(app).get('/api/admin/sales/items')).status).toBe(401);
     const cookie = await tokenFor('cashier');
-    for (const qs of ['status=all', 'from=2026-02-30', 'account=bitcoin']) {
+    for (const qs of ['status=open', 'from=2026-02-30', 'account=bitcoin']) {
       expect((await request(app).get(`/api/admin/sales/items?${qs}`).set('Cookie', cookie)).status).toBe(400);
     }
     expect(db.order.findMany).not.toHaveBeenCalled();

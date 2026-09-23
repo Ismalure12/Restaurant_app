@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start -p 3100",
     "lint": "eslint src",
-    "check:admin-css": "node scripts/check-admin-css.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

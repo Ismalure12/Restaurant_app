@@ -5,10 +5,16 @@ import { tagSchema } from '../../validations/catalog.validation.js';
 import { readJson } from '../../utils/body.js';
 import { errCode } from '../../utils/errors.js';
 
+// Each tag carries how many dishes use it (`itemCount`, from one _count
+// include — never a query per tag). Public read, like categories.
 export async function listTags(_req: Request, res: Response) {
   try {
-    const tags = await prisma.tag.findMany({ orderBy: { label: 'asc' } });
-    return res.json(tags);
+    const tags = await prisma.tag.findMany({
+      orderBy: { label: 'asc' },
+      include: { _count: { select: { items: true } } },
+      take: 500,
+    });
+    return res.json(tags.map(({ _count, ...t }) => ({ ...t, itemCount: _count.items })));
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }

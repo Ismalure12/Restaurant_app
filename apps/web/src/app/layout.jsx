@@ -1,5 +1,4 @@
-import { Cormorant_Garamond, Inter } from 'next/font/google';
-import localFont from 'next/font/local';
+import { Cormorant_Garamond, Inter, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
 
 const cormorant = Cormorant_Garamond({
@@ -15,19 +14,11 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-// Geist (variable woff) powers the admin "Ledger" theme only — referenced via
-// --font-geist / --font-geist-mono inside .adm-shell, so the public site is untouched.
-const geist = localFont({
-  src: './fonts/GeistVF.woff',
-  weight: '100 900',
-  variable: '--font-geist',
-  display: 'swap',
-});
-
-const geistMono = localFont({
-  src: './fonts/GeistMonoVF.woff',
-  weight: '100 900',
-  variable: '--font-geist-mono',
+// Admin numbers (docs/admin-design-system.md §2).
+const jetbrains = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-jetbrains',
   display: 'swap',
 });
 
@@ -40,10 +31,10 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body
-        className={`${cormorant.variable} ${inter.variable} ${geist.variable} ${geistMono.variable}`}
+        className={`${cormorant.variable} ${inter.variable} ${jetbrains.variable}`}
         style={{ fontFamily: 'var(--font-inter), system-ui, -apple-system, sans-serif', margin: 0 }}
       >
-        <main>{children}</main>
+        {children}
       </body>
     </html>
   );

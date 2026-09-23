@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
-import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
@@ -15,24 +14,142 @@ import CustomerPicker from '@/components/admin/CustomerPicker';
 import ItemCustomizer, { buildLine, needsChoices } from '@/components/admin/ItemCustomizer';
 import TablePicker from '@/components/admin/TablePicker';
 import useTables, { tableKey } from '@/hooks/useTables';
+import useAccess from '@/hooks/useAccess';
 import PaymentFields, { usePayment, paymentBody, paymentProblem, collectorChoices } from '@/components/admin/PaymentFields';
+import { DiscountRow, TotalsBlock } from '@/components/admin/RegisterTotals';
+import {
+  Alert, Button, ChoiceChip, EmptyState, Icon, SearchInput, Skeleton, Toggle,
+  cx, inputCls, selectCls, useBreakpoint, usePanelWidth,
+} from '@/components/admin/ui';
 import { money } from '@/lib/money';
 
 
-function PCardImg({ src }) {
-  const [ok, setOk] = useState(Boolean(src));
-  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" /><path d="M6 1v3M10 1v3M14 1v3" /></svg>;
-}
-
-// Ticket width (the menu | ticket divider) — dragged by the user, kept per computer.
-const TICKET_KEY = 'mx_pos_ticket_w';
-const TICKET_DEFAULT = 400;
+// Ticket width (the menu | ticket divider) — dragged by the user, kept per viewer (`mq-panels`).
+// Module-level so usePanelWidth's clamp stays stable between renders.
 const TICKET_MIN = 320;
 const ticketMax = () => Math.max(TICKET_MIN, Math.min(720, Math.round(window.innerWidth * 0.6)));
+// Ticket: the payment area under the lines is drag-resizable (up = taller).
+// The default leaves room for several lines; the primary button sits below it,
+// always in view.
+const PAY_AREA_MIN = 110;
+
+const LABEL = 'text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted';
+
+/** Menu card picture: the real image, else the striped placeholder with the category name. */
+function CardImage({ src, cat }) {
+  const [ok, setOk] = useState(Boolean(src));
+  // Plain <img>: menu images come from any host and fall back to the placeholder on error.
+  // eslint-disable-next-line @next/next/no-img-element
+  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} className="w-full h-full object-cover" />;
+  return (
+    <span className="w-full h-full grid place-items-center px-2 text-center bg-mq-chip [background-image:repeating-linear-gradient(135deg,transparent_0_11px,rgba(26,26,24,.045)_11px_12px)] text-mq-chip-ink font-mq-mono text-[10.5px] tracking-[.04em] truncate">
+      {cat || 'Menu'}
+    </span>
+  );
+}
+
+function ItemCard({ item, cat, onAdd }) {
+  const hasChoices = needsChoices(item);
+  const off = item.isActive === false;
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      title={off ? `${item.name} (hidden from the menu)` : `Add ${item.name}`}
+      className={cx(
+        'flex flex-col text-left p-0 bg-white border border-mq-line rounded-xl overflow-hidden text-mq-ink transition-[border-color,box-shadow]',
+        'hover:border-mq-focus hover:shadow-mq-md focus-visible:outline-none focus-visible:border-mq-focus focus-visible:shadow-mq-focus',
+        off && 'opacity-60',
+      )}
+    >
+      <span className="relative block h-24 flex-none overflow-hidden">
+        <CardImage src={item.imageUrl} cat={cat} />
+        {hasChoices && <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-white/95 border border-mq-line text-[11px] font-semibold text-mq-body">Options</span>}
+        {off && <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-mq-chip text-[11px] font-semibold text-mq-chip-ink">Hidden</span>}
+      </span>
+      <span className="flex flex-col gap-1 flex-1 px-3 pt-2.5 pb-3">
+        <span className="text-[13.5px] font-semibold leading-[1.3] min-h-[2.6em] line-clamp-2">{item.name}</span>
+        <span className="flex items-center justify-between mt-auto pt-1.5">
+          <span className="font-mq-mono tabular-nums font-semibold text-[15px]">{money(item.price)}</span>
+          <span className="grid place-items-center w-[30px] h-[30px] rounded-[9px] bg-mq-soft text-mq-primary"><Icon name="plus" size={16} stroke={2.6} /></span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// Service icons from the design (not in the shared icon set).
+const DINE_IN = <path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2M5 2v20M11 2v20M11 8a4 4 0 0 0 4 4V2" />;
+const DELIVERY = <><path d="M14 18V6a2 2 0 0 0-2-2H3v12M14 9h4l3 3v6M3 18h11" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></>;
+
+function ServiceSwitch({ value, onChange }) {
+  const opts = [['dine_in', 'Dine-in', DINE_IN], ['delivery', 'Delivery', DELIVERY]];
+  return (
+    <div role="group" aria-label="Service" className="flex gap-1.5 p-[3px] bg-mq-chip border border-mq-line rounded-[10px]">
+      {opts.map(([v, label, glyph]) => {
+        const on = value === v;
+        return (
+          <button
+            key={v} type="button" aria-pressed={on} onClick={() => onChange(v)}
+            className={cx(
+              'flex-1 inline-flex items-center justify-center gap-2 min-h-11 rounded-lg text-[13.5px] font-semibold transition-colors',
+              'focus-visible:outline-none focus-visible:shadow-mq-focus',
+              on ? 'bg-white text-mq-ink shadow-mq-seg' : 'text-mq-on-tint hover:text-mq-ink',
+            )}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyph}</svg>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TicketLine({ line, onQty }) {
+  const detail = [line.optionName, line.extras.map((e) => e.name).join(', '), line.notes && `“${line.notes}”`].filter(Boolean).join(' · ');
+  const last = line.quantity <= 1;
+  const stepBtn = 'grid place-items-center w-12 h-12 text-mq-body hover:bg-mq-chip hover:text-mq-ink focus-visible:outline-none focus-visible:bg-mq-chip';
+  return (
+    <div className="flex gap-[11px] py-3 border-b border-mq-chip last:border-b-0">
+      <span className="font-mq-mono tabular-nums font-bold text-sm text-mq-primary min-w-[22px] pt-px">{line.quantity}×</span>
+      <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <span className="text-sm font-semibold break-words">{line.name}</span>
+        {detail && <span className="text-[11.5px] text-mq-on-tint leading-[1.4] break-words">{detail}</span>}
+      </span>
+      <span className="flex flex-col items-end gap-1.5 flex-none">
+        <span className="font-mq-mono tabular-nums font-semibold text-sm">{money(line.unitPrice * line.quantity)}</span>
+        <span className="inline-flex items-center border border-mq-line rounded-lg overflow-hidden bg-white">
+          {/* Minus on the last one removes the line (trash glyph says so). */}
+          <button type="button" className={cx(stepBtn, last && 'hover:!bg-mq-danger-bg hover:!text-mq-danger-ink')} onClick={() => onQty(-1)} aria-label={last ? `Remove ${line.name}` : `Decrease ${line.name}`}>
+            <Icon name={last ? 'trash' : 'minus'} size={last ? 16 : 18} stroke={last ? 2 : 2.4} />
+          </button>
+          <span className="min-w-[30px] text-center font-mq-mono tabular-nums text-[15px] font-semibold">{line.quantity}</span>
+          <button type="button" className={stepBtn} onClick={() => onQty(1)} aria-label={`Increase ${line.name}`} disabled={line.quantity >= 99}>
+            <Icon name="plus" size={18} stroke={2.4} />
+          </button>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Read ?table= / ?customer= once (the Tables and Customers pages link here). */
+function readPrefill() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const table = (p.get('table') || '').trim().slice(0, 40);
+    const c = Number(p.get('customer'));
+    return { table, customerId: Number.isInteger(c) && c > 0 ? c : null };
+  } catch { return { table: '', customerId: null }; }
+}
 
 export default function PosPage() {
   const qc = useQueryClient();
+  const bp = useBreakpoint();
+  const phone = bp === 'phone';
+  const resizable = bp === 'desktop' || bp === 'narrow';
+  const { canView } = useAccess();
   // Same ['me'] cache as TakePaymentModal (one key, one shape).
   const { data: me = null } = useQuery({ queryKey: ['me'], queryFn: () => fetchJson('/api/auth/me'), staleTime: 5 * 60 * 1000 });
   const [activeCat, setActiveCat] = useState('all');
@@ -46,7 +163,7 @@ export default function PosPage() {
   const [contactPhone, setContactPhone] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
-  const [discount, setDiscount] = useState({ type: 'percent', value: '' });
+  const [discount, setDiscount] = useState({ type: 'fixed', value: '' });
   const deliveryOn = service === 'delivery';
   const { tables, hasTables } = useTables();
 
@@ -61,49 +178,51 @@ export default function PosPage() {
   const isWaiterSelf = me?.role === 'waiter';
 
   const [customizing, setCustomizing] = useState(null);
+  const ticket = usePanelWidth('reg', { initial: 400, min: TICKET_MIN, max: ticketMax, edge: 'left' });
+  // Keep ≥ ~2 ticket lines visible however tall the payment area is dragged.
+  const payAreaMax = useCallback(() => Math.max(PAY_AREA_MIN, (ticketRef.current?.clientHeight || 800) - 420), []);
+  const payArea = usePanelWidth('reg-pay', { initial: 180, min: PAY_AREA_MIN, max: payAreaMax, edge: 'top' });
 
-  // Resizable ticket (desktop only — below 1081px the ticket stacks under the menu).
-  const posRef = useRef(null);
-  const [ticketW, setTicketW] = useState(() => {
-    try { return Number(localStorage.getItem(TICKET_KEY)) || TICKET_DEFAULT; } catch { return TICKET_DEFAULT; }
-  });
-  const saveTicketW = (w) => { try { localStorage.setItem(TICKET_KEY, String(w)); } catch { /* private mode */ } };
-  const clampW = (w) => Math.round(Math.min(Math.max(w, TICKET_MIN), ticketMax()));
-  const startResize = (e) => {
-    e.preventDefault();
-    const handle = e.currentTarget;
-    handle.setPointerCapture(e.pointerId);
-    const right = posRef.current.getBoundingClientRect().right;
-    let last = ticketW;
-    const move = (ev) => { last = clampW(right - ev.clientX); setTicketW(last); };
-    const up = () => { handle.removeEventListener('pointermove', move); saveTicketW(last); };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up, { once: true });
-  };
-  const keyResize = (e) => {
-    const step = e.key === 'ArrowLeft' ? 16 : e.key === 'ArrowRight' ? -16 : 0;
-    if (!step) return;
-    e.preventDefault();
-    const w = clampW(ticketW + step);
-    setTicketW(w); saveTicketW(w);
-  };
-
-  // placed = { kind: 'paid' | 'later', order } after a submit.
+  // placed = { kind: 'paid' | 'invoice' | 'later', order, dueDate } after a submit.
   const [placed, setPlaced] = useState(null);
   const [placing, setPlacing] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [printKind, printDoc] = usePrintDoc();
 
-  const canOpenOrders = Boolean(me) && me.role !== 'waiter';
-
   const { data: categories = [] } = useQuery({ queryKey: ['pos-categories'], queryFn: () => fetchJson('/api/categories') });
   const { data: items = [], isLoading } = useQuery({ queryKey: ['pos-items'], queryFn: () => fetchJson('/api/menu-items') });
   const { data: waiters = [] } = useQuery({ queryKey: ['pos-waiters'], queryFn: () => fetchJson('/api/admin/waiters?active=1') });
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetchJson('/api/admin/settings'), staleTime: 5 * 60 * 1000 });
-  // How the customer pays: Cash, a business wallet (A/C, E/d, My Cash…), the
-  // Mastercard, split, or On account — and who took the money.
+  // How the customer pays: Cash, a business wallet, the card, split, or On
+  // account — and who took the money.
   const pay = usePayment(settings?.moneyAccounts);
   const paymentMethod = pay.opt.method;
+  const setPayKey = pay.setKey;
+
+  // ?table=<name> (Tables page) prefills a dine-in table; ?customer=<id>
+  // (Customers › Open in Register) bills that customer On account.
+  const [prefillCustomerId, setPrefillCustomerId] = useState(null);
+  useEffect(() => {
+    const { table, customerId } = readPrefill();
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time read of the URL after mount */
+    if (table) { setService('dine_in'); setTableNumber(table); }
+    if (customerId) { setPrefillCustomerId(customerId); setPayLaterMode(false); setPayKey('invoice'); }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [setPayKey]);
+  // Same key + shape as the customer detail page (GET /api/admin/customers/:id).
+  const { data: prefillCustomer } = useQuery({
+    queryKey: ['customer', String(prefillCustomerId)],
+    queryFn: () => fetchJson(`/api/admin/customers/${prefillCustomerId}`),
+    enabled: Boolean(prefillCustomerId),
+    retry: false,
+  });
+  const prefillApplied = useRef(false);
+  useEffect(() => {
+    const c = prefillCustomer?.customer;
+    if (!c || prefillApplied.current) return;
+    prefillApplied.current = true;
+    setInvoiceCustomer({ customerId: c.id, customer: { ...c, owedBalance: prefillCustomer.owedBalance } });
+  }, [prefillCustomer]);
 
   const defaultFee = settings?.deliveryFee != null ? String(settings.deliveryFee) : '0';
   // A waiter is always attributed to their own sale server-side — the picker
@@ -122,6 +241,7 @@ export default function PosPage() {
   }, [items, activeCat, search]);
 
   const subtotal = useMemo(() => cart.reduce((s, l) => s + Number(l.unitPrice) * l.quantity, 0), [cart]);
+  const itemCount = useMemo(() => cart.reduce((s, l) => s + l.quantity, 0), [cart]);
   const discountAmount = useMemo(() => {
     const v = Number(discount.value);
     if (!v || v <= 0) return 0;
@@ -133,6 +253,7 @@ export default function PosPage() {
   const orderType = service;
   // Pay later (dine-in only): to the kitchen now, paid in Orders at the end.
   const flow = orderType === 'dine_in' && payLaterMode ? 'later' : 'pay';
+  const shownTotal = flow === 'later' ? subtotal : total;
   const needsWaiter = orderType === 'dine_in' && !isWaiterSelf;
   const isInvoice = paymentMethod === 'invoice';
   const tableChosen = !hasTables || tables.some((t) => tableKey(t.name) === tableKey(tableNumber));
@@ -176,7 +297,7 @@ export default function PosPage() {
 
   const resetOrder = () => {
     setCart([]); setService('dine_in'); setTableNumber(''); setWaiterId(''); setContactName(''); setContactPhone('');
-    setAddress(''); setDeliveryFee(''); setDiscount({ type: 'percent', value: '' }); setPayLaterMode(true);
+    setAddress(''); setDeliveryFee(''); setDiscount({ type: 'fixed', value: '' }); setPayLaterMode(true);
     pay.reset(); setInvoiceCustomer({ customerId: null, customer: null }); setInvoiceDueDate('');
     setPlaced(null); setReceipt(null); form.reset();
   };
@@ -186,8 +307,6 @@ export default function PosPage() {
     printDoc(kind);
   };
 
-  const lineBody = () => cart.map(({ uid: _u, ...l }) => ({ uid: _u, ...l }));
-
   const placeOrder = async () => {
     if (placing || !form.check()) return;
     form.setServerErrors(null);
@@ -196,7 +315,7 @@ export default function PosPage() {
       const order = await fetchJson('/api/admin/pos/orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: lineBody(),
+          items: cart,
           orderType,
           tableNumber: orderType === 'dine_in' ? tableNumber.trim() : null,
           waiterId: effWaiterId ? Number(effWaiterId) : null,
@@ -222,7 +341,7 @@ export default function PosPage() {
         setPlaced({ kind: 'later', order });
         notify.success(`Sent to the kitchen · ${order.code} · unpaid`);
       } else {
-        setPlaced({ kind: 'paid', order });
+        setPlaced({ kind: order.invoiceId ? 'invoice' : 'paid', order, dueDate: isInvoice ? invoiceDueDate : '' });
         notify.success(order.invoiceId ? `Invoice #${order.invoiceId} created` : `Paid · receipt ${order.receiptNo}`);
       }
     } catch (err) {
@@ -232,208 +351,237 @@ export default function PosPage() {
   };
 
   const activeCats = categories.filter((c) => c.isActive);
+  const catName = useMemo(() => Object.fromEntries(categories.map((c) => [c.id, c.name])), [categories]);
+
+  // Phone: the ticket sits under the menu, so a bar at the bottom jumps to it
+  // while it is off screen.
+  const ticketRef = useRef(null);
+  const [ticketInView, setTicketInView] = useState(false);
+  useEffect(() => {
+    if (!phone || !ticketRef.current || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(([e]) => setTicketInView(e.isIntersecting), { threshold: 0.05 });
+    io.observe(ticketRef.current);
+    return () => io.disconnect();
+  }, [phone]);
+  const showJump = phone && cart.length > 0 && !placed && !ticketInView;
+
+  const primaryLabel = placing
+    ? (flow === 'later' ? 'Sending…' : 'Placing…')
+    : flow === 'later' ? 'Send to kitchen' : isInvoice ? `Bill ${money(total)} to account` : `Take ${money(total)}`;
 
   return (
-    <div className="pos" ref={posRef} style={{ '--ticket-w': `${ticketW}px` }}>
+    <div className={cx('flex flex-col tab:flex-row tab:h-[calc(100dvh-60px)] min-h-0 bg-mq-canvas', showJump && 'pb-20')}>
       {/* LEFT — menu */}
-      <section className="pos-menu">
-        <div className="pos-menu-top">
-          <div className="search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search the menu…" aria-label="Search the menu" />
-          </div>
-          <div className="pos-cats">
-            <button className={`pos-cat${activeCat === 'all' ? ' on' : ''}`} onClick={() => setActiveCat('all')}>All</button>
-            {activeCats.map((c) => <button key={c.id} className={`pos-cat${activeCat === c.id ? ' on' : ''}`} onClick={() => setActiveCat(c.id)}>{c.name}</button>)}
+      <section className="flex flex-col flex-1 min-w-0 tab:min-h-0" aria-label="Menu">
+        <div className="flex flex-col gap-2.5 px-3 tab:px-[18px] pt-3.5 pb-2.5">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search the menu"
+            aria-label="Search the menu"
+            className="!h-[46px] !rounded-[10px] !px-[13px]"
+          />
+          <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-3 px-3 tab:mx-0 tab:px-0 [scrollbar-width:thin]" role="group" aria-label="Categories">
+            <ChoiceChip active={activeCat === 'all'} onClick={() => setActiveCat('all')} className="flex-none">All</ChoiceChip>
+            {activeCats.map((c) => (
+              <ChoiceChip key={c.id} active={activeCat === c.id} onClick={() => setActiveCat(c.id)} className="flex-none">{c.name}</ChoiceChip>
+            ))}
           </div>
         </div>
-        <div className="pos-grid">
+        <div className="tab:flex-1 tab:min-h-0 tab:overflow-y-auto px-3 tab:px-[18px] pt-1 pb-5 grid gap-3 content-start auto-rows-max grid-cols-[repeat(auto-fill,minmax(min(164px,100%),1fr))]">
           {isLoading
-            ? [1, 2, 3, 4, 5, 6].map((n) => <div key={n} className="sk" style={{ height: 180, borderRadius: 'var(--r-md)' }} />)
+            ? [1, 2, 3, 4, 5, 6, 7, 8].map((n) => <Skeleton key={n} className="h-[178px] !rounded-xl" />)
             : visibleItems.length === 0
-              ? <div className="empty"><div className="empty-ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg></div><p className="empty-title">No items found</p><p className="empty-sub">Try another search or category.</p></div>
-              : visibleItems.map((item) => {
-                const hasChoices = item.optionGroups?.length > 0 || item.extras?.length > 0;
-                return (
-                  <button key={item.id} className={`pcard${item.isActive === false ? ' off' : ''}`} onClick={() => openItem(item)} title={`Add ${item.name}`}>
-                    <div className="pcard-img"><PCardImg src={item.imageUrl} />{hasChoices && <span className="pcard-tag">Options</span>}</div>
-                    <div className="pcard-b">
-                      <div className="pcard-nm">{item.name}</div>
-                      <div className="pcard-row"><span className="pcard-pr">{money(item.price)}</span><span className="pcard-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" /></svg></span></div>
-                    </div>
-                  </button>
-                );
-              })}
+              ? <EmptyState icon="search" title="No items found" className="col-span-full">Try another search or category.</EmptyState>
+              : visibleItems.map((item) => (
+                <ItemCard key={item.id} item={item} cat={catName[item.categoryId]} onAdd={() => openItem(item)} />
+              ))}
         </div>
       </section>
 
-      {/* RIGHT — ticket */}
-      <aside className="pos-ticket">
+      {resizable && (
         <div
-          className="pos-resize" role="separator" aria-orientation="vertical" aria-label="Resize the ticket — drag, or use the arrow keys"
-          aria-valuemin={TICKET_MIN} aria-valuenow={ticketW} tabIndex={0}
-          onPointerDown={startResize} onKeyDown={keyResize}
-          onDoubleClick={() => { setTicketW(TICKET_DEFAULT); saveTicketW(TICKET_DEFAULT); }}
-        />
-        {!placed && (
-          <div className="ticket-top">
-            <div className="ticket-svc">
-              <button className={service === 'dine_in' ? 'on' : ''} onClick={() => setService('dine_in')}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 2v7c0 1.1.9 2 2 2a2 2 0 0 0 2-2V2M5 2v20M11 2v20M11 8a4 4 0 0 0 4 4V2" /></svg>Dine-in
-              </button>
-              <button className={service === 'delivery' ? 'on' : ''} onClick={() => { setService('delivery'); setTableNumber(''); }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 18V6a2 2 0 0 0-2-2H3v12M14 9h4l3 3v6M3 18h11" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>Delivery
-              </button>
-            </div>
-            <div className="ticket-meta">
-              {!deliveryOn ? (
-                <>
-                  <Field {...form.fieldProps('table')}>
-                    <TablePicker value={tableNumber} onChange={(v) => { setTableNumber(v); form.touch('table'); }} invalid={Boolean(form.fieldProps('table').error)} required={hasTables} />
-                  </Field>
-                  {/* A waiter's own sale is always attributed to them — no picker needed. */}
-                  {!isWaiterSelf && (
-                    waiters.length > 0 ? (
-                      <Field {...form.fieldProps('waiter')}>
-                        <select className="input" value={waiterId} onChange={(e) => { setWaiterId(e.target.value); form.touch('waiter'); }}>
-                          <option value="">Waiter — required</option>
-                          {waiters.map((w) => <option key={w.id} value={w.id}>{w.label || w.name}</option>)}
-                        </select>
-                      </Field>
-                    ) : <div className="field-err">No active waiters — add one in Staff before taking dine-in orders.</div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <input className="input" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Customer name (optional)" aria-label="Customer name" />
-                  <Field {...form.fieldProps('contactPhone')}>
-                    <input className="input" type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone — required" aria-label="Customer phone" />
-                  </Field>
-                  <Field {...form.fieldProps('address')}>
-                    <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address — required" aria-label="Delivery address" />
-                  </Field>
-                  <Field {...form.fieldProps('deliveryFee')}>
-                    {(a) => <div className="fee-field"><span className="fee-lbl">Delivery fee</span><input {...a} className={`input${a['aria-invalid'] ? ' input-err' : ''}`} type="number" min="0" step="0.5" inputMode="decimal" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)} aria-label="Delivery fee" /><span className="fee-hint">default from Settings</span></div>}
-                  </Field>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+          {...ticket.handleProps}
+          aria-label="Resize the ticket — drag, or use the arrow keys"
+          aria-valuemin={TICKET_MIN}
+          title="Drag to resize · double-click to reset"
+          className="relative z-[6] flex-none flex items-center justify-center w-2.5 -mx-[5px] cursor-col-resize touch-none hover:bg-[rgba(133,13,51,.07)] focus-visible:outline-none focus-visible:bg-[rgba(133,13,51,.07)]"
+        >
+          <span className="block w-1 h-9 rounded-full bg-mq-line-2" />
+        </div>
+      )}
 
-        {cart.length === 0 && !placed ? (
-          <div className="ticket-lines">
-            <div className="ticket-empty">
-              <div className="er"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="26" height="26"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg></div>
-              <div className="et">Ticket is empty</div>
-              <div className="sub">Tap a menu item to start the order.</div>
-            </div>
-          </div>
-        ) : placed ? (
+      {/* RIGHT — ticket */}
+      <aside
+        ref={ticketRef}
+        aria-label="Ticket"
+        className={cx(
+          'flex flex-col bg-white border-mq-line min-w-0',
+          'border-t tab:border-t-0 tab:border-l tab:min-h-0',
+          !resizable && 'tab:flex-[0_1_360px] tab:min-w-[320px]',
+        )}
+        style={resizable ? { width: ticket.width, flex: 'none' } : undefined}
+      >
+        {placed ? (
           <PlacedPanel
             placed={placed}
-            canOpenOrders={canOpenOrders}
+            canOpenOrders={Boolean(me) && me.role !== 'waiter' && canView('orders')}
+            canOpenCustomer={canView('customers')}
             onPrint={(kind) => printNow(placed.order, kind)}
             onNew={resetOrder}
           />
         ) : (
-          <div className="ticket-lines">
-            {cart.map((l) => (
-              <div className="tline" key={l.uid}>
-                <span className="tline-q">{l.quantity}×</span>
-                <div className="tline-main">
-                  <div className="tline-nm">{l.name}</div>
-                  {(l.optionName || l.extras.length > 0 || l.notes) && (
-                    <div className="tline-opt">{[l.optionName, l.extras.map((e) => e.name).join(', '), l.notes && `“${l.notes}”`].filter(Boolean).join(' · ')}</div>
+          <>
+            <div className="flex flex-col gap-2.5 px-4 py-3.5 border-b border-mq-line">
+              <ServiceSwitch value={service} onChange={(v) => { setService(v); if (v === 'delivery') setTableNumber(''); }} />
+              {!deliveryOn ? (
+                <div className="flex flex-col gap-2">
+                  <Field label="Table" required={hasTables} {...form.fieldProps('table')}>
+                    <TablePicker size="xl" value={tableNumber} onChange={(v) => { setTableNumber(v); form.touch('table'); }} required={hasTables} />
+                  </Field>
+                  {/* A waiter's own sale is always attributed to them — no picker needed. */}
+                  {!isWaiterSelf && (
+                    waiters.length > 0 ? (
+                      <Field label="Served by" required {...form.fieldProps('waiter')}>
+                        <select className={selectCls({ size: 'xl' })} value={waiterId} onChange={(e) => { setWaiterId(e.target.value); form.touch('waiter'); }}>
+                          <option value="">Waiter — required</option>
+                          {waiters.map((w) => <option key={w.id} value={w.id}>{w.label || w.name}</option>)}
+                        </select>
+                      </Field>
+                    ) : <Alert tone="warn">No active waiters — add one in Staff before taking dine-in orders.</Alert>
                   )}
                 </div>
-                <div className="tline-r">
-                  <span className="tline-pr">{money(l.unitPrice * l.quantity)}</span>
-                  <span className="tline-steps">
-                    <button onClick={() => changeQty(l.uid, -1)} aria-label={`Decrease ${l.name}`}>−</button>
-                    <span>{l.quantity}</span>
-                    <button onClick={() => changeQty(l.uid, 1)} aria-label={`Increase ${l.name}`}>+</button>
-                  </span>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <input className={inputCls({ size: 'xl' })} value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Customer name (optional)" aria-label="Customer name" />
+                  <Field {...form.fieldProps('contactPhone')}>
+                    <input className={inputCls({ size: 'xl' })} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone — required" aria-label="Customer phone" />
+                  </Field>
+                  <Field {...form.fieldProps('address')}>
+                    <input className={inputCls({ size: 'xl' })} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address — required" aria-label="Delivery address" />
+                  </Field>
+                  <Field {...form.fieldProps('deliveryFee')}>
+                    {(a) => (
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <label htmlFor={a.id} className={LABEL}>Delivery fee</label>
+                        <input {...a} className={inputCls({ size: 'xl', mono: true, className: 'w-[110px] text-right' })} type="number" min="0" step="0.5" inputMode="decimal" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)} />
+                        <span className="text-[11.5px] text-mq-muted">default from Settings</span>
+                      </div>
+                    )}
+                  </Field>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
+            </div>
 
-        {cart.length > 0 && !placed && (
-          <div className="ticket-foot">
-            {orderType === 'dine_in' && (
-              <div className="seg seg-full" style={{ marginBottom: 10 }} role="group" aria-label="When do the guests pay?">
-                <button type="button" className={flow === 'pay' ? 'active' : ''} onClick={() => setPayLaterMode(false)} aria-pressed={flow === 'pay'}>Pay now</button>
-                <button type="button" className={flow === 'later' ? 'active' : ''} onClick={() => setPayLaterMode(true)} aria-pressed={flow === 'later'}>Pay later</button>
+            <div className="tab:flex-1 tab:min-h-[120px] tab:overflow-y-auto min-h-24 px-4 py-1.5">
+              {cart.length === 0
+                ? <EmptyState icon="pos" title="Ticket is empty">Tap a menu item to start the order.</EmptyState>
+                : cart.map((l) => <TicketLine key={l.uid} line={l} onQty={(d) => changeQty(l.uid, d)} />)}
+            </div>
+
+            {cart.length > 0 && !phone && (
+              <div
+                {...payArea.handleProps}
+                aria-label="Resize the payment area — drag, or use the arrow keys"
+                title="Drag to resize · double-click to reset"
+                className="relative z-[6] flex-none flex items-center justify-center h-2.5 -my-[5px] cursor-row-resize touch-none hover:bg-[rgba(133,13,51,.07)] focus-visible:outline-none focus-visible:bg-[rgba(133,13,51,.07)]"
+              >
+                <span className="block h-1 w-9 rounded-full bg-mq-line-2" />
               </div>
             )}
-            {flow === 'later' ? (
+
+            {cart.length > 0 && (
               <>
-                <div className="tf-row total"><span>Total</span><span className="v">{money(subtotal)}</span></div>
-                <div className="note" style={{ marginTop: 8 }}>The kitchen gets it now. It waits in Orders as <b>Unpaid</b> until the guests pay.</div>
-                <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 12 }} disabled={placing || !form.valid} onClick={placeOrder}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" /></svg>{placing ? 'Sending…' : 'Send to kitchen'}
-                </button>
-                {!form.valid && !placing && firstIssue && <div className="fld-note g3-why" role="status">{firstIssue}</div>}
-              </>
-            ) : (<>
-            <Field {...form.fieldProps('discountValue')}>
-              {(a) => (
-              <div className="disc-row">
-                <input {...a} className={`input${a['aria-invalid'] ? ' input-err' : ''}`} type="number" min="0" inputMode="decimal" value={discount.value} onChange={(e) => setDiscount((d) => ({ ...d, value: e.target.value }))} placeholder="Discount (optional)" aria-label="Discount" />
-                <div className="seg" style={{ flexShrink: 0 }}>
-                  <button type="button" className={discount.type === 'percent' ? 'active' : ''} onClick={() => setDiscount((d) => ({ ...d, type: 'percent' }))}>%</button>
-                  <button type="button" className={discount.type === 'fixed' ? 'active' : ''} onClick={() => setDiscount((d) => ({ ...d, type: 'fixed' }))}>$</button>
-                </div>
-              </div>
-              )}
-            </Field>
-            {(discountAmount > 0 || delivery > 0) && <div className="tf-row"><span>Subtotal</span><span className="v">{money(subtotal)}</span></div>}
-            {discountAmount > 0 && <div className="tf-row"><span>Discount</span><span className="v" style={{ color: 'var(--rose)' }}>−{money(discountAmount)}</span></div>}
-            {delivery > 0 && <div className="tf-row"><span>Delivery fee</span><span className="v">{money(delivery)}</span></div>}
-            <div className="tf-row total"><span>Total</span><span className="v">{money(total)}</span></div>
+              <div
+                className="flex flex-col gap-2.5 px-4 pt-3.5 pb-2.5 border-t border-mq-line bg-mq-cream tab:overflow-y-auto tab:flex-none"
+                style={phone ? undefined : { maxHeight: payArea.width }}
+              >
+                {flow === 'pay' && (
+                  <Field {...form.fieldProps('discountValue')}>
+                    {(a) => <DiscountRow a11y={a} discount={discount} setDiscount={setDiscount} disabled={placing} />}
+                  </Field>
+                )}
+                <TotalsBlock
+                  total={shownTotal}
+                  rows={flow === 'pay' && (discountAmount > 0 || delivery > 0) ? [
+                    ['Subtotal', money(subtotal)],
+                    discountAmount > 0 && ['Discount', `−${money(discountAmount)}`],
+                    delivery > 0 && ['Delivery fee', money(delivery)],
+                  ].filter(Boolean) : []}
+                />
 
-            <PaymentFields
-              pay={pay}
-              total={total}
-              accounts={settings?.moneyAccounts}
-              collectors={collectors}
-              defaultCollector={defaultCollector}
-              disabled={placing}
-            />
-
-            {isInvoice && (
-              <div className="ticket-sec">
-                <div className="note">Bill this customer instead of collecting payment now.</div>
-                <Field {...form.fieldProps('invoiceCustomer')}>
-                  <CustomerPicker
-                    customerId={invoiceCustomer.customerId}
-                    customer={invoiceCustomer.customer}
-                    onChange={setInvoiceCustomer}
+                {flow === 'pay' && (
+                  <PaymentFields
+                    pay={pay}
+                    total={total}
+                    collectors={collectors}
+                    defaultCollector={defaultCollector}
                     disabled={placing}
                   />
-                </Field>
-                <div>
-                  <div className="field-l" style={{ marginTop: 0 }}>Due date (optional)</div>
-                  <input className="input" type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} aria-label="Invoice due date" />
-                </div>
-              </div>
-            )}
+                )}
 
-            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 12 }} disabled={placing || !form.valid} onClick={placeOrder}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 12h14M13 6l6 6-6 6" /></svg>{placing ? 'Placing…' : isInvoice ? 'Bill to account & print' : 'Paid · print receipt'}
-            </button>
-            {!form.valid && !placing && firstIssue && <div className="fld-note g3-why" role="status">{firstIssue}</div>}
-            </>)}
-          </div>
+                {flow === 'pay' && isInvoice && (
+                  <div className="flex flex-col gap-2">
+                    <p className="m-0 text-[12.5px] text-mq-on-tint">Bill this customer instead of collecting payment now.</p>
+                    <Field label="Customer" required {...form.fieldProps('invoiceCustomer')}>
+                      <CustomerPicker
+                        customerId={invoiceCustomer.customerId}
+                        customer={invoiceCustomer.customer}
+                        onChange={setInvoiceCustomer}
+                        disabled={placing}
+                      />
+                    </Field>
+                    <Field label="Due date (optional)">
+                      <input className={inputCls({ size: 'xl' })} type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} />
+                    </Field>
+                  </div>
+                )}
+
+                {orderType === 'dine_in' && (
+                  <label className="flex items-start gap-2.5 px-3 py-2.5 bg-white border border-mq-line rounded-lg cursor-pointer">
+                    <Toggle checked={flow === 'later'} onChange={setPayLaterMode} label="Pay later" disabled={placing} className="mt-px" />
+                    <span className="flex flex-col gap-0.5 flex-1 min-w-0">
+                      <span className="text-[13.5px] font-semibold">Pay later</span>
+                      <span className="text-xs text-mq-on-tint leading-[1.45]">The kitchen gets it now; the guests settle the tab in Orders at the end.</span>
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 px-4 pt-1 pb-3.5 bg-mq-cream flex-none">
+                <Button
+                  variant="primary" size="xl" block
+                  icon={flow === 'later' ? 'arrowRight' : undefined}
+                  className="!h-auto min-h-[52px] !rounded-[10px] !text-base"
+                  disabled={placing || !form.valid}
+                  onClick={placeOrder}
+                >
+                  {primaryLabel}
+                </Button>
+                {!form.valid && !placing && firstIssue && <div className="text-xs text-mq-muted text-center" role="status">{firstIssue}</div>}
+              </div>
+              </>
+            )}
+          </>
         )}
       </aside>
+
+      {showJump && (
+        <div className="fixed inset-x-3 bottom-3 z-30">
+          <Button
+            variant="primary" size="xl" block iconRight="arrowDown"
+            className="!h-auto min-h-[52px] !rounded-xl !shadow-mq-toast"
+            onClick={() => ticketRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
+            Ticket · {itemCount} {itemCount === 1 ? 'item' : 'items'} · <span className="font-mq-mono tabular-nums">{money(shownTotal)}</span>
+          </Button>
+        </div>
+      )}
 
       {customizing && (
         <ItemCustomizer
           item={customizing}
-          eyebrow={activeCats.find((c) => c.id === customizing.categoryId)?.name || 'Item'}
+          eyebrow={catName[customizing.categoryId] || 'Item'}
           onClose={() => setCustomizing(null)}
           onAdd={(line) => { setCart((prev) => [...prev, line]); setCustomizing(null); }}
         />
@@ -444,35 +592,98 @@ export default function PosPage() {
   );
 }
 
-function PlacedPanel({ placed, canOpenOrders, onPrint, onNew }) {
-  const { kind, order } = placed;
-  const later = kind === 'later';
-  const title = later
+const PLACED_TONE = {
+  later: 'bg-mq-info-bg text-mq-info',
+  invoice: 'bg-mq-warn-bg text-mq-warn-ink',
+  paid: 'bg-mq-ok-bg text-mq-ok',
+};
+
+function paymentFact(kind, order, dueDate) {
+  if (kind === 'later') return 'Unpaid tab';
+  if (kind === 'invoice') {
+    const due = dueDate ? new Date(`${dueDate}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+    return `On account${due ? ` · due ${due}` : ''}`;
+  }
+  const parts = Array.isArray(order.payments) ? order.payments : [];
+  const acct = order.paymentAccount || parts[0]?.label || order.paymentMethod || '—';
+  const received = Number(order.amountReceived);
+  const tot = Number(order.total);
+  return received > tot ? `${acct} · ${money(received)} received · change ${money(received - tot)}` : acct;
+}
+
+function PlacedPanel({ placed, canOpenOrders, canOpenCustomer, onPrint, onNew }) {
+  const { kind, order, dueDate } = placed;
+  const lines = Array.isArray(order.items) ? order.items : [];
+  const qty = lines.reduce((s, l) => s + Number(l.quantity || 0), 0);
+  const dineIn = order.orderType === 'dine_in';
+  const where = dineIn
+    ? `Dine-in${order.tableNumber ? ` · Table ${order.tableNumber}` : ''}`
+    : `Delivery${order.contactName || order.contactPhone ? ` · ${order.contactName || order.contactPhone}` : ''}`;
+  const servedBy = dineIn ? (order.waiterName || order.waiter) : (order.staffName || order.staff);
+
+  const title = kind === 'later'
     ? `Sent to kitchen · ${order.tableNumber ? `Table ${order.tableNumber}` : order.code}`
-    : (order.invoiceId ? `Invoice #${order.invoiceId} created` : `Paid · receipt ${order.receiptNo}`);
-  const sub = later
-    ? `${order.code} is Unpaid — take payment in Orders when the guests ask for the bill.`
-    : (order.invoiceId ? 'Balance due from the customer — receipt sent to the printer.' : `${order.code} · receipt sent to the printer.`);
+    : kind === 'invoice' ? `Invoice #${order.invoiceId} created` : `Paid · receipt ${order.receiptNo}`;
+  const sub = kind === 'later'
+    ? `The kitchen ticket went to the printer. ${order.code} stays unpaid until the guests ask for the bill in Orders.`
+    : kind === 'invoice'
+      ? 'Balance due from the customer. The receipt went to the printer.'
+      : `${order.code} · the receipt went to the printer.`;
+
+  const facts = [
+    ['Order', <span key="c" className="font-mq-mono tabular-nums text-[12.5px]">{order.code}</span>],
+    ['Service', where],
+    kind === 'invoice' && order.customer?.name && ['Customer', order.customer.name],
+    servedBy && ['Served by', servedBy],
+    ['Items', `${qty} ${qty === 1 ? 'item' : 'items'} · ${lines.length} ${lines.length === 1 ? 'dish' : 'dishes'}`],
+    ['Payment', paymentFact(kind, order, dueDate)],
+    kind === 'paid' && order.collectedBy && ['Collected by', order.collectedBy],
+  ].filter(Boolean);
+
+  const act = 'min-h-11 !h-auto !rounded-[10px]';
   return (
-    <div className="pos-placed">
-      <div className="pos-placed-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ width: 26, height: 26 }}><path d="M20 6 9 17l-5-5" /></svg></div>
-      <div className="h-2">{title}</div>
-      <div className="sub">{sub}</div>
-      <div className="acts">
-        {later ? (
+    <div className="flex flex-col items-center gap-3.5 flex-1 min-h-0 tab:overflow-y-auto px-5 pt-7 pb-5 text-center animate-mq-in motion-reduce:animate-none">
+      <span className={cx('grid place-items-center w-[60px] h-[60px] rounded-full flex-none', PLACED_TONE[kind])}>
+        <Icon name="check" size={28} stroke={2.8} />
+      </span>
+      <span className="flex flex-col items-center gap-[5px]">
+        <span className="text-[19px] font-semibold tracking-[-.01em]">{title}</span>
+        <span className="text-[13px] text-mq-on-tint leading-normal max-w-[330px]">{sub}</span>
+      </span>
+
+      <div className="w-full border border-mq-line rounded-xl overflow-hidden text-left">
+        {facts.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 px-3.5 py-[9px] border-b border-mq-chip text-[13px]">
+            <span className="text-mq-muted flex-none">{k}</span>
+            <span className="font-medium text-right min-w-0 break-words">{v}</span>
+          </div>
+        ))}
+        <div className="flex justify-between gap-3 px-3.5 py-[11px] bg-mq-cream">
+          <span className="font-semibold">Total</span>
+          <span className="font-mq-mono tabular-nums font-semibold text-[15px]">{money(order.total)}</span>
+        </div>
+      </div>
+
+      <div className="w-full grid gap-2 grid-cols-[repeat(auto-fit,minmax(130px,1fr))]">
+        {kind === 'later' ? (
           <>
-            <button className="btn btn-ghost" onClick={() => onPrint('kitchen')}>Kitchen ticket</button>
-            <button className="btn btn-ghost" onClick={() => onPrint('bill')}>Print bill</button>
-            {canOpenOrders && <Link className="btn btn-soft" href={`/admin/dashboard/orders/${order.id}`}>Open order</Link>}
+            <Button icon="print" className={act} onClick={() => onPrint('kitchen')}>Kitchen ticket</Button>
+            <Button icon="print" className={act} onClick={() => onPrint('bill')}>Print bill</Button>
+            {canOpenOrders && <Button iconRight="arrowRight" className={act} href={`/admin/dashboard/orders/${order.id}`}>Open order</Button>}
           </>
         ) : (
           <>
-            <button className="btn btn-ghost" onClick={() => onPrint('customer')}>Customer receipt</button>
-            <button className="btn btn-ghost" onClick={() => onPrint('kitchen')}>Kitchen ticket</button>
+            <Button icon="print" className={act} onClick={() => onPrint('customer')}>Customer receipt</Button>
+            <Button icon="print" className={act} onClick={() => onPrint('kitchen')}>Kitchen ticket</Button>
+            {kind === 'invoice' && canOpenCustomer && order.customer?.id && (
+              <Button iconRight="arrowRight" className={act} href={`/admin/dashboard/customers/${order.customer.id}`}>Open customer</Button>
+            )}
           </>
         )}
-        <button className="btn btn-primary" onClick={onNew}>New order</button>
       </div>
+
+      <span className="flex-1" />
+      <Button variant="primary" size="xl" block icon="plus" className="!h-auto min-h-[52px] !rounded-xl" onClick={onNew}>New order</Button>
     </div>
   );
 }

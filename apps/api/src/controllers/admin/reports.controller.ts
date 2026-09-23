@@ -192,6 +192,9 @@ export async function getFinancialReport(req: Request, res: Response) {
           ['Sales billed on account', money(r.pnl.billedOnAccount)],
           ['Total sales', money(r.pnl.totalSales)],
           ...(r.pnl.taxRate > 0 ? [[`Tax included in sales (${r.pnl.taxRate}%)`, money(r.pnl.includedTax)]] : []),
+          ['Stock purchases', money(-r.pnl.expensesByKind.stock_purchase)],
+          ['Operating expenses', money(-r.pnl.expensesByKind.operating)],
+          ['Payroll', money(-r.pnl.expensesByKind.payroll)],
           ['Expenses', money(-r.pnl.expenses)],
           ['Net profit', money(r.pnl.netProfit)],
         ]);

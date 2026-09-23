@@ -11,6 +11,7 @@ import AccountField from '@/components/admin/suppliers/AccountField';
 import { reportSaveError } from '@/lib/saveError';
 import useMoneyAccounts from '@/hooks/useMoneyAccounts';
 import { defaultPaidFrom } from '@/components/admin/AccountSelect';
+import { Alert, Button, IconButton, Modal, ModalSpacer, inputCls } from '@/components/admin/ui';
 import { money } from './payrollUi';
 
 /**
@@ -62,48 +63,55 @@ export default function PayDialog({ people, month, label, onClose }) {
   const remove = (id) => setLines((ls) => ls.filter((l) => l.staffId !== id));
 
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !pay.isPending) onClose(); }}>
-      <div className="modal pr-modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">Salary · {label}</div><div className="h-1" id="pay-title" style={{ marginTop: 3 }}>{lines.length === 1 ? `Pay ${lines[0].name}` : `Pay ${lines.length} people`}</div></div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" disabled={pay.isPending}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
-        </div>
-        <form onSubmit={submit} noValidate style={{ display: 'contents' }}>
-          <div className="modal-b">
-            <div className="pr-paylist">
-              {lines.map((l) => (
-                <div className="pr-payline-w" key={l.staffId}>
-                  <div className="pr-payline">
-                    <label htmlFor={`pay-${l.staffId}`} className="pr-prev-nm">{l.name}</label>
-                    <div className="pr-affix">
-                      <span>$</span>
-                      <input id={`pay-${l.staffId}`} className={`input${touchedLines[l.staffId] && lineErr[l.staffId] ? ' input-err' : ''}`} type="number" min="0" step="0.01" inputMode="decimal"
-                        aria-invalid={touchedLines[l.staffId] && lineErr[l.staffId] ? true : undefined} aria-describedby={lineErr[l.staffId] ? `pay-${l.staffId}-m` : undefined}
-                        value={l.amount} onChange={(e) => setAmount(l.staffId, e.target.value)} onBlur={() => setTouchedLines((t) => ({ ...t, [l.staffId]: true }))} autoFocus={lines.length === 1} />
-                    </div>
-                    {lines.length > 1 && (
-                      <button type="button" className="icon-btn pr-x" onClick={() => remove(l.staffId)} aria-label={`Don’t pay ${l.name} now`}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                      </button>
-                    )}
+    <Modal
+      eyebrow={`Salary · ${label}`}
+      title={lines.length === 1 ? `Pay ${lines[0].name}` : `Pay ${lines.length} people`}
+      icon="cash"
+      onClose={onClose}
+      busy={pay.isPending}
+      width={520}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={pay.isPending}>Cancel</Button>
+          <Button variant="primary" size="lg" type="submit" form="pay-form" disabled={pay.isPending || !linesOk || !fv.valid}>{pay.isPending ? 'Paying…' : `Pay ${money(total)}`}</Button>
+        </>
+      )}
+    >
+      <form id="pay-form" onSubmit={submit} noValidate className="flex flex-col gap-3.5">
+        <div className="flex flex-col border border-mq-line rounded-[10px] overflow-hidden">
+          {lines.map((l) => {
+            const bad = touchedLines[l.staffId] && lineErr[l.staffId];
+            return (
+              <div key={l.staffId} className="flex flex-col gap-1 px-3 py-2.5 border-b border-mq-chip last:border-b-0">
+                <div className="flex items-center gap-2.5">
+                  <label htmlFor={`pay-${l.staffId}`} className="flex-1 min-w-0 truncate text-[13.5px] font-medium text-mq-ink">{l.name}</label>
+                  <div className="relative w-[140px] flex-none">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-mq-muted font-mq-mono pointer-events-none">$</span>
+                    <input
+                      id={`pay-${l.staffId}`}
+                      className={inputCls({ size: 'lg', mono: true, className: 'pl-7 text-right' })}
+                      type="number" min="0" step="0.01" inputMode="decimal"
+                      aria-invalid={bad ? true : undefined} aria-describedby={lineErr[l.staffId] ? `pay-${l.staffId}-m` : undefined}
+                      value={l.amount} onChange={(e) => setAmount(l.staffId, e.target.value)} onBlur={() => setTouchedLines((t) => ({ ...t, [l.staffId]: true }))} autoFocus={lines.length === 1}
+                    />
                   </div>
-                  {lineErr[l.staffId] && <div id={`pay-${l.staffId}-m`} className={touchedLines[l.staffId] ? 'field-err' : 'fld-note'} role={touchedLines[l.staffId] ? 'alert' : undefined}>{lineErr[l.staffId]}</div>}
+                  {lines.length > 1 && <IconButton icon="x" variant="ghost" size={34} label={`Don’t pay ${l.name} now`} onClick={() => remove(l.staffId)} />}
                 </div>
-              ))}
-            </div>
-            <AccountField label="Paid from" value={paidFrom} onChange={setAccountId} {...fv.fieldProps('paidFromAccountId')} />
-            <Field label="Note (optional)" {...fv.fieldProps('note')}>
-              <input className="input" value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. paid by EVC, advance deducted" />
-            </Field>
-            <div className="note">Recorded as <b>Salaries</b> expenses for {label}. You can undo a payment afterwards.</div>
-            {error && <div className="adm-error-banner">{error}</div>}
-          </div>
-          <div className="modal-f">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={pay.isPending}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={pay.isPending || !linesOk || !fv.valid}>{pay.isPending ? 'Paying…' : `Pay ${money(total)}`}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+                {lineErr[l.staffId] && (
+                  <div id={`pay-${l.staffId}-m`} className={bad ? 'text-xs font-medium text-mq-danger-ink' : 'text-xs text-mq-muted'} role={bad ? 'alert' : undefined}>{lineErr[l.staffId]}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <AccountField label="Paid from" value={paidFrom} onChange={setAccountId} {...fv.fieldProps('paidFromAccountId')} />
+        <Field label="Note (optional)" {...fv.fieldProps('note')}>
+          <input className={inputCls({ size: 'lg' })} value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} placeholder="e.g. paid by EVC, advance deducted" />
+        </Field>
+        <p className="m-0 text-xs text-mq-muted">Recorded as <b className="text-mq-body">Salaries</b> expenses for {label}. You can undo a payment afterwards.</p>
+        {error && <Alert tone="danger">{error}</Alert>}
+      </form>
+    </Modal>
   );
 }

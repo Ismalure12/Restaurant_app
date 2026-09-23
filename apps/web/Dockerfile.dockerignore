@@ -1,0 +1,16 @@
+# Deny everything, then allow only what the build needs (same shape as
+# apps/api/Dockerfile.dockerignore). Keeps .next/, node_modules and every .env
+# out of the build context.
+**
+!package.json
+!package-lock.json
+!apps/web/package.json
+!apps/api/package.json
+!apps/api/prisma.config.ts
+!apps/api/prisma/**
+!apps/web/src/**
+!apps/web/public/**
+!apps/web/next.config.mjs
+!apps/web/tailwind.config.js
+!apps/web/postcss.config.mjs
+!apps/web/jsconfig.json

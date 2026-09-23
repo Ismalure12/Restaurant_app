@@ -59,10 +59,11 @@ export async function salesReport(db: Db, range: DayRange, f: SalesFilters, opts
     accounts.set(key, cur);
   }
 
-  const [items, time, receivable] = await Promise.all([
+  const [items, time, receivable, lines] = await Promise.all([
     menuReport(db, range, { category: opts.category, orderFilter: filtersWhere(f) }),
     salesByTime(db, where),
     outstandingReceivables(db),
+    linesSold(db, where),
   ]);
   // Sales billed On account in the range (honours the filters) vs what is still owed overall.
   const onAccountRows = byAccountRaw.filter((r) => r.paymentMethod === 'invoice');
@@ -78,6 +79,10 @@ export async function salesReport(db: Db, range: DayRange, f: SalesFilters, opts
       discounts: round2(discounts),
       deliveryFees: round2(deliveryFees),
       avgTicket: count ? round2(netSales / count) : 0,
+      // Units sold and distinct dishes across the same sales (every category;
+      // the dish table below may be cut to its top rows, these never are).
+      itemsSold: lines.itemsSold,
+      dishesSold: lines.dishesSold,
       // Billed On account in this range, and what customers still owe in total.
       onAccount: { orders: onAccountRows.reduce((s, r) => s + r._count._all, 0), total: round2(onAccountRows.reduce((s, r) => s + num(r._sum.total), 0)) },
       receivable,
@@ -102,6 +107,21 @@ export async function salesReport(db: Db, range: DayRange, f: SalesFilters, opts
     // What sold (menu value = line prices before order discounts): dishes, categories, never sold.
     items,
   };
+}
+
+// Distinct dishes are counted by menu item (a rename stays one dish); lines
+// whose menu item was deleted count once per name, as in the Menu part.
+const DISH_CAP = 10_000;
+
+/** Units and distinct dishes over the sales matching `where` — DB aggregates, no line reads. */
+export async function linesSold(db: Db, where: Prisma.OrderWhereInput) {
+  const order = { order: where };
+  const [units, byItem, byName] = await Promise.all([
+    db.orderItem.aggregate({ where: order, _sum: { quantity: true } }),
+    db.orderItem.groupBy({ by: ['menuItemId'], where: { ...order, menuItemId: { not: null } }, _count: { _all: true }, orderBy: { menuItemId: 'asc' }, take: DISH_CAP }),
+    db.orderItem.groupBy({ by: ['name'], where: { ...order, menuItemId: null }, _count: { _all: true }, orderBy: { name: 'asc' }, take: DISH_CAP }),
+  ]);
+  return { itemsSold: num(units?._sum?.quantity), dishesSold: (byItem?.length ?? 0) + (byName?.length ?? 0) };
 }
 
 /**

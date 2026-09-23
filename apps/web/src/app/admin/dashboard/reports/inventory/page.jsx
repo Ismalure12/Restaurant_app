@@ -1,20 +1,27 @@
 'use client';
 
-import Link from 'next/link';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import Bk from '@/components/admin/Bk';
-import { KpiRowSkeleton, RowsSkeleton } from '@/components/admin/Skeletons';
 import {
-  Card, Empty, ErrorNote, FilterSelect, Kpi, PrintHead, RangePicker, Toolbar, labelOf, money, num, useReportParams,
+  ActiveFilters, ErrorNote, ExportBar, FilterSelect, FiltersButton, PeriodPicker, PrintHead, RangeNote, labelOf, money, num, useReportParams,
 } from '@/components/admin/reports/ReportKit';
+import {
+  Button, Card, CardHeader, EmptyRow, EmptyState, Kpi, KpiGrid, KpiSkeletons, LoadMoreBar, RowSkeletons,
+  Table, Td, Th, Tr,
+} from '@/components/admin/ui';
 
 const API = '/api/admin/reports/inventory';
 const TYPES = [
   { value: 'purchase', label: 'Purchases' }, { value: 'usage', label: 'Usage' },
   { value: 'waste', label: 'Waste' }, { value: 'adjustment', label: 'Adjustments' },
 ];
+const when = (d) => new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
+/**
+ * Inventory report: purchases, usage and waste in the range. Stock on hand,
+ * its value and low stock live on the Inventory page only.
+ */
 export default function InventoryReportPage() {
   const { preset, range, filters, set, query } = useReportParams('30d', ['itemId', 'type']);
   const { data: r, isLoading, isError, error } = useQuery({ queryKey: ['rpt-inventory', query], queryFn: () => fetchJson(`${API}?${query}`) });
@@ -31,6 +38,13 @@ export default function InventoryReportPage() {
   const s = r?.summary;
   const items = r?.items || [];
   const itemOptions = (Array.isArray(stock) ? stock : stock.items || []).map((i) => ({ value: String(i.id), label: i.name }));
+  const itemName = itemOptions.find((o) => o.value === filters.itemId)?.label;
+  const active = ['itemId', 'type'].filter((k) => filters[k]).length;
+  const clearFilters = () => set({ itemId: '', type: '' });
+  const chips = [
+    filters.itemId && { key: 'itemId', label: `Item: ${itemName || '…'}`, onRemove: () => set({ itemId: '' }) },
+    filters.type && { key: 'type', label: `Movement: ${TYPES.find((t) => t.value === filters.type)?.label || filters.type}`, onRemove: () => set({ type: '' }) },
+  ].filter(Boolean);
 
   const exports = [
     { label: 'Movement totals by item', href: `${API}?${query}&format=csv&table=stock` },
@@ -40,72 +54,84 @@ export default function InventoryReportPage() {
 
   return (
     <>
-      <Toolbar exports={exports}>
-        <RangePicker preset={preset} range={range} set={set} />
-        <FilterSelect label="Item" value={filters.itemId} options={itemOptions} onChange={(v) => set({ itemId: v })} />
-        <FilterSelect label="Movement" value={filters.type} options={TYPES} onChange={(v) => set({ type: v })} />
-      </Toolbar>
-      <PrintHead title="Inventory report" range={range} preset={preset} filters={{ Item: itemOptions.find((o) => o.value === filters.itemId)?.label, Movement: labelOf('movement', filters.type) }} />
+      <div className="flex items-center gap-2.5 flex-wrap rpt-noprint">
+        <PeriodPicker preset={preset} range={range} set={set} />
+        <FiltersButton active={active} onClear={clearFilters}>
+          <FilterSelect label="Item" value={filters.itemId} options={itemOptions} onChange={(v) => set({ itemId: v })} all="All items" />
+          <FilterSelect label="Movement" value={filters.type} options={TYPES} onChange={(v) => set({ type: v })} all="All movements" />
+        </FiltersButton>
+        <span className="flex-1" />
+        <RangeNote preset={preset} range={range} compare={false} />
+        <ExportBar exports={exports} />
+      </div>
+      <ActiveFilters items={chips} onClear={clearFilters} />
+      <PrintHead title="Inventory report" range={range} preset={preset} filters={{ Item: itemName, Movement: labelOf('movement', filters.type) }} />
       {isError && <ErrorNote error={error} />}
 
       {/* Stock on hand, its value and low-stock counts live on the Inventory page. */}
-      {isLoading ? <KpiRowSkeleton count={3} style={{ marginBottom: 16 }} /> : s && (
-        <div className="kpi-row rpt-kpis">
-          <Kpi label="Purchases" tone="green" value={money(s.purchases)} foot="bought in range" />
-          <Kpi label="Used" value={money(s.usageValue)} foot="logged usage at cost" />
-          <Kpi label="Wasted" tone="rose" value={money(s.wasteValue)} foot="logged waste at cost" />
-        </div>
+      {isLoading ? <KpiSkeletons count={3} min={180} /> : s && (
+        <KpiGrid min={180}>
+          <Kpi label="Purchases" value={money(s.purchases)} foot="bought in range, at cost" />
+          <Kpi label="Usage" value={money(s.usageValue)} foot="logged usage at cost" />
+          <Kpi label="Waste" value={money(s.wasteValue)} foot="logged waste at cost" />
+        </KpiGrid>
       )}
 
-      <Card eyebrow="Suppliers" title="Purchases by supplier">
-        <Bk loading={isLoading} rows={(r?.bySupplier || []).map((x) => ({ l: x.supplier, v: x.cost, fmt: `${money(x.cost)} · ${x.items} items` }))} empty="No purchases with a cost in this range." />
+      <Card className="overflow-hidden">
+        <CardHeader eyebrow="Purchases by supplier" title="What each supplier delivered with a cost" />
+        <div className="p-4">
+          <Bk loading={isLoading} rows={(r?.bySupplier || []).map((x) => ({ l: x.supplier, v: x.cost, fmt: `${money(x.cost)} · ${x.items} items` }))} empty="No purchases with a cost in this range." />
+        </div>
       </Card>
 
-      <Card flush title="Movements by item" action={<Link className="btn btn-ghost btn-sm rpt-noprint" href="/admin/dashboard/inventory">Stock on hand →</Link>}>
-        {isLoading ? <RowsSkeleton className="card-pad" /> : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead><tr><th>Item</th><th className="num">Bought</th><th className="num">Used</th><th className="num">Wasted</th></tr></thead>
-              <tbody>
-                {items.length === 0 ? <tr><td colSpan={4} className="td-empty">No stock items</td></tr> : items.map((i) => (
-                  <tr key={i.id}>
-                    <td className="strong">{i.name}{i.supplier ? <div className="sub">{i.supplier}</div> : null}</td>
-                    <td className="num">{i.purchasedQty ? `${num(i.purchasedQty)} ${i.unit} · ${money(i.purchaseCost)}` : '—'}</td>
-                    <td className="num">{i.usedQty ? `${num(i.usedQty)} ${i.unit}` : '—'}</td>
-                    <td className="num">{i.wastedQty ? `${num(i.wastedQty)} ${i.unit}` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <Card className="overflow-hidden">
+        <CardHeader
+          eyebrow="Movement totals" title="By item" count={isLoading ? null : items.length}
+          actions={<Button href="/admin/dashboard/inventory" variant="ghost" size="xs" iconRight="arrowRight" className="rpt-noprint">Stock on hand</Button>}
+        />
+        {isLoading ? <RowSkeletons /> : (
+          <Table maxH={460} minW={520} label="Movement totals by item">
+            <thead><tr><Th>Item</Th><Th align="right">Bought</Th><Th align="right">Used</Th><Th align="right">Wasted</Th></tr></thead>
+            <tbody>
+              {items.length === 0 ? <EmptyRow cols={4}>No stock items.</EmptyRow> : items.map((i) => (
+                <Tr key={i.id}>
+                  <Td strong>{i.name}{i.supplier && <span className="block text-xs font-normal text-mq-muted">{i.supplier}</span>}</Td>
+                  <Td mono align="right">{i.purchasedQty ? <>{num(i.purchasedQty)} {i.unit}<span className="block text-xs text-mq-muted">{money(i.purchaseCost)}</span></> : '—'}</Td>
+                  <Td mono align="right">{i.usedQty ? `${num(i.usedQty)} ${i.unit}` : '—'}</Td>
+                  <Td mono align="right">{i.wastedQty ? `${num(i.wastedQty)} ${i.unit}` : '—'}</Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
         )}
       </Card>
 
-      <Card flush title="Movement ledger">
-        {moves.isLoading ? <RowsSkeleton className="card-pad" /> : moveRows.length === 0 ? <Empty>No stock movements in this range.</Empty> : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead><tr><th>When</th><th>Item</th><th>Type</th><th className="num">Quantity</th><th className="num">Cost</th><th>By</th><th>Note</th></tr></thead>
+      <Card className="overflow-hidden">
+        <CardHeader eyebrow="Movement ledger" title="Every movement in the period" />
+        {moves.isLoading ? <RowSkeletons /> : moves.isError ? <div className="p-4"><ErrorNote error={moves.error} /></div> : moveRows.length === 0 ? (
+          <EmptyState icon="inventory" title="No stock movements">Nothing was bought, used, wasted or adjusted in this range.</EmptyState>
+        ) : (
+          <>
+            <Table maxH={480} minW={760} label="Movement ledger">
+              <thead><tr><Th>When</Th><Th>Item</Th><Th>Type</Th><Th align="right">Quantity</Th><Th align="right">Cost</Th><Th>By</Th><Th>Note</Th></tr></thead>
               <tbody>
                 {moveRows.map((m) => (
-                  <tr key={m.id}>
-                    <td>{new Date(m.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                    <td className="strong">{m.item}</td>
-                    <td style={{ textTransform: 'capitalize' }}>{m.type}</td>
-                    <td className="num">{m.quantity > 0 ? '+' : ''}{num(m.quantity)} {m.unit}</td>
-                    <td className="num">{m.totalCost != null ? money(m.totalCost) : '—'}</td>
-                    <td>{m.staff || '—'}</td>
-                    <td>{m.note || ''}</td>
-                  </tr>
+                  <Tr key={m.id}>
+                    <Td mono className="whitespace-nowrap">{when(m.createdAt)}</Td>
+                    <Td strong>{m.item}</Td>
+                    <Td className="capitalize">{m.type}</Td>
+                    <Td mono align="right" className="whitespace-nowrap">{m.quantity > 0 ? '+' : ''}{num(m.quantity)} {m.unit}</Td>
+                    <Td money>{m.totalCost != null ? money(m.totalCost) : '—'}</Td>
+                    <Td>{m.staff || '—'}</Td>
+                    <Td muted>{m.note || ''}</Td>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-        )}
-        {moves.hasNextPage && (
-          <div className="card-foot rpt-noprint">
-            <button className="btn btn-ghost btn-sm" onClick={() => moves.fetchNextPage()} disabled={moves.isFetchingNextPage}>{moves.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>
-          </div>
+            </Table>
+            <div className="rpt-noprint">
+              <LoadMoreBar shown={moveRows.length} hasMore={moves.hasNextPage} loading={moves.isFetchingNextPage} onMore={() => moves.fetchNextPage()} noun="movements" />
+            </div>
+          </>
         )}
       </Card>
     </>

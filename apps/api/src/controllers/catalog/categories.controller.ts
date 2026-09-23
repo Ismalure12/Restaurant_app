@@ -86,11 +86,28 @@ export async function deleteCategory(req: Request<{ id: string }>, res: Response
     const auth = await requirePage(prisma, req, 'categories', 'act');
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
-    const { id } = req.params;
+    const categoryId = Number(req.params.id);
+    if (!Number.isInteger(categoryId) || categoryId <= 0) return res.status(400).json({ error: 'Invalid id' });
 
-    await prisma.category.delete({
-      where: { id: parseInt(id) },
-    });
+    // MenuItem.category cascades on delete, so removing a category that still
+    // has dishes would silently delete them (and their options, extras and
+    // tags). Refuse instead: the dishes must be moved or deleted first. The
+    // "no dishes" condition is part of the DELETE itself, so a dish added at
+    // the same moment can't be swept away between a check and the delete.
+    const removed = await prisma.category.deleteMany({ where: { id: categoryId, items: { none: {} } } });
+    if (removed.count === 0) {
+      const found = await prisma.category.findUnique({
+        where: { id: categoryId },
+        select: { id: true, _count: { select: { items: true } } },
+      });
+      if (!found) return res.status(404).json({ error: 'Category not found' });
+      const dishes = found._count.items;
+      return res.status(409).json({
+        error: `Move or delete its ${dishes} ${dishes === 1 ? 'dish' : 'dishes'} first`,
+        code: 'CATEGORY_NOT_EMPTY',
+        itemCount: dishes,
+      });
+    }
 
     return res.json({ success: true });
   } catch (error) {

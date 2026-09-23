@@ -14,7 +14,5 @@ export function paymentOptions(accounts = [], { invoice = true } = {}) {
   ].filter(Boolean);
 }
 
-/** Accounts a customer can pay into at the till (split parts pick from these). */
-export const tillAccounts = (accounts = []) => accounts.filter((a) => a.kind === 'cash' || a.kind === 'wallet' || a.kind === 'card');
 
 export const findOption = (options, key) => options.find((o) => o.key === key) || options[0];

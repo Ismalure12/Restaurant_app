@@ -51,16 +51,17 @@ Keep the container on a private network or behind the reverse proxy, and let the
 - `FIXED_CHARGE_USD` in `src/lib/payments/sifalo.ts` is the temporary test charge — set it to `null` at go-live.
 
 ## Live updates (SSE) and nginx
-`GET /api/admin/events` streams `event: orders` nudges (no data) to back-office screens; they refetch, and keep a slow poll as fallback. It sends `X-Accel-Buffering: no`; nginx must also not time it out:
+`GET /api/admin/events` streams `event: orders` nudges (no data) to back-office screens; they refetch, and keep a slow poll as fallback. It sends `X-Accel-Buffering: no`; nginx must also not buffer or time it out:
 ```nginx
-location /api/admin/events {
-  proxy_pass http://api:4000;
+location = /api/admin/events {
+  proxy_pass http://maqaaxi_api;
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_buffering off;
   proxy_read_timeout 1h;
 }
 ```
+The real production config is **`deploy/nginx/menu.kfggalkacyo.com.conf`** — edit that file, not this snippet. See `DEPLOYMENT.md`.
 Subscribers live in process memory — correct for one API container.
 
 ## Rate limits and the proxy

@@ -46,12 +46,15 @@ export default function ConnectionBanner() {
     : offline ? 'No internet connection. Changes can’t be saved until you’re back online.'
     : 'Can’t reach the server. We’ll keep trying — your work on this screen is safe.';
 
+  const tone = status === 'ok'
+    ? 'bg-mq-ok-bg border-mq-ok-line text-mq-ok-ink'
+    : 'bg-mq-warn-bg border-mq-warn-line text-mq-warn-ink';
   return (
-    <div className={`conn-banner ${status === 'ok' ? 'is-ok' : offline ? 'is-offline' : 'is-server'}`} role="status" aria-live="polite">
-      <span className="conn-dot" aria-hidden="true" />
-      <span className="conn-text">{text}</span>
+    <div className={`fixed top-2 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-2.5 max-w-[calc(100vw-24px)] px-3.5 py-2 rounded-[10px] border shadow-mq-md font-mq text-[13px] ${tone}`} role="status" aria-live="polite">
+      <span className={`w-2 h-2 rounded-full flex-none ${status === 'ok' ? 'bg-mq-ok' : 'bg-mq-warn animate-mq-pulse motion-reduce:animate-none'}`} aria-hidden="true" />
+      <span className="min-w-0">{text}</span>
       {status === 'unreachable' && (
-        <button type="button" className="conn-retry" onClick={retry} disabled={probing}>{probing ? 'Checking…' : 'Retry'}</button>
+        <button type="button" className="flex-none h-7 px-2.5 rounded-[7px] border border-mq-warn-line bg-white text-mq-warn-ink text-[12.5px] font-semibold disabled:opacity-60" onClick={retry} disabled={probing}>{probing ? 'Checking…' : 'Retry now'}</button>
       )}
     </div>
   );

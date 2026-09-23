@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import OrderPage from '@/components/admin/orders/OrderPage';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import { Page, RowSkeletons } from '@/components/admin/ui';
 
 // One sale opened from Sales history (or the Sales report's ledger). `?back=`
 // carries the list's filters so the breadcrumb returns to exactly that view.
@@ -15,5 +15,5 @@ function SaleDetail() {
 }
 
 export default function SaleDetailPage() {
-  return <Suspense fallback={<RowsSkeleton rows={5} height={64} />}><SaleDetail /></Suspense>;
+  return <Suspense fallback={<Page><RowSkeletons rows={5} /></Page>}><SaleDetail /></Suspense>;
 }

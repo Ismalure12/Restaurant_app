@@ -1,15 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchJson } from '@/lib/apiError';
-import { notify } from '@/lib/notify';
-import useConfirm from '@/hooks/useConfirm';
-import Field from '@/components/admin/Field';
-import { useFormValidation } from '@/lib/formValidation';
-import { reportSaveError } from '@/lib/saveError';
-import { socialLinkSchema } from '@/lib/schemas/settings';
-import { Modal, SectionHead, plus } from './shared';
+import { Button, Icon, IconButton, MenuItem, Popover, inputCls } from '@/components/admin/ui';
+import { SettingsCard } from './shared';
 
 const PLATFORMS = [
   { value: 'phone', label: 'Phone', icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>) },
@@ -20,56 +12,103 @@ const PLATFORMS = [
   { value: 'tiktok', label: 'TikTok', icon: (<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 0 0-.79-.05A6.34 6.34 0 0 0 3.15 15a6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.34-6.34V8.88a8.28 8.28 0 0 0 4.76 1.5V6.93a4.84 4.84 0 0 1-1-.24z" /></svg>) },
   { value: 'website', label: 'Website', icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>) },
 ];
-const platformInfo = (p) => PLATFORMS.find((x) => x.value === p) || { value: p, label: p, icon: null };
+export const platformInfo = (p) => PLATFORMS.find((x) => x.value === p) || { value: p, label: p, icon: null };
 const placeholderFor = (p) => (p === 'phone' || p === 'whatsapp') ? '+252 70 000 0000' : 'https://example.com';
-/** Settings › General: links shown in the public menu footer. */
-export default function SocialLinksSection() {
-  const qc = useQueryClient();
-  const { confirm, dialog } = useConfirm();
-  const { data: links = [] } = useQuery({ queryKey: ['social-links'], queryFn: () => fetchJson('/api/social-links') });
-  const [linkModal, setLinkModal] = useState(null);
-  const [linkForm, setLinkForm] = useState({ platform: '', value: '' });
-  const usedPlatforms = links.map((l) => l.platform);
-  const available = PLATFORMS.filter((p) => !usedPlatforms.includes(p.value));
-  const [linkBanner, setLinkBanner] = useState('');
-  const linkV = useFormValidation(socialLinkSchema, linkForm);
-  const saveLink = useMutation({
-    mutationFn: (p) => fetchJson(p.id ? `/api/social-links/${p.id}` : '/api/social-links', { method: p.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p.id ? { value: p.value } : { platform: p.platform, value: p.value }) }),
-    onSuccess: () => { notify.success(linkModal?.id ? 'Link updated' : 'Link added', { title: 'Could not save the link' }); qc.invalidateQueries({ queryKey: ['social-links'] }); setLinkModal(null); },
-    onError: (e) => reportSaveError(e, { form: linkV, setBanner: setLinkBanner, title: 'Could not save the link' }),
-  });
-  const delLink = useMutation({ mutationFn: (id) => fetchJson(`/api/social-links/${id}`, { method: 'DELETE' }), onSuccess: () => { notify.success('Link removed'); qc.invalidateQueries({ queryKey: ['social-links'] }); }, onError: (e) => notify.error(e, { title: 'Could not remove the link' }) });
-  const openLink = (l) => { linkV.reset(); setLinkBanner(''); setLinkForm({ platform: l?.platform || available[0]?.value || '', value: l?.value || '' }); setLinkModal(l || {}); };
-  const removeLink = async (l) => { if (await confirm({ title: `Remove ${platformInfo(l.platform).label}?`, body: 'It will disappear from the public menu footer.', confirmLabel: 'Remove' })) delLink.mutate(l.id); };
+
+/** Draft rows ({platform, value}) from the saved links. */
+export const rowsFromLinks = (links) => links.map((l) => ({ platform: l.platform, value: l.value }));
+
+/**
+ * What Save must send to turn the saved links into the draft rows, keyed by
+ * platform (one link per platform): POST new ones, PUT changed values, DELETE
+ * removed ones. Re-running it after a partial failure (and a refetch) yields
+ * only what is still left to do. Blank new rows are not sent — they block Save.
+ */
+export function linkOps(links, rows) {
+  const saved = new Map(links.map((l) => [l.platform, l]));
+  const ops = [];
+  for (const r of rows) {
+    const v = r.value.trim();
+    const s = saved.get(r.platform);
+    if (!s) { if (v) ops.push({ method: 'POST', url: '/api/social-links', body: { platform: r.platform, value: v } }); }
+    else if (v && v !== s.value) ops.push({ method: 'PUT', url: `/api/social-links/${s.id}`, body: { value: v } });
+  }
+  const kept = new Set(rows.map((r) => r.platform));
+  for (const l of links) if (!kept.has(l.platform)) ops.push({ method: 'DELETE', url: `/api/social-links/${l.id}` });
+  return ops;
+}
+/** Rows that can't be saved yet: no handle / link typed. */
+export const blankRows = (rows) => rows.filter((r) => !r.value.trim());
+
+/**
+ * Settings › General: links shown in the public menu footer and contact
+ * screen. Controlled — edits are a draft sent by the section's one Save.
+ */
+export default function SocialLinksSection({ rows, onChange, loaded, disabled }) {
+  const used = new Set(rows.map((r) => r.platform));
+  const available = PLATFORMS.filter((p) => !used.has(p.value));
+  const setValue = (platform, value) => onChange(rows.map((r) => (r.platform === platform ? { ...r, value } : r)));
+  const remove = (platform) => onChange(rows.filter((r) => r.platform !== platform));
+  const add = (platform) => {
+    onChange([...rows, { platform, value: '' }]);
+    // Focus the new row's input once it renders.
+    setTimeout(() => document.getElementById(`social-${platform}`)?.focus(), 0);
+  };
+
+  const addButton = available.length > 0 && (
+    <Popover
+      align="right"
+      width={200}
+      trigger={({ open, toggle }) => (
+        <Button size="xs" icon="plus" onClick={toggle} disabled={disabled || !loaded} aria-haspopup="menu" aria-expanded={open}>Add link</Button>
+      )}
+    >
+      {({ close }) => (
+        <div role="menu">
+          {available.map((p) => (
+            <MenuItem key={p.value} onClick={() => { close(); add(p.value); }}>
+              <span className="inline-flex items-center gap-2.5"><span className="w-4 h-4 text-mq-muted [&>svg]:w-4 [&>svg]:h-4">{p.icon}</span>{p.label}</span>
+            </MenuItem>
+          ))}
+        </div>
+      )}
+    </Popover>
+  );
 
   return (
-    <>
-      {dialog}
-      <section className="card set-sec">
-        <SectionHead gold icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>} title="Social links" sub="Shown in the customer menu footer and contact screen." action={available.length > 0 && <button className="btn btn-ghost btn-sm" onClick={() => openLink(null)}>{plus}Add link</button>} />
-        <div className="set-body">
-          {links.length === 0 ? <p className="sub">No links yet — add your first.</p> : links.map((l) => {
-            const info = platformInfo(l.platform);
+    <SettingsCard title="Social links" sub="Shown in the customer menu footer and contact screen." actions={addButton}>
+      {!loaded ? <p className="m-0 text-[13px] text-mq-muted">Loading…</p> : rows.length === 0 ? (
+        <p className="m-0 text-[13px] text-mq-muted">No links yet. Use Add link for your phone, WhatsApp or pages.</p>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          {rows.map((r) => {
+            const info = platformInfo(r.platform);
+            const blank = !r.value.trim();
             return (
-              <div className="sl" key={l.id}>
-                <span className="sl-ic">{info.icon}</span>
-                <div style={{ flex: 1, minWidth: 0 }}><div className="sl-nm">{info.label}</div><div className="sl-url">{l.value}</div></div>
-                <button className="btn btn-ghost btn-sm" onClick={() => openLink(l)}>Edit</button>
-                <button className="btn btn-danger btn-sm" onClick={() => removeLink(l)} disabled={delLink.isPending}>Remove</button>
+              <div key={r.platform} className="grid items-start gap-2 grid-cols-[minmax(92px,120px)_minmax(0,1fr)_40px]">
+                <label htmlFor={`social-${r.platform}`} className="flex items-center gap-2 min-h-[42px] text-[13.5px] font-semibold text-mq-ink min-w-0">
+                  <span className="w-4 h-4 flex-none text-mq-muted [&>svg]:w-4 [&>svg]:h-4">{info.icon}</span>
+                  <span className="truncate">{info.label}</span>
+                </label>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <input
+                    id={`social-${r.platform}`}
+                    className={inputCls({ size: 'lg' })}
+                    value={r.value}
+                    disabled={disabled}
+                    onChange={(e) => setValue(r.platform, e.target.value)}
+                    placeholder={placeholderFor(r.platform)}
+                    aria-describedby={blank ? `social-${r.platform}-msg` : undefined}
+                  />
+                  {blank && <span id={`social-${r.platform}-msg`} className="text-xs text-mq-muted">Enter the handle or link, or remove this row</span>}
+                </div>
+                <IconButton icon="trash" size={42} label={`Remove ${info.label}`} onClick={() => remove(r.platform)} disabled={disabled} />
               </div>
             );
           })}
         </div>
-      </section>
-
-      {linkModal && (
-        <Modal title={linkModal.id ? 'Edit link' : 'Add social link'} onClose={() => setLinkModal(null)} saving={saveLink.isPending} canSave={linkV.valid} banner={linkBanner} onSubmit={(e) => { e.preventDefault(); setLinkBanner(''); linkV.setServerErrors({}); if (!linkV.check()) return; saveLink.mutate({ id: linkModal.id, platform: linkForm.platform, value: linkForm.value.trim() }); }}>
-          {linkModal.id
-            ? <div className="ff"><label>Platform</label><div className="input" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span style={{ width: 16 }}>{platformInfo(linkForm.platform).icon}</span>{platformInfo(linkForm.platform).label}</div></div>
-            : <Field label="Platform" required {...linkV.fieldProps('platform')}><select className="input" value={linkForm.platform} onChange={(e) => setLinkForm({ ...linkForm, platform: e.target.value })}>{available.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}</select></Field>}
-          <Field label="Handle / URL" required {...linkV.fieldProps('value')}><input className="input" value={linkForm.value} onChange={(e) => setLinkForm({ ...linkForm, value: e.target.value })} placeholder={placeholderFor(linkForm.platform)} /></Field>
-        </Modal>
       )}
-    </>
+      {loaded && available.length === 0 && <p className="m-0 mt-3 text-xs text-mq-muted inline-flex items-center gap-1.5"><Icon name="check" size={13} />Every platform has a link.</p>}
+    </SettingsCard>
   );
 }

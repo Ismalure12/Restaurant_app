@@ -1,18 +1,25 @@
 'use client';
 
-import { useState, useMemo , Suspense } from 'react';
+import { useState, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchJson, parseApiError } from '@/lib/apiError';
+import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import useConfirm from '@/hooks/useConfirm';
+import useAccess from '@/hooks/useAccess';
 import Field from '@/components/admin/Field';
 import { useFormValidation, zodFieldErrors } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
 import { groupTitleSchema, menuItemSchema, optionSchema } from '@/lib/schemas/menu';
 import { money } from '@/lib/money';
-import IfCan from '@/components/admin/IfCan';
+import { ActiveFilters, FilterSelect, FiltersButton } from '@/components/admin/reports/ReportKit';
+import {
+  Page, Toolbar, Card, Kpi, KpiGrid, KpiSkeletons, Button, IconButton, Icon, Toggle, ChoiceChip,
+  SearchInput, Modal, ModalSpacer, Alert, EmptyState, ErrorState, Skeleton,
+  inputCls, selectCls, textareaCls, cx,
+} from '@/components/admin/ui';
 
+const NEVER_SOLD_DAYS = 30;
 const EMPTY_FORM = {
   name: '', description: '', price: '', categoryId: '',
   imageUrl: '', sortOrder: 0, isActive: true,
@@ -20,19 +27,24 @@ const EMPTY_FORM = {
   tagIds: [],
 };
 
-
 // An option / extra row: what is in the boxes (`priceAdd` stays text while typing) and what the server last saved.
 const optionRow = (o) => ({ id: o.id, name: o.name, priceAdd: String(Number(o.priceAdd)), saved: { name: o.name, priceAdd: String(Number(o.priceAdd)) } });
 const rowErrors = (r) => zodFieldErrors(optionSchema.safeParse({ name: r.name, priceAdd: r.priceAdd }));
-const TAG_PILL = { green: 'pill-green', spicy: 'pill-rose', default: 'pill-gold' };
 
-function MiImg({ src }) {
+// Tag colours follow the public menu's three tag styles (Tag.variant).
+export const TAG_FILL = { default: 'bg-mq-primary', green: 'bg-mq-ok', spicy: 'bg-mq-danger' };
+const tagOf = (t) => t?.tag ?? t;
+const optionCount = (it) => (it.optionGroups || []).reduce((n, g) => n + (g.options?.length || 0), 0);
+
+/** The dish photo, or the striped placeholder (also when the image fails to load). */
+function DishImage({ src, label }) {
   const [ok, setOk] = useState(Boolean(src));
-  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} />;
+  // eslint-disable-next-line @next/next/no-img-element -- uploaded blob URLs of any size; the menu uses a plain <img> with a fallback too
+  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} className="block w-full h-full object-cover" />;
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" /><path d="M6 1v3M10 1v3M14 1v3" />
-    </svg>
+    <span className="grid place-items-center w-full h-full bg-mq-chip bg-[repeating-linear-gradient(135deg,transparent_0_11px,rgba(26,26,24,.045)_11px_12px)] font-mq-mono text-[10.5px] tracking-[.04em] uppercase text-mq-on-tint px-3 text-center">
+      {label}
+    </span>
   );
 }
 
@@ -48,120 +60,220 @@ function MenuItemsPageFromUrl() {
 
 function MenuItemsPage({ initialSearch = '' }) {
   const qc = useQueryClient();
-  const { confirm, dialog } = useConfirm();
+  const { canAct, canView } = useAccess();
+  const mayEdit = canAct('menu');
   const [filterCategoryId, setFilterCategoryId] = useState('');
   const [search, setSearch] = useState(initialSearch);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [groups, setGroups] = useState([]);
-  const [extras, setExtras] = useState([]);
+  const [editing, setEditing] = useState(null); // null · {} (new) · a menu item
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => fetchJson('/api/categories'),
+  const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: () => fetchJson('/api/categories') });
+  const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: () => fetchJson('/api/tags') });
+  // Every dish (hidden ones too) — the KPIs count the whole menu; the category filter is applied here.
+  const { data: items = [], isLoading, error: loadError, refetch } = useQuery({
+    queryKey: ['menu-items', ''],
+    queryFn: () => fetchJson('/api/menu-items?onlyActive=false'),
   });
-  const { data: tags = [] } = useQuery({
-    queryKey: ['tags'],
-    queryFn: () => fetchJson('/api/tags'),
-  });
-  const { data: items = [], isLoading, error: loadError } = useQuery({
-    queryKey: ['menu-items', filterCategoryId],
-    queryFn: () => {
-      const url = filterCategoryId
-        ? `/api/menu-items?categoryId=${filterCategoryId}&onlyActive=false`
-        : '/api/menu-items?onlyActive=false';
-      return fetchJson(url);
-    },
+  const neverSold = useQuery({
+    queryKey: ['menu-never-sold', NEVER_SOLD_DAYS],
+    queryFn: () => fetchJson(`/api/admin/menu-items/never-sold?days=${NEVER_SOLD_DAYS}`),
+    staleTime: 5 * 60 * 1000,
   });
 
   const visibleItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => it.name.toLowerCase().includes(q));
-  }, [items, search]);
+    return items.filter((it) => (!filterCategoryId || String(it.categoryId) === filterCategoryId) && (!q || it.name.toLowerCase().includes(q)));
+  }, [items, search, filterCategoryId]);
 
+  const kpis = useMemo(() => {
+    const unavailable = items.filter((it) => !it.isActive).length;
+    const avg = items.length ? items.reduce((s, it) => s + Number(it.price || 0), 0) / items.length : 0;
+    return { unavailable, avg };
+  }, [items]);
+
+  const toggleActive = useMutation({
+    mutationFn: ({ id, isActive }) => fetchJson(`/api/menu-items/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive }),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['menu-items'] }); qc.invalidateQueries({ queryKey: ['menu-never-sold'] }); },
+    onError: (e) => notify.error(e, { title: 'Could not change the item' }),
+  });
+
+  const nCats = categories.length;
+  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }));
+  return (
+    <Page>
+      {isLoading ? <KpiSkeletons count={4} min={210} /> : (
+        <KpiGrid min={210}>
+          <Kpi label="Dishes" value={items.length} foot={`${nCats} ${nCats === 1 ? 'category' : 'categories'}`} />
+          <Kpi label="Unavailable" value={kpis.unavailable} foot="hidden from the menu" />
+          <Kpi label="Average price" value={money(kpis.avg)} foot="across all dishes" />
+          <Kpi
+            label={`Never sold · ${NEVER_SOLD_DAYS} days`}
+            value={neverSold.data ? neverSold.data.count : neverSold.isError ? '—' : '…'}
+            foot={neverSold.isError ? 'Couldn’t load' : `no sale in the last ${NEVER_SOLD_DAYS} days`}
+            href={canView('reports') ? '/admin/dashboard/reports/sales#dishes' : undefined}
+          />
+        </KpiGrid>
+      )}
+
+      <Toolbar>
+        {/* Category lives in the one Filters control, never as its own select. */}
+        <FiltersButton active={filterCategoryId ? 1 : 0} onClear={() => setFilterCategoryId('')}>
+          <FilterSelect label="Category" value={filterCategoryId} options={categoryOptions} onChange={setFilterCategoryId} all="All categories" />
+        </FiltersButton>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search dishes" className="flex-[1_1_220px] h-[38px]" aria-label="Search dishes" />
+        {mayEdit && <Button variant="primary" icon="plus" onClick={() => setEditing({})}>New dish</Button>}
+      </Toolbar>
+      <ActiveFilters
+        items={filterCategoryId ? [{ key: 'category', label: `Category: ${categoryOptions.find((c) => c.value === filterCategoryId)?.label || '…'}`, onRemove: () => setFilterCategoryId('') }] : []}
+      />
+
+      {loadError && <ErrorState error={loadError} onRetry={refetch} title="Couldn’t load the menu" />}
+
+      {isLoading ? (
+        <DishGrid>
+          {Array.from({ length: 8 }, (_, n) => (
+            <Card key={n} className="overflow-hidden">
+              <Skeleton className="h-28 !rounded-none" />
+              <div className="flex flex-col gap-2 p-3.5"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="h-5 w-1/3 mt-3" /></div>
+            </Card>
+          ))}
+        </DishGrid>
+      ) : visibleItems.length === 0 && !loadError ? (
+        <Card>
+          <EmptyState
+            icon="menu"
+            title={search || filterCategoryId ? 'No dishes match' : 'No dishes yet'}
+            action={!search && !filterCategoryId && mayEdit ? <Button variant="soft" size="sm" icon="plus" onClick={() => setEditing({})}>New dish</Button> : null}
+          >
+            {search || filterCategoryId ? 'Try a different search or category.' : 'Add your first dish to start building the menu.'}
+          </EmptyState>
+        </Card>
+      ) : (
+        <DishGrid>
+          {visibleItems.map((it) => {
+            const tag = tagOf((it.tags || [])[0]);
+            const n = optionCount(it);
+            const cat = it.category?.name || '—';
+            return (
+              <Card as="article" key={it.id} className={cx('overflow-hidden flex flex-col', !it.isActive && 'opacity-60')}>
+                <div className="relative h-28 flex-none">
+                  <DishImage key={it.imageUrl || 'none'} src={it.imageUrl} label={cat} />
+                  {!it.isActive ? (
+                    <span className="absolute top-2 left-2 rounded-md px-[7px] py-[3px] text-[10px] font-bold uppercase tracking-[.06em] text-white bg-mq-muted">Off menu</span>
+                  ) : tag ? (
+                    <span className={cx('absolute top-2 left-2 rounded-md px-[7px] py-[3px] text-[10px] font-bold uppercase tracking-[.06em] text-white', TAG_FILL[tag.variant] || TAG_FILL.default)}>{tag.label}</span>
+                  ) : null}
+                </div>
+                <div className="flex flex-col gap-[3px] flex-1 px-3.5 py-3">
+                  <h3 className="m-0 text-sm font-semibold leading-snug text-mq-ink break-words">{it.name}</h3>
+                  <span className="text-[11.5px] text-mq-muted">{cat}{n ? ` · ${n} ${n === 1 ? 'option' : 'options'}` : ''}</span>
+                  <div className="flex items-center gap-1 mt-auto pt-2.5">
+                    <span className="flex-1 font-mq-mono text-base font-semibold tabular-nums text-mq-ink">{money(it.price)}</span>
+                    {mayEdit && (
+                      <span className="inline-grid place-items-center w-12 h-11">
+                        <Toggle
+                          checked={it.isActive}
+                          label={`${it.name}: ${it.isActive ? 'on the menu' : 'off the menu'}`}
+                          disabled={toggleActive.isPending && toggleActive.variables?.id === it.id}
+                          onChange={(on) => toggleActive.mutate({ id: it.id, isActive: on })}
+                        />
+                      </span>
+                    )}
+                    {mayEdit && <Button size="xs" onClick={() => setEditing(it)} aria-label={`Edit ${it.name}`}>Edit</Button>}
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </DishGrid>
+      )}
+
+      {editing && (
+        <DishModal
+          key={editing.id ?? 'new'}
+          item={editing.id ? editing : null}
+          categories={categories}
+          tags={tags}
+          defaultCategoryId={filterCategoryId}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </Page>
+  );
+}
+
+function DishGrid({ children }) {
+  return <div className="grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(224px, 100%), 1fr))' }}>{children}</div>;
+}
+
+/** Bordered row with a title, a hint and a switch (the design's toggle field). */
+function ToggleField({ title, hint, checked, onChange }) {
+  return (
+    <div className="flex items-center gap-3 rounded-[10px] border border-mq-line bg-mq-cream px-3.5 py-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13.5px] font-semibold text-mq-ink">{title}</div>
+        {hint && <div className="text-xs text-mq-muted mt-0.5">{hint}</div>}
+      </div>
+      <Toggle checked={checked} onChange={onChange} label={title} />
+    </div>
+  );
+}
+
+const itemForm = (item, defaultCategoryId) => (item ? {
+  name: item.name,
+  description: item.description ?? '',
+  price: item.price.toString(),
+  categoryId: item.categoryId.toString(),
+  imageUrl: item.imageUrl ?? '',
+  sortOrder: item.sortOrder ?? 0,
+  isActive: item.isActive,
+  kcal: item.kcal ?? '',
+  prepTime: item.prepTime ?? '',
+  pairing: item.pairing ?? '',
+  tagIds: (item.tags || []).map((t) => tagOf(t).id),
+} : { ...EMPTY_FORM, categoryId: defaultCategoryId || '' });
+const itemGroups = (item) => (item?.optionGroups || []).map((g) => ({
+  id: g.id, title: g.title, savedTitle: g.title, options: (g.options || []).map((o) => optionRow(o)),
+}));
+
+function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
+  const qc = useQueryClient();
+  const { confirm, dialog } = useConfirm();
+  const [editingId, setEditingId] = useState(item?.id ?? null);
+  const [form, setForm] = useState(() => itemForm(item, defaultCategoryId));
+  const [imagePreview, setImagePreview] = useState(item?.imageUrl ?? null);
+  const [uploading, setUploading] = useState(false);
+  const [groups, setGroups] = useState(() => itemGroups(item));
+  const [extras, setExtras] = useState(() => (item?.extras || []).map((e) => optionRow(e)));
   const [banner, setBanner] = useState('');
+  const set = (patch) => setForm((f) => ({ ...f, ...patch }));
+
   const v = useFormValidation(menuItemSchema, {
     name: form.name, description: form.description, categoryId: String(form.categoryId ?? ''), price: String(form.price ?? ''),
     prepTime: String(form.prepTime ?? ''), kcal: String(form.kcal ?? ''), pairing: String(form.pairing ?? ''), sortOrder: String(form.sortOrder ?? ''),
   });
 
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['menu-items'] }); qc.invalidateQueries({ queryKey: ['menu-never-sold'] }); qc.invalidateQueries({ queryKey: ['categories'] }); qc.invalidateQueries({ queryKey: ['tags'] }); };
+
   const saveItem = useMutation({
-    mutationFn: (payload) => fetchJson(
-      editingId ? `/api/menu-items/${editingId}` : '/api/menu-items',
-      {
-        method: editingId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }
-    ),
+    mutationFn: (payload) => fetchJson(editingId ? `/api/menu-items/${editingId}` : '/api/menu-items', {
+      method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    }),
     onSuccess: (saved) => {
-      notify.success(editingId ? 'Item updated' : 'Item created', { title: 'Could not save the item' });
-      qc.invalidateQueries({ queryKey: ['menu-items'] });
-      if (!editingId) {
-        setEditingId(saved.id);
-        setGroups([]);
-        setExtras([]);
-      }
+      notify.success(editingId ? 'Dish updated' : 'Dish added — now add its options and extras', { title: 'Could not save the dish' });
+      refresh();
+      // A new dish stays open so its option groups and extras can be added.
+      if (!editingId) setEditingId(saved.id);
     },
-    onError: (e) => reportSaveError(e, { form: v, setBanner, title: 'Could not save the item' }),
+    onError: (e) => reportSaveError(e, { form: v, setBanner, title: 'Could not save the dish' }),
   });
 
   const deleteItem = useMutation({
     mutationFn: (id) => fetchJson(`/api/menu-items/${id}`, { method: 'DELETE' }),
-    onSuccess: () => { notify.success('Item deleted'); qc.invalidateQueries({ queryKey: ['menu-items'] }); },
-    onError: (e) => notify.error(e, { title: 'Could not delete the item' }),
+    onSuccess: () => { notify.success('Dish deleted'); refresh(); onClose(); },
+    onError: (e) => notify.error(e, { title: 'Could not delete the dish' }),
   });
-
-  const toggleActive = useMutation({
-    mutationFn: ({ id, isActive }) => fetchJson(`/api/menu-items/${id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isActive }),
-    }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu-items'] }),
-    onError: (e) => notify.error(e, { title: 'Could not change the item' }),
-  });
-
-  const resetForm = () => {
-    setForm(EMPTY_FORM);
-    setEditingId(null);
-    setShowForm(false);
-    setImagePreview(null);
-    setGroups([]);
-    setExtras([]);
-    setBanner('');
-    v.reset();
-  };
-
-  const handleEdit = (item) => {
-    v.reset(); setBanner('');
-    setEditingId(item.id);
-    setForm({
-      name: item.name,
-      description: item.description ?? '',
-      price: item.price.toString(),
-      categoryId: item.categoryId.toString(),
-      imageUrl: item.imageUrl ?? '',
-      sortOrder: item.sortOrder ?? 0,
-      isActive: item.isActive,
-      kcal: item.kcal ?? '',
-      prepTime: item.prepTime ?? '',
-      pairing: item.pairing ?? '',
-      tagIds: (item.tags || []).map((t) => t.tag?.id ?? t.id),
-    });
-    setImagePreview(item.imageUrl ?? null);
-    setGroups(
-      (item.optionGroups || []).map((g) => ({
-        id: g.id, title: g.title, savedTitle: g.title,
-        options: (g.options || []).map((o) => optionRow(o)),
-      }))
-    );
-    setExtras((item.extras || []).map((e) => optionRow(e)));
-    setShowForm(true);
-  };
 
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
@@ -172,9 +284,9 @@ function MenuItemsPage({ initialSearch = '' }) {
     fd.append('file', file);
     try {
       const data = await fetchJson('/api/upload', { method: 'POST', body: fd });
-      if (data.url) { setForm((p) => ({ ...p, imageUrl: data.url })); notify.success('Image uploaded'); }
+      if (data.url) { set({ imageUrl: data.url }); notify.success('Image uploaded'); }
       else throw new Error('The upload did not return an image. Please try again.');
-    } catch (err) { notify.error(err, { title: 'Could not upload the image' }); setImagePreview(null); }
+    } catch (err) { notify.error(err, { title: 'Could not upload the image' }); setImagePreview(form.imageUrl || null); }
     finally { setUploading(false); }
   };
 
@@ -197,312 +309,254 @@ function MenuItemsPage({ initialSearch = '' }) {
     });
   };
 
-  const handleDelete = async (it) => {
+  const handleDelete = async () => {
     const ok = await confirm({
-      title: `Delete “${it.name}”?`,
-      body: 'Removing this item also clears its option groups and extras.',
-      confirmLabel: 'Delete item',
+      title: `Delete ${form.name || 'this dish'}?`,
+      body: 'It disappears from the Register and the public menu, with its option groups and extras. Past sales keep the dish name.',
+      confirmLabel: 'Delete dish',
     });
-    if (ok) { deleteItem.mutate(it.id); resetForm(); }
+    if (ok) deleteItem.mutate(editingId);
   };
 
   // Option groups, options and extras save when you leave a box (blur), and only
   // when the row is valid — a half-typed row is never sent. Typing only edits the
   // on-screen copy; the message under a box says what is missing.
   const json = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-
   const addGroup = async () => {
-    if (!editingId) { notify.warning('Save the item first, then add option groups.'); return; }
     try {
       const g = await fetchJson('/api/option-groups', json('POST', { menuItemId: editingId, title: 'New option', sortOrder: groups.length }));
       setGroups((gs) => [...gs, { id: g.id, title: g.title, savedTitle: g.title, options: [] }]);
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not add the option group' }); }
   };
-  const editGroupTitle = (id, title) => setGroups((gs) => gs.map((g) => g.id === id ? { ...g, title } : g));
+  const editGroupTitle = (id, title) => setGroups((gs) => gs.map((g) => (g.id === id ? { ...g, title } : g)));
   const commitGroupTitle = async (g) => {
     if (g.title.trim() === g.savedTitle || !groupTitleSchema.safeParse({ title: g.title }).success) return;
     const title = g.title.trim();
     try {
       await fetchJson(`/api/option-groups/${g.id}`, json('PUT', { title }));
-      setGroups((gs) => gs.map((x) => x.id === g.id ? { ...x, savedTitle: title } : x));
+      setGroups((gs) => gs.map((x) => (x.id === g.id ? { ...x, savedTitle: title } : x)));
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not rename the option group' }); }
   };
   const deleteGroup = async (id) => {
-    const ok = await confirm({
-      title: 'Delete option group?',
-      body: 'All options inside this group will be removed.',
-      confirmLabel: 'Delete group',
-    });
+    const ok = await confirm({ title: 'Delete option group?', body: 'All options inside this group will be removed.', confirmLabel: 'Delete group' });
     if (!ok) return;
     try {
       await fetchJson(`/api/option-groups/${id}`, { method: 'DELETE' });
       setGroups((gs) => gs.filter((g) => g.id !== id));
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not delete the option group' }); }
   };
   const addOption = async (groupId) => {
     try {
       const o = await fetchJson('/api/item-options', json('POST', { optionGroupId: groupId, name: 'New', priceAdd: 0 }));
-      setGroups((gs) => gs.map((g) => g.id === groupId ? { ...g, options: [...g.options, optionRow(o)] } : g));
+      setGroups((gs) => gs.map((g) => (g.id === groupId ? { ...g, options: [...g.options, optionRow(o)] } : g)));
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not add the option' }); }
   };
-  const editOption = (groupId, optId, patch) => setGroups((gs) => gs.map((g) => g.id === groupId
-    ? { ...g, options: g.options.map((o) => o.id === optId ? { ...o, ...patch } : o) }
-    : g));
+  const editOption = (groupId, optId, patch) => setGroups((gs) => gs.map((g) => (g.id === groupId
+    ? { ...g, options: g.options.map((o) => (o.id === optId ? { ...o, ...patch } : o)) }
+    : g)));
   const commitOption = async (groupId, o) => {
     if (Object.keys(rowErrors(o)).length || (o.name.trim() === o.saved.name && Number(o.priceAdd) === Number(o.saved.priceAdd))) return;
     const patch = { name: o.name.trim(), priceAdd: Number(o.priceAdd) };
     try {
       await fetchJson(`/api/item-options/${o.id}`, json('PUT', patch));
       editOption(groupId, o.id, { saved: { name: patch.name, priceAdd: String(patch.priceAdd) } });
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not save the option' }); }
   };
   const deleteOption = async (groupId, optId) => {
     try {
       await fetchJson(`/api/item-options/${optId}`, { method: 'DELETE' });
-      setGroups((gs) => gs.map((g) => g.id === groupId
-        ? { ...g, options: g.options.filter((o) => o.id !== optId) }
-        : g));
+      setGroups((gs) => gs.map((g) => (g.id === groupId ? { ...g, options: g.options.filter((o) => o.id !== optId) } : g)));
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not remove the option' }); }
   };
-
-  // Extras
   const addExtra = async () => {
-    if (!editingId) { notify.warning('Save the item first, then add extras.'); return; }
     try {
       const ex = await fetchJson('/api/item-extras', json('POST', { menuItemId: editingId, name: 'New extra', priceAdd: 0, sortOrder: extras.length }));
       setExtras((xs) => [...xs, optionRow(ex)]);
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not add the extra' }); }
   };
-  const editExtra = (id, patch) => setExtras((xs) => xs.map((e) => e.id === id ? { ...e, ...patch } : e));
+  const editExtra = (id, patch) => setExtras((xs) => xs.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   const commitExtra = async (x) => {
     if (Object.keys(rowErrors(x)).length || (x.name.trim() === x.saved.name && Number(x.priceAdd) === Number(x.saved.priceAdd))) return;
     const patch = { name: x.name.trim(), priceAdd: Number(x.priceAdd) };
     try {
       await fetchJson(`/api/item-extras/${x.id}`, json('PUT', patch));
       editExtra(x.id, { saved: { name: patch.name, priceAdd: String(patch.priceAdd) } });
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not save the extra' }); }
   };
   const deleteExtra = async (id) => {
     try {
       await fetchJson(`/api/item-extras/${id}`, { method: 'DELETE' });
       setExtras((xs) => xs.filter((e) => e.id !== id));
+      qc.invalidateQueries({ queryKey: ['menu-items'] });
     } catch (err) { notify.error(err, { title: 'Could not remove the extra' }); }
   };
 
-  const activeCats = categories.filter((c) => c.isActive !== false);
+  const busy = saveItem.isPending || deleteItem.isPending;
+  const catName = categories.find((c) => String(c.id) === String(form.categoryId))?.name;
 
   return (
-    <div>
+    <Modal
+      eyebrow={editingId ? 'Edit dish' : 'New dish'}
+      title={editingId ? (form.name || 'Dish') : 'Add to the menu'}
+      sub={editingId && catName ? catName : undefined}
+      onClose={onClose}
+      busy={busy}
+      width={560}
+      footer={(
+        <>
+          {editingId && <Button variant="danger-soft" size="lg" onClick={handleDelete} disabled={busy}>Delete</Button>}
+          <ModalSpacer />
+          <Button size="lg" onClick={onClose} disabled={busy}>{editingId ? 'Close' : 'Cancel'}</Button>
+          <Button variant="primary" size="lg" type="submit" form="dish-form" disabled={busy || uploading || !v.valid}>
+            {saveItem.isPending ? 'Saving…' : editingId ? 'Save changes' : 'Add dish'}
+          </Button>
+        </>
+      )}
+    >
       {dialog}
+      <form id="dish-form" onSubmit={handleSubmit} noValidate className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+        <Field className="sm:col-span-2" label="Item name" required {...v.fieldProps('name')}>
+          <input className={inputCls({ size: 'lg' })} type="text" value={form.name} onChange={(e) => set({ name: e.target.value })} />
+        </Field>
+        <Field className="sm:col-span-2" label="Description" {...v.fieldProps('description')}>
+          <textarea className={textareaCls()} rows={3} value={form.description} onChange={(e) => set({ description: e.target.value })} />
+        </Field>
+        <Field label="Category" required {...v.fieldProps('categoryId')}>
+          <select className={selectCls({ size: 'lg' })} value={form.categoryId} onChange={(e) => set({ categoryId: e.target.value })}>
+            <option value="">Select…</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Price (USD)" required {...v.fieldProps('price')}>
+          <input className={inputCls({ size: 'lg', mono: true })} type="number" step="0.01" min="0" inputMode="decimal" placeholder="0.00" value={form.price} onChange={(e) => set({ price: e.target.value })} />
+        </Field>
+        <Field label="Prep time" {...v.fieldProps('prepTime')}>
+          <input className={inputCls({ size: 'lg' })} type="text" placeholder="12 min" value={form.prepTime} onChange={(e) => set({ prepTime: e.target.value })} />
+        </Field>
+        <Field label="Kcal" {...v.fieldProps('kcal')}>
+          <input className={inputCls({ size: 'lg' })} type="text" placeholder="520" value={form.kcal} onChange={(e) => set({ kcal: e.target.value })} />
+        </Field>
+        <Field className="sm:col-span-2" label="Pairing" {...v.fieldProps('pairing')}>
+          <input className={inputCls({ size: 'lg' })} type="text" placeholder="Champagne" value={form.pairing} onChange={(e) => set({ pairing: e.target.value })} />
+        </Field>
 
-      <div className="toolbar">
-        <div className="search" style={{ width: 240 }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search menu…" />
-        </div>
-        <div className="seg">
-          <button className={filterCategoryId === '' ? 'active' : ''} onClick={() => setFilterCategoryId('')}>All</button>
-          {activeCats.map((c) => (
-            <button key={c.id} className={String(filterCategoryId) === String(c.id) ? 'active' : ''} onClick={() => setFilterCategoryId(String(c.id))}>{c.name}</button>
-          ))}
-        </div>
-        <div style={{ flex: 1 }} />
-        <IfCan page="menu"><button className="btn btn-primary" onClick={() => { resetForm(); setShowForm(true); }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" /></svg>Add item
-        </button></IfCan>
-      </div>
+        <label className={cx('sm:col-span-2 flex items-center gap-3 rounded-[10px] border border-dashed border-mq-line-2 bg-mq-cream px-3.5 py-3 transition-colors', uploading ? 'cursor-wait' : 'cursor-pointer hover:border-mq-focus hover:bg-mq-soft')}>
+          {imagePreview
+            // eslint-disable-next-line @next/next/no-img-element -- local preview / uploaded blob URL
+            ? <img src={imagePreview} alt="" className="w-10 h-10 rounded-[10px] object-cover border border-mq-line flex-none" />
+            : <span className="grid place-items-center w-10 h-10 rounded-[10px] bg-white border border-mq-line text-mq-cta flex-none"><Icon name="upload" size={18} stroke={1.9} /></span>}
+          <span className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[13.5px] font-semibold text-mq-ink">{uploading ? 'Uploading…' : imagePreview ? 'Change image' : 'Upload image'}</span>
+            <span className="text-xs text-mq-on-tint">JPG, PNG or WebP</span>
+          </span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleImageUpload} disabled={uploading} />
+        </label>
 
-      {loadError && <div className="adm-error-banner" style={{ marginBottom: 14 }}>{parseApiError(loadError)}</div>}
+        <div className="sm:col-span-2 flex flex-col gap-[7px]">
+          <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">Tags</span>
+          {tags.length === 0
+            ? <span className="text-xs text-mq-muted">No tags yet. Create some in Categories › Tags.</span>
+            : (
+              <div className="flex flex-wrap gap-2">
+                {tags.map((t) => {
+                  const on = form.tagIds.includes(t.id);
+                  return (
+                    <ChoiceChip key={t.id} size="sm" active={on} onClick={() => set({ tagIds: on ? form.tagIds.filter((x) => x !== t.id) : [...form.tagIds, t.id] })}>
+                      <span className={cx('w-2 h-2 rounded-full', on ? 'bg-white' : (TAG_FILL[t.variant] || TAG_FILL.default))} aria-hidden="true" />
+                      {t.label}
+                    </ChoiceChip>
+                  );
+                })}
+              </div>
+            )}
+        </div>
 
-      {/* LIST */}
-      {isLoading ? (
-        <div className="mi-grid">
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <div key={n} className="sk" style={{ height: 205, borderRadius: 'var(--r-lg)' }} />)}
+        <Field label="Sort order" hint="Lower numbers show first in the category" {...v.fieldProps('sortOrder')}>
+          <input className={inputCls({ size: 'lg', mono: true })} type="number" min="0" inputMode="numeric" value={form.sortOrder} onChange={(e) => set({ sortOrder: e.target.value })} />
+        </Field>
+        <div className="sm:col-span-2">
+          <ToggleField title="Available" hint="Off hides it from the public menu and the Register" checked={form.isActive} onChange={(on) => set({ isActive: on })} />
         </div>
-      ) : visibleItems.length === 0 ? (
-        <div className="card card-pad-lg">
-          <div className="empty">
-            <div className="empty-ring">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" /><path d="M6 1v3M10 1v3M14 1v3" /></svg>
-            </div>
-            <p className="empty-title">{search ? 'No matches' : 'No items yet'}</p>
-            <p className="empty-sub">{search ? 'Try a different search.' : 'Add your first dish to start building the menu.'}</p>
-          </div>
-        </div>
+
+        {banner && <Alert tone="danger" className="sm:col-span-2">{banner}</Alert>}
+      </form>
+
+      {!editingId ? (
+        <p className="m-0 mt-4 text-xs text-mq-muted">Add the dish first, then its option groups (Size, Bread…) and extras.</p>
       ) : (
-        <div className="mi-grid">
-          {visibleItems.map((it) => {
-            const tag = (it.tags || [])[0];
-            const tagObj = tag?.tag ?? tag;
-            return (
-              <button key={it.id} className={`mi${it.isActive ? '' : ' off'}`} onClick={() => handleEdit(it)}>
-                <div className="mi-img">
-                  {tagObj && <span className={`pill ${TAG_PILL[tagObj.variant] || 'pill-gold'} tagchip`}>{tagObj.label}</span>}
-                  <MiImg src={it.imageUrl} />
-                  <span className="mi-edit" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
-                  </span>
-                </div>
-                <div className="mi-b">
-                  <div className="mi-nm">{it.name}</div>
-                  <div className="mi-cat">{it.category?.name || '—'}</div>
-                  <div className="mi-row">
-                    <span className="mi-pr">{money(it.price)}</span>
-                    <span
-                      role="switch"
-                      aria-checked={it.isActive}
-                      className={`hj-sw${it.isActive ? ' on' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); toggleActive.mutate({ id: it.id, isActive: !it.isActive }); }}
-                    />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* MODAL */}
-      {showForm && (
-        <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget) resetForm(); }}>
-          <div className="modal" style={{ width: 'min(560px, 100%)' }}>
-            <div className="modal-h">
-              <div className="mt">
-                <div className="eyebrow">{editingId ? (categories.find((c) => String(c.id) === String(form.categoryId))?.name || 'Menu item') : 'New menu item'}</div>
-                <div className="h-1" style={{ marginTop: 3 }}>{editingId ? form.name || 'Edit item' : 'Add item'}</div>
+        <div className="flex flex-col gap-5 mt-5 pt-4 border-t border-mq-chip">
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="m-0 text-sm font-semibold text-mq-ink">Option groups</h3>
+                <p className="m-0 text-xs text-mq-muted">The customer picks one per group; its price adds to the dish.</p>
               </div>
-              <button className="icon-btn" onClick={resetForm} aria-label="Close" disabled={saveItem.isPending}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
+              <Button variant="soft" size="xs" icon="plus" onClick={addGroup}>Group</Button>
             </div>
-
-            <form onSubmit={handleSubmit} noValidate style={{ display: 'contents' }}>
-              <div className="modal-b">
-                <Field label="Item name" required {...v.fieldProps('name')}><input className="input" type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-                <Field label="Description" {...v.fieldProps('description')}><textarea className="input" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
-                <div className="ff-row" style={{ alignItems: 'flex-start' }}>
-                  <Field className="g1-grow" label="Category" required {...v.fieldProps('categoryId')}>
-                    <select className="input" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                      <option value="">Select…</option>
-                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
+            {groups.length === 0 && <p className="m-0 text-[12.5px] text-mq-muted">No options. Add a group for variants like Bread, Milk, Size.</p>}
+            {groups.map((g) => (
+              <div key={g.id} className="flex flex-col gap-2 rounded-[10px] border border-mq-line bg-mq-cream p-3">
+                <div className="flex items-start gap-2">
+                  <Field className="flex-1" error={zodFieldErrors(groupTitleSchema.safeParse({ title: g.title })).title}>
+                    <input className={inputCls({ className: 'font-semibold' })} type="text" aria-label="Group name" value={g.title} onChange={(e) => editGroupTitle(g.id, e.target.value)} onBlur={() => commitGroupTitle(g)} />
                   </Field>
-                  <Field className="g1-grow" label="Price (USD)" required {...v.fieldProps('price')}><input className="input" type="number" step="0.01" min="0" inputMode="decimal" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></Field>
+                  <IconButton icon="trash" label={`Delete group ${g.title}`} variant="danger" size={40} onClick={() => deleteGroup(g.id)} />
                 </div>
-                <div className="ff-row" style={{ alignItems: 'flex-start' }}>
-                  <Field className="g1-grow" label="Prep time" {...v.fieldProps('prepTime')}><input className="input" type="text" placeholder="12 min" value={form.prepTime} onChange={(e) => setForm({ ...form, prepTime: e.target.value })} /></Field>
-                  <Field className="g1-grow" label="Kcal" {...v.fieldProps('kcal')}><input className="input" type="text" placeholder="520" value={form.kcal} onChange={(e) => setForm({ ...form, kcal: e.target.value })} /></Field>
-                </div>
-                <Field label="Pairing" {...v.fieldProps('pairing')}><input className="input" type="text" placeholder="Champagne" value={form.pairing} onChange={(e) => setForm({ ...form, pairing: e.target.value })} /></Field>
-
-                <div className="ff">
-                  <label>Image</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {imagePreview && <img src={imagePreview} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover', border: '1px solid var(--line)', flexShrink: 0 }} />}
-                    <label className="btn btn-ghost" style={{ flex: 1, cursor: 'pointer' }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" /></svg>
-                      {uploading ? 'Uploading…' : imagePreview ? 'Change image' : 'Upload image'}
-                      <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleImageUpload} disabled={uploading} />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="ff">
-                  <label>Tags</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                    {tags.length === 0 && <span className="sub" style={{ fontSize: 12 }}>No tags yet. Create some in Settings.</span>}
-                    {tags.map((t) => {
-                      const on = form.tagIds.includes(t.id);
-                      return (
-                        <button key={t.id} type="button"
-                          onClick={() => setForm((f) => ({ ...f, tagIds: on ? f.tagIds.filter((x) => x !== t.id) : [...f.tagIds, t.id] }))}
-                          className={`pill ${on ? (TAG_PILL[t.variant] || 'pill-green') : 'pill-ghost'}`}
-                          style={{ cursor: 'pointer' }}>
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="ff-row" style={{ alignItems: 'flex-start' }}>
-                  <Field className="g1-grow" label="Sort order" {...v.fieldProps('sortOrder')}><input className="input" type="number" min="0" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: e.target.value })} /></Field>
-                  <label className="ff-row" style={{ flex: 1, gap: 10, paddingTop: 30, cursor: 'pointer' }}>
-                    <span style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>Visible in menu</span>
-                    <span role="switch" aria-checked={form.isActive} className={`hj-sw${form.isActive ? ' on' : ''}`} onClick={() => setForm((f) => ({ ...f, isActive: !f.isActive }))} />
-                  </label>
-                </div>
-
-                {/* Option groups + extras */}
-                {editingId && (
-                  <>
-                    <div style={{ height: 1, background: 'var(--line-2)', margin: '4px 0' }} />
-                    <section>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <div className="h-2">Option groups</div>
-                        <button type="button" onClick={addGroup} className="btn btn-soft btn-sm">+ Group</button>
-                      </div>
-                      {groups.length === 0 && <p className="sub" style={{ fontSize: 12.5 }}>No options. Add a group for variants like Bread, Milk, Size.</p>}
-                      {groups.map((g) => (
-                        <div key={g.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: 12, marginBottom: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <Field className="g1-grow" error={zodFieldErrors(groupTitleSchema.safeParse({ title: g.title })).title}><input className="input" type="text" aria-label="Group name" value={g.title} onChange={(e) => editGroupTitle(g.id, e.target.value)} onBlur={() => commitGroupTitle(g)} style={{ fontWeight: 600 }} /></Field>
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => deleteGroup(g.id)}>Delete</button>
-                          </div>
-                          {g.options.map((o) => {
-                            const err = rowErrors(o);
-                            return (
-                              <div key={o.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
-                                <Field className="g1-grow" error={err.name}><input className="input" type="text" aria-label="Option name" value={o.name} onChange={(e) => editOption(g.id, o.id, { name: e.target.value })} onBlur={() => commitOption(g.id, o)} style={{ height: 34 }} /></Field>
-                                <span className="sub g1-plus">+ $</span>
-                                <Field className="g1-price" error={err.priceAdd}><input className="input" type="number" step="0.5" min="0" aria-label="Extra price" value={o.priceAdd} onChange={(e) => editOption(g.id, o.id, { priceAdd: e.target.value })} onBlur={() => commitOption(g.id, o)} style={{ height: 34 }} /></Field>
-                                <button type="button" onClick={() => deleteOption(g.id, o.id)} className="icon-btn" style={{ width: 34, height: 34 }} aria-label="Remove">
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                                </button>
-                              </div>
-                            );
-                          })}
-                          <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 2 }} onClick={() => addOption(g.id)}>+ Add option</button>
-                        </div>
-                      ))}
-                    </section>
-
-                    <section>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <div className="h-2">Extras</div>
-                        <button type="button" onClick={addExtra} className="btn btn-soft btn-sm">+ Extra</button>
-                      </div>
-                      {extras.length === 0 && <p className="sub" style={{ fontSize: 12.5 }}>No extras. Add optional add-ons like “Truffle butter”.</p>}
-                      {extras.map((x) => {
-                        const err = rowErrors(x);
-                        return (
-                          <div key={x.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 6, background: 'var(--surface-2)', border: '1px solid var(--line)', borderRadius: 'var(--r-md)', padding: 8 }}>
-                            <Field className="g1-grow" error={err.name}><input className="input" type="text" aria-label="Extra name" value={x.name} onChange={(e) => editExtra(x.id, { name: e.target.value })} onBlur={() => commitExtra(x)} style={{ height: 34 }} /></Field>
-                            <span className="sub g1-plus">+ $</span>
-                            <Field className="g1-price" error={err.priceAdd}><input className="input" type="number" step="0.5" min="0" aria-label="Extra price" value={x.priceAdd} onChange={(e) => editExtra(x.id, { priceAdd: e.target.value })} onBlur={() => commitExtra(x)} style={{ height: 34 }} /></Field>
-                            <button type="button" onClick={() => deleteExtra(x.id)} className="icon-btn" style={{ width: 34, height: 34 }} aria-label="Remove">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </section>
-                  </>
-                )}
-                {banner && <div className="adm-error-banner">{banner}</div>}
+                {g.options.map((o) => (
+                  <PriceRow
+                    key={o.id} row={o} nameLabel="Option name"
+                    onEdit={(patch) => editOption(g.id, o.id, patch)}
+                    onCommit={() => commitOption(g.id, o)}
+                    onRemove={() => deleteOption(g.id, o.id)}
+                  />
+                ))}
+                <div><Button variant="ghost" size="xs" icon="plus" onClick={() => addOption(g.id)}>Add option</Button></div>
               </div>
+            ))}
+          </section>
 
-              <div className="modal-f">
-                {editingId && <button type="button" className="btn btn-ghost" style={{ marginRight: 'auto', color: 'var(--rose)' }} onClick={() => handleDelete({ id: editingId, name: form.name })} disabled={deleteItem.isPending}>Delete</button>}
-                <button type="button" onClick={resetForm} disabled={saveItem.isPending} className="btn btn-ghost">{editingId ? 'Close' : 'Cancel'}</button>
-                <button type="submit" disabled={saveItem.isPending || uploading || !v.valid} className="btn btn-primary">
-                  {saveItem.isPending ? (editingId ? 'Updating…' : 'Creating…') : (editingId ? 'Save changes' : 'Create item')}
-                </button>
+          <section className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="m-0 text-sm font-semibold text-mq-ink">Extras</h3>
+                <p className="m-0 text-xs text-mq-muted">Optional add-ons; each one ticked adds its price.</p>
               </div>
-            </form>
-          </div>
+              <Button variant="soft" size="xs" icon="plus" onClick={addExtra}>Extra</Button>
+            </div>
+            {extras.length === 0 && <p className="m-0 text-[12.5px] text-mq-muted">No extras. Add optional add-ons like “Truffle butter”.</p>}
+            {extras.map((x) => (
+              <div key={x.id} className="rounded-[10px] border border-mq-line bg-mq-cream p-2">
+                <PriceRow row={x} nameLabel="Extra name" onEdit={(patch) => editExtra(x.id, patch)} onCommit={() => commitExtra(x)} onRemove={() => deleteExtra(x.id)} />
+              </div>
+            ))}
+          </section>
         </div>
       )}
+    </Modal>
+  );
+}
+
+/** Name + "+ $ price" + remove, saved on blur (options and extras). */
+function PriceRow({ row, nameLabel, onEdit, onCommit, onRemove }) {
+  const err = rowErrors(row);
+  return (
+    <div className="flex items-start gap-1.5">
+      <Field className="flex-1" error={err.name}>
+        <input className={inputCls()} type="text" aria-label={nameLabel} value={row.name} onChange={(e) => onEdit({ name: e.target.value })} onBlur={onCommit} />
+      </Field>
+      <span className="h-10 grid place-items-center text-[12.5px] text-mq-muted font-mq-mono flex-none">+ $</span>
+      <Field className="w-[92px] flex-none" error={err.priceAdd}>
+        <input className={inputCls({ mono: true })} type="number" step="0.5" min="0" inputMode="decimal" aria-label="Extra price" value={row.priceAdd} onChange={(e) => onEdit({ priceAdd: e.target.value })} onBlur={onCommit} />
+      </Field>
+      <IconButton icon="x" label={`Remove ${row.name || 'row'}`} variant="danger" size={40} onClick={onRemove} />
     </div>
   );
 }

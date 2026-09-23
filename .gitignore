@@ -54,3 +54,7 @@ cats.json
 
 # local backups (contain customer data)
 /backups/
+
+# Production env files (templates are deploy/*.env.example)
+deploy/*.env
+!deploy/*.env.example

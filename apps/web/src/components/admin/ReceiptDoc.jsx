@@ -25,6 +25,9 @@ import { useIsClient, useBusiness, includedTax, printDate, printTime } from './p
  *     print, under an ADDED band.
  *
  *   kind="invoice"  — a customer invoice on the same 80mm roll (pass `invoice`).
+ *   kind="payslip"  — a staff member's salary slip for one month (pass
+ *     `payslip`: { name, role, monthLabel, salary?, payment:{ id, amount,
+ *     paidAt, paidBy, note } }) — from a Staff › Payroll row or history.
  *
  * Rendered hidden on screen. usePrintDoc() copies the rendered markup + the
  * RECEIPT_CSS below into a tiny hidden iframe and prints THAT — so the print
@@ -108,18 +111,19 @@ export const receiptFromOrder = (o, extra = {}) => ({
   ...extra,
 });
 
-export default function ReceiptDoc({ order, invoice, kind = 'customer' }) {
+export default function ReceiptDoc({ order, invoice, payslip, kind = 'customer' }) {
   const isClient = useIsClient();
   const biz = useBusiness();
   const wallets = useWallets();
-  const doc = kind === 'invoice' ? invoice : order;
+  const doc = kind === 'invoice' ? invoice : kind === 'payslip' ? payslip : order;
   if (!doc || !isClient) return null;
 
   return (
     <div className="rcpt-root" data-print-doc hidden aria-hidden="true">
       {kind === 'kitchen' ? <KitchenTicket order={order} />
         : kind === 'invoice' ? <InvoiceReceipt invoice={invoice} biz={biz} wallets={wallets} />
-          : <CustomerReceipt order={order} biz={biz} wallets={wallets} bill={kind === 'bill'} />}
+          : kind === 'payslip' ? <Payslip slip={payslip} biz={biz} />
+            : <CustomerReceipt order={order} biz={biz} wallets={wallets} bill={kind === 'bill'} />}
     </div>
   );
 }
@@ -328,6 +332,47 @@ function InvoiceReceipt({ invoice, biz, wallets }) {
         </>
       )}
       <div className="rc-center">{biz.footer || 'Thank you!'}</div>
+    </div>
+  );
+}
+
+const ROLE_NAME = { admin: 'Admin', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter' };
+
+/**
+ * A salary slip on the 80mm roll: who, which month, the salary on file for it
+ * and what was actually paid (an advance or bonus makes them differ).
+ */
+function Payslip({ slip, biz }) {
+  const p = slip.payment || {};
+  const salary = slip.salary != null && Number(slip.salary) > 0 ? Number(slip.salary) : null;
+  const paid = Number(p.amount || 0);
+  return (
+    <div className="rcpt">
+      <div className="rc-name">{biz.name}</div>
+      <div className="rc-status">PAYSLIP</div>
+      <div className="rc-rule" />
+      <div className="rc-kv">
+        <span className="k">Name:</span><span className="v">{slip.name}</span>
+        {slip.role && <><span className="k">Role:</span><span className="v">{ROLE_NAME[slip.role] || slip.role}</span></>}
+        <span className="k">Month:</span><span className="v">{slip.monthLabel}</span>
+        {p.id != null && <><span className="k">Slip #:</span><span className="v">{p.id}</span></>}
+        {p.paidAt && <><span className="k">Paid on:</span><span className="v">{printDate(p.paidAt)}</span></>}
+        {p.paidBy && <><span className="k">Paid by:</span><span className="v">{p.paidBy}</span></>}
+      </div>
+      <div className="rc-rule" />
+      {salary != null && salary !== paid && (
+        <>
+          <div className="rc-sum"><span>Monthly salary</span><span>{amt(salary)}</span></div>
+          <div className="rc-sum"><span>{paid < salary ? 'Less' : 'Plus'}</span><span>{paid < salary ? '-' : ''}{amt(Math.abs(paid - salary))}</span></div>
+          <div className="rc-rule solid" />
+        </>
+      )}
+      <div className="rc-total"><span>PAID</span><span>{usd(paid)}</span></div>
+      {p.note && <div className="rc-sum"><span>Note: {p.note}</span></div>}
+      <div className="rc-rule" />
+      <div className="rc-sum"><span>Received by</span><span /></div>
+      <div className="rc-center">&nbsp;</div>
+      <div className="rc-rule" />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Modal, { ModalSpacer } from '@/components/admin/ui/Modal';
+import Button from '@/components/admin/ui/Button';
 
 /**
  * useConfirm() — branded replacement for window.confirm.
@@ -32,40 +34,24 @@ export default function useConfirm() {
     setState(null);
   }, [state]);
 
+  const danger = state?.tone === 'danger';
   const dialog = state ? (
-    <div className="adm-modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) handle(false); }}>
-      <div className="adm-modal" role="dialog" aria-modal="true" style={{ maxWidth: 420 }}>
-        <div className="adm-modal-head">
-          <h2 className="adm-modal-title">{state.title}</h2>
-        </div>
-        {state.body && (
-          <div className="adm-modal-body">
-            <p style={{
-              fontFamily: 'var(--font-inter), Inter, sans-serif',
-              fontSize: 'var(--t-base, 14px)',
-              color: 'var(--ink-2)',
-              margin: 0,
-              lineHeight: 1.55,
-            }}>
-              {state.body}
-            </p>
-          </div>
-        )}
-        <div className="adm-modal-foot">
-          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => handle(false)}>
-            {state.cancelLabel}
-          </button>
-          <button
-            type="button"
-            className={`adm-btn ${state.tone === 'danger' ? 'adm-btn-danger' : 'adm-btn-primary'}`}
-            onClick={() => handle(true)}
-            autoFocus
-          >
-            {state.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      title={state.title}
+      icon={danger ? 'alert' : 'info'}
+      tone={danger ? 'danger' : 'brand'}
+      width={440}
+      onClose={() => handle(false)}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={() => handle(false)}>{state.cancelLabel}</Button>
+          <Button variant={danger ? 'danger' : 'primary'} size="lg" onClick={() => handle(true)} data-autofocus>{state.confirmLabel}</Button>
+        </>
+      )}
+    >
+      {state.body && <p className="m-0 text-sm leading-relaxed text-mq-body">{state.body}</p>}
+    </Modal>
   ) : null;
 
   return { confirm, dialog };

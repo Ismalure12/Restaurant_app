@@ -8,44 +8,43 @@ import { MONEY_ACCOUNTS_KEY, accountName } from '@/hooks/useMoneyAccounts';
 import Field from '@/components/admin/Field';
 import { useFormValidation } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
-import { accountSchema, taxSchema } from '@/lib/schemas/settings';
+import { accountSchema } from '@/lib/schemas/settings';
 import { money } from '@/lib/money';
-import { ACCOUNTS_KEY, JSON_H, KIND_LABEL, Modal, SectionHead, plus } from './shared';
+import {
+  Alert, Button, Chip, Modal, ModalSpacer, Table, Th, Td, Tr, EmptyRow, ToggleRow, inputCls, selectCls,
+} from '@/components/admin/ui';
+import { ACCOUNTS_KEY, JSON_H, KIND_LABEL, SETTINGS_KEY, SettingsCard } from './shared';
 
-/** Settings › Money: the business accounts (with balances) and the tax rate. */
-export default function AccountsTaxSection() {
+/** The accounts query every Money settings card shares (same key + URL as Cash & accounts). */
+export function useAccountsData() {
+  return useQuery({ queryKey: ACCOUNTS_KEY, queryFn: () => fetchJson('/api/admin/accounts?balances=1') });
+}
+/** Refetch everything that shows accounts or the calendar after a change. */
+export function useRefreshAccounts() {
   const qc = useQueryClient();
-  const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetchJson('/api/admin/settings') });
-  // Tax already included in menu prices. `pay` is a local draft; null = saved.
-  const [pay, setPay] = useState(null);
-  const taxValue = pay ?? (settings?.taxRate != null ? String(settings.taxRate) : '0');
-  const taxForm = useFormValidation(taxSchema, { tax: taxValue });
-  const savePay = useMutation({
-    mutationFn: (payload) => fetchJson('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }),
-    onSuccess: (d) => { notify.success('Tax saved', { title: 'Could not save the tax rate' }); qc.setQueryData(['settings'], d); setPay(null); },
-    onError: (e) => reportSaveError(e, { form: taxForm, title: 'Could not save the tax rate', guess: { tax: /tax/i } }),
-  });
-  const submitPay = (e) => {
-    e.preventDefault();
-    taxForm.setServerErrors({});
-    if (!taxForm.check()) return;
-    savePay.mutate({ taxRate: Number(taxValue) });
-  };
-
-  // Business accounts (Cash, wallets, Mastercard, bank, Sifalo) — every one,
-  // active or not, with balances. Staff wallet numbers live in Staff › Team.
-  const { data: acctData } = useQuery({ queryKey: ACCOUNTS_KEY, queryFn: () => fetchJson('/api/admin/accounts?balances=1') });
-  const accounts = acctData?.accounts || [];
-  const refreshAccounts = () => {
+  return () => {
     qc.invalidateQueries({ queryKey: ACCOUNTS_KEY });
     qc.invalidateQueries({ queryKey: MONEY_ACCOUNTS_KEY });
-    qc.invalidateQueries({ queryKey: ['settings'] });
+    qc.invalidateQueries({ queryKey: SETTINGS_KEY });
   };
+}
+
+/**
+ * Settings › Money: the business accounts (Cash, wallets, Mastercard, bank,
+ * Sifalo) — every one, active or not. Balances live on Cash & accounts; here
+ * each shows its opening balance. Staff wallet numbers are in Staff › Team.
+ * An account is a record, so it saves from its own dialog.
+ */
+export default function AccountsSection({ disabled }) {
+  const { data: acctData, isError, error, refetch } = useAccountsData();
+  const refreshAccounts = useRefreshAccounts();
+  const accounts = acctData?.accounts || [];
+
   const [acctModal, setAcctModal] = useState(null); // {} = new, {id,...} = edit
   const [acctForm, setAcctForm] = useState({ kind: 'wallet', label: '', number: '', isActive: true });
-  const openAcct = (a) => { acctV.reset(); setAcctBanner(''); setAcctForm({ kind: a?.kind || 'wallet', label: a?.label || '', number: a?.number || '', isActive: a ? a.isActive : true }); setAcctModal(a || {}); };
   const [acctBanner, setAcctBanner] = useState('');
   const acctV = useFormValidation(accountSchema, { label: acctForm.label, number: acctForm.number });
+  const openAcct = (a) => { acctV.reset(); setAcctBanner(''); setAcctForm({ kind: a?.kind || 'wallet', label: a?.label || '', number: a?.number || '', isActive: a ? a.isActive : true }); setAcctModal(a || {}); };
   const saveAcct = useMutation({
     mutationFn: ({ id, ...f }) => id
       ? fetchJson(`/api/admin/accounts/${id}`, { method: 'PUT', headers: JSON_H, body: JSON.stringify({ label: f.label, number: f.number || null, isActive: f.isActive }) })
@@ -54,7 +53,7 @@ export default function AccountsTaxSection() {
     onError: (e) => reportSaveError(e, { form: acctV, setBanner: setAcctBanner, title: 'Could not save the account', guess: { label: /name|already/i } }),
   });
   const submitAcct = (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     setAcctBanner(''); acctV.setServerErrors({});
     if (!acctV.check()) return;
     saveAcct.mutate({ id: acctModal.id, kind: acctForm.kind, label: acctForm.label.trim(), number: acctForm.number.trim(), isActive: acctForm.isActive });
@@ -62,46 +61,75 @@ export default function AccountsTaxSection() {
 
   return (
     <>
-      <section className="card set-sec">
-        <SectionHead gold icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20M6 15h4" /></svg>} title="Business accounts & tax" sub="Where the business's money sits: cash, mobile wallets, the Mastercard, the bank and Sifalo. Each waiter and cashier's own wallet numbers are set in Staff › Team." action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => openAcct(null)} disabled={!acctData}>{plus}Add account</button>} />
-        <div className="set-body">
-          {!acctData && <p className="sub">Loading…</p>}
-          {accounts.map((a) => (
-            <div className={`bacc-row${a.isActive ? '' : ' off'}`} key={a.id}>
-              <div className="bacc-main">
-                <div className="bacc-name">{accountName(a)}{!a.isActive && <span className="pill pill-ghost">Inactive</span>}</div>
-                <div className="bacc-meta">{KIND_LABEL[a.kind] || a.kind}{a.number ? ` · ${a.number}` : ''}</div>
-              </div>
-              <div className="bacc-bal">{money(a.balance)}</div>
-              {a.kind === 'gateway' ? <span className="bacc-ro">Automatic</span> : <button type="button" className="btn btn-ghost btn-sm" onClick={() => openAcct(a)}>Edit</button>}
-            </div>
-          ))}
-          <form className="set-form" onSubmit={submitPay} noValidate style={{ marginTop: 16 }}>
-            <Field className="g1-narrow" label="Tax included in prices (%)" required {...taxForm.fieldProps('tax')}>
-              <input className="input" type="number" min="0" max="50" step="0.5" value={taxValue} disabled={!settings} onChange={(e) => setPay(e.target.value)} />
-            </Field>
-            <div className="set-actions">
-              {pay != null && <button type="button" className="btn btn-ghost" onClick={() => { setPay(null); taxForm.reset(); }} disabled={savePay.isPending}>Discard changes</button>}
-              <button type="submit" className="btn btn-primary" disabled={savePay.isPending || pay == null || !settings || !taxForm.valid}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg>{savePay.isPending ? 'Saving…' : 'Save tax'}</button>
-            </div>
-          </form>
-        </div>
-      </section>
+      <SettingsCard
+        flush
+        title="Business accounts"
+        sub="Where money lands — these are the payment choices at the till."
+        actions={<Button size="xs" icon="plus" onClick={() => openAcct(null)} disabled={disabled || !acctData}>Add account</Button>}
+      >
+        {isError ? <div className="p-4"><Alert tone="danger" title="Couldn’t load the accounts" action={<Button size="xs" icon="refresh" onClick={() => refetch()}>Retry</Button>}>{error?.message}</Alert></div> : (
+          <Table minW={560} label="Business accounts">
+            <thead><tr><Th>Account</Th><Th>Kind</Th><Th>Number</Th><Th align="right">Opening</Th><Th align="right"><span className="sr-only">Actions</span></Th></tr></thead>
+            <tbody>
+              {!acctData ? <EmptyRow cols={5}>Loading…</EmptyRow> : accounts.length === 0 ? <EmptyRow cols={5}>No accounts yet — add Cash and your wallets.</EmptyRow> : accounts.map((a) => (
+                <Tr key={a.id} dim={!a.isActive}>
+                  <Td strong>
+                    <span className="inline-flex items-center gap-2 flex-wrap">{accountName(a)}{!a.isActive && <Chip small tone="off" dot={false}>Inactive</Chip>}</span>
+                  </Td>
+                  <Td className="text-mq-on-tint">{KIND_LABEL[a.kind] || a.kind}</Td>
+                  <Td mono className="text-mq-on-tint">{a.number || '—'}</Td>
+                  <Td money>{a.openingBalance != null ? money(a.openingBalance) : '—'}</Td>
+                  <Td align="right">
+                    {a.kind === 'gateway'
+                      ? <span className="text-xs text-mq-muted">Automatic</span>
+                      : <Button size="xs" className="!text-mq-cta" onClick={() => openAcct(a)} disabled={disabled}>Edit</Button>}
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+        <p className="m-0 px-4 py-3 text-xs text-mq-muted border-t border-mq-chip">Balances are on Cash &amp; accounts. Each waiter’s and cashier’s own wallet numbers are set in Staff › Team.</p>
+      </SettingsCard>
 
       {acctModal && (
-        <Modal title={acctModal.id ? 'Edit account' : 'Add account'} onClose={() => setAcctModal(null)} saving={saveAcct.isPending} canSave={acctV.valid} banner={acctBanner} onSubmit={submitAcct}>
-          <div className="ff"><label htmlFor="acct-kind">Type</label>
-            {acctModal.id ? <div className="input" id="acct-kind" style={{ display: 'flex', alignItems: 'center' }}>{KIND_LABEL[acctForm.kind]}</div> : (
-              <select id="acct-kind" className="input" value={acctForm.kind} onChange={(e) => setAcctForm({ ...acctForm, kind: e.target.value })}>
-                {['wallet', 'cash', 'card', 'bank'].map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-              </select>
-            )}
-          </div>
-          <Field label="Name" required {...acctV.fieldProps('label')}><input className="input" value={acctForm.label} maxLength={30} onChange={(e) => setAcctForm({ ...acctForm, label: e.target.value })} placeholder="e.g. EVC Plus" /></Field>
-          <Field label="Number (optional)" {...acctV.fieldProps('number')}><input className="input" type="tel" value={acctForm.number} maxLength={40} onChange={(e) => setAcctForm({ ...acctForm, number: e.target.value })} placeholder="Business wallet or account number" /></Field>
-          {acctModal.id && <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}><input type="checkbox" checked={acctForm.isActive} onChange={(e) => setAcctForm({ ...acctForm, isActive: e.target.checked })} /> Active (shown when taking payment)</label>}
+        <Modal
+          title={acctModal.id ? 'Edit account' : 'Add account'}
+          icon="cash"
+          width={460}
+          onClose={() => setAcctModal(null)}
+          busy={saveAcct.isPending}
+          footer={<><ModalSpacer /><Button onClick={() => setAcctModal(null)} disabled={saveAcct.isPending}>Cancel</Button><Button variant="primary" onClick={submitAcct} disabled={saveAcct.isPending || !acctV.valid}>{saveAcct.isPending ? 'Saving…' : 'Save'}</Button></>}
+        >
+          <form className="flex flex-col gap-3.5" onSubmit={submitAcct} noValidate>
+            <Field label="Type">
+              {acctModal.id
+                ? <input className={inputCls({ size: 'lg' })} value={KIND_LABEL[acctForm.kind] || acctForm.kind} readOnly disabled />
+                : (
+                  <select className={selectCls({ size: 'lg' })} value={acctForm.kind} onChange={(e) => setAcctForm({ ...acctForm, kind: e.target.value })}>
+                    {['wallet', 'cash', 'card', 'bank'].map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+                  </select>
+                )}
+            </Field>
+            <Field label="Name" required {...acctV.fieldProps('label')}><input className={inputCls({ size: 'lg' })} value={acctForm.label} maxLength={30} onChange={(e) => setAcctForm({ ...acctForm, label: e.target.value })} placeholder="e.g. EVC Plus" /></Field>
+            <Field label="Number (optional)" {...acctV.fieldProps('number')}><input className={inputCls({ size: 'lg', mono: true })} type="tel" value={acctForm.number} maxLength={40} onChange={(e) => setAcctForm({ ...acctForm, number: e.target.value })} placeholder="Business wallet or account number" /></Field>
+            {acctModal.id && <ToggleRow title="Active" desc="Shown when taking payment" checked={acctForm.isActive} onChange={(v) => setAcctForm({ ...acctForm, isActive: v })} />}
+            {acctBanner && <Alert tone="danger">{acctBanner}</Alert>}
+            <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
+          </form>
         </Modal>
       )}
     </>
+  );
+}
+
+/** Settings › Money: tax already included in menu prices. Controlled. */
+export function TaxSection({ value, onChange, form, disabled }) {
+  return (
+    <SettingsCard title="Tax" sub="Already included in menu prices — never added on top of a total.">
+      <Field className="max-w-[220px]" label="Tax included in prices (%)" required {...form.fieldProps('tax')}>
+        <input className={inputCls({ size: 'lg', mono: true })} type="number" min="0" max="50" step="0.5" inputMode="decimal" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+      </Field>
+    </SettingsCard>
   );
 }

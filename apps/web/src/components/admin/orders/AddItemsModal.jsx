@@ -7,7 +7,8 @@ import { notify } from '@/lib/notify';
 import { useFormValidation } from '@/lib/formValidation';
 import { addItemsSchema } from '@/lib/schemas/sales';
 import ItemCustomizer, { buildLine, needsChoices } from '@/components/admin/ItemCustomizer';
-import { Ic, money } from './orderUi';
+import { Modal, ModalSpacer, Button, ChoiceChip, SearchInput, Icon, Overline, Skeleton } from '@/components/admin/ui';
+import { money } from './orderUi';
 
 /**
  * Add items (drinks, dessert…) to an unpaid pay-later order. Picks from the
@@ -31,6 +32,7 @@ export default function AddItemsModal({ order, onClose, onAdded }) {
   }, [menu, q, cat]);
   const cats = categories.filter((c) => c.isActive);
   const added = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  const count = lines.reduce((n, l) => n + l.quantity, 0);
 
   const pick = (item) => (needsChoices(item) ? setCustomizing(item) : setLines((ls) => [...ls, buildLine(item)]));
   const step = (uid, d) => setLines((ls) => ls.map((l) => (l.uid === uid ? { ...l, quantity: Math.min(99, l.quantity + d) } : l)).filter((l) => l.quantity > 0));
@@ -61,64 +63,89 @@ export default function AddItemsModal({ order, onClose, onAdded }) {
   }
 
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div className="modal add-items" role="dialog" aria-modal="true" aria-labelledby="ai-title">
-        <div className="modal-h">
-          <div className="mt">
-            <div className="eyebrow">{order.code}{order.tableNumber ? ` · Table ${order.tableNumber}` : ''} · {money(order.total)} so far</div>
-            <div className="h-1" id="ai-title" style={{ marginTop: 3 }}>Add items</div>
-          </div>
-          <button className="icon-btn" onClick={onClose} disabled={busy} aria-label="Close">{Ic.x}</button>
+    <Modal
+      title="Add items"
+      eyebrow={`${order.code}${order.tableNumber ? ` · Table ${order.tableNumber}` : ''} · ${money(order.total)} so far`}
+      icon="plus"
+      width={600}
+      onClose={onClose}
+      busy={busy}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button variant="primary" size="lg" onClick={send} disabled={busy || !form.valid}>
+            {busy ? 'Sending…' : <>Send to kitchen · <span className="font-mq-mono tabular-nums">+{money(added)}</span></>}
+          </Button>
+        </>
+      )}
+    >
+      <div className="flex flex-col gap-3">
+        <SearchInput value={q} onChange={setQ} placeholder="Search the menu…" aria-label="Search the menu" className="h-10" />
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]" role="group" aria-label="Category">
+          <ChoiceChip size="sm" active={cat === 'all'} onClick={() => setCat('all')}>All</ChoiceChip>
+          {cats.map((c) => <ChoiceChip key={c.id} size="sm" active={cat === c.id} onClick={() => setCat(c.id)}>{c.name}</ChoiceChip>)}
         </div>
-        <div className="modal-b">
-          <div className="search ai-search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the menu…" aria-label="Search the menu" autoFocus />
-          </div>
-          <div className="pos-cats ai-cats">
-            <button className={`pos-cat${cat === 'all' ? ' on' : ''}`} onClick={() => setCat('all')}>All</button>
-            {cats.map((c) => <button key={c.id} className={`pos-cat${cat === c.id ? ' on' : ''}`} onClick={() => setCat(c.id)}>{c.name}</button>)}
-          </div>
-          <div className="ai-menu" role="list">
-            {isLoading ? <div className="sub">Loading the menu…</div>
-              : visible.length === 0 ? <div className="sub">No items match.</div>
-                : visible.map((m) => (
-                  <button type="button" role="listitem" key={m.id} className="ai-item" onClick={() => pick(m)}>
-                    <span className="ai-nm">{m.name}{needsChoices(m) && <span className="ai-tag">options</span>}</span>
-                    <span className="ai-pr">{money(m.price)}</span>
-                    <span className="ai-add" aria-hidden="true">{Ic.plus}</span>
-                  </button>
-                ))}
-          </div>
 
-          <div className="ai-cart">
-            <div className="field-l" style={{ marginTop: 0 }}>Adding · {lines.reduce((n, l) => n + l.quantity, 0)} items</div>
-            {lines.length === 0 ? <div className="sub">Tap items above to add them.</div> : lines.map((l) => (
-              <div className="tline" key={l.uid}>
-                <span className="tline-q">{l.quantity}×</span>
-                <div className="tline-main">
-                  <div className="tline-nm">{l.name}</div>
-                  {(l.optionName || l.extras.length > 0 || l.notes) && <div className="tline-opt">{[l.optionName, l.extras.map((x) => x.name).join(', '), l.notes && `“${l.notes}”`].filter(Boolean).join(' · ')}</div>}
-                </div>
-                <div className="tline-r">
-                  <span className="tline-pr">{money(l.unitPrice * l.quantity)}</span>
-                  <span className="tline-steps">
-                    <button type="button" onClick={() => step(l.uid, -1)} aria-label={`Decrease ${l.name}`}>−</button>
-                    <span>{l.quantity}</span>
-                    <button type="button" onClick={() => step(l.uid, 1)} aria-label={`Increase ${l.name}`}>+</button>
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div className="max-h-[260px] overflow-y-auto rounded-[10px] border border-mq-line" role="list">
+          {isLoading ? (
+            <div className="flex flex-col gap-2 p-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-9" />)}</div>
+          ) : visible.length === 0 ? (
+            <div className="px-4 py-6 text-center text-[13px] text-mq-muted">No items match.</div>
+          ) : visible.map((m) => (
+            <button
+              type="button"
+              role="listitem"
+              key={m.id}
+              onClick={() => pick(m)}
+              className="flex w-full items-center gap-3 min-h-12 px-3.5 border-b border-mq-chip last:border-b-0 text-left hover:bg-mq-cream focus-visible:outline-none focus-visible:bg-mq-soft"
+            >
+              <span className="flex-1 min-w-0 truncate text-sm font-medium text-mq-ink">
+                {m.name}
+                {needsChoices(m) && <span className="ml-2 text-[11px] font-semibold uppercase tracking-[.08em] text-mq-muted">options</span>}
+              </span>
+              <span className="font-mq-mono text-[13px] tabular-nums text-mq-ink">{money(m.price)}</span>
+              <span className="grid place-items-center w-7 h-7 rounded-lg bg-mq-soft text-mq-primary" aria-hidden="true"><Icon name="plus" size={14} stroke={2.2} /></span>
+            </button>
+          ))}
         </div>
-        <div className="modal-f">
-          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
-          <button className="btn btn-primary" onClick={send} disabled={busy || !form.valid}>
-            {busy ? 'Sending…' : `Send to kitchen · +${money(added)}`}
-          </button>
+
+        <div className="flex flex-col gap-2">
+          <Overline>Adding · {count} {count === 1 ? 'item' : 'items'}</Overline>
+          {lines.length === 0 ? (
+            <p className="m-0 text-[13px] text-mq-muted">Tap items above to add them.</p>
+          ) : (
+            <div className="rounded-[10px] border border-mq-line">
+              {lines.map((l) => (
+                <div key={l.uid} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-2.5 border-b border-mq-chip last:border-b-0">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-mq-ink truncate">{l.name}</div>
+                    {(l.optionName || l.extras.length > 0 || l.notes) && (
+                      <div className="text-xs text-mq-muted truncate">{[l.optionName, l.extras.map((x) => x.name).join(', '), l.notes && `“${l.notes}”`].filter(Boolean).join(' · ')}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mq-mono text-[13px] tabular-nums text-mq-ink">{money(l.unitPrice * l.quantity)}</span>
+                    <Stepper value={l.quantity} name={l.name} onStep={(d) => step(l.uid, d)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
+  );
+}
+
+/** − n + quantity stepper (44px targets). */
+export function Stepper({ value, name, onStep, min = 0, max = 99 }) {
+  const btn = 'grid place-items-center w-11 h-11 tab:w-9 tab:h-9 rounded-lg text-mq-body hover:bg-mq-chip disabled:opacity-40 disabled:hover:bg-transparent';
+  return (
+    <span className="inline-flex items-center rounded-lg border border-mq-line bg-white">
+      <button type="button" className={btn} onClick={() => onStep(-1)} disabled={value <= min} aria-label={`Decrease ${name}`}><Icon name="minus" size={14} stroke={2.2} /></button>
+      <span className="min-w-[24px] text-center font-mq-mono text-[13px] font-semibold tabular-nums text-mq-ink">{value}</span>
+      <button type="button" className={btn} onClick={() => onStep(1)} disabled={value >= max} aria-label={`Increase ${name}`}><Icon name="plus" size={14} stroke={2.2} /></button>
+    </span>
   );
 }

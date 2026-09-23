@@ -1,16 +1,27 @@
 'use client';
 
-// Shared pieces of the Reports hub (Sales · Inventory · Financial · Employees).
-// Every filter lives in the URL (?preset=&from=&to=&waiterId=…), so a report
-// view can be bookmarked, shared and survives a reload; the API receives the
-// same keys. Export = a same-origin CSV link (the session cookie rides along);
-// Print = window.print() with the A4 rules in reports/layout.jsx.
+// Shared pieces of the Reports hub, Overview and Sales history. Every filter
+// lives in the URL (?preset=&from=&to=&waiterId=…), so a view can be
+// bookmarked, shared and survives a reload; the API receives the same keys.
+// Export = a same-origin CSV link (the session cookie rides along);
+// Print = window.print() with the A4 rules in ReportPrintCss.
+// Styled per docs/admin-design-system.md.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import { money } from '@/lib/money';
+import Button from '@/components/admin/ui/Button';
+import UiCard, { CardHeader, CardTitle } from '@/components/admin/ui/Card';
+import UiKpi from '@/components/admin/ui/Kpi';
+import Icon from '@/components/admin/ui/icons';
+import Popover, { MenuItem, MenuDivider } from '@/components/admin/ui/Popover';
+import { FilterChip } from '@/components/admin/ui/Chip';
+import { Alert, EmptyState } from '@/components/admin/ui/Feedback';
+import { selectCls, inputCls } from '@/components/admin/ui/Controls';
+import cx from '@/components/admin/ui/cx';
+import { Columns } from './Charts';
 
 export { money };
 export const num = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -20,15 +31,27 @@ const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const shift = (d, days) => { const x = new Date(d); x.setDate(x.getDate() + days); return x; };
 
 export const PRESETS = [
-  ['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', '7 days'], ['30d', '30 days'], ['month', 'This month'],
-  ['week', 'This week'], ['lastMonth', 'Last month'], ['year', 'This year'], ['custom', 'Custom'],
+  ['today', 'Today'], ['week', 'This week'], ['month', 'This month'],
+  ['yesterday', 'Yesterday'], ['7d', '7 days'], ['30d', '30 days'], ['lastMonth', 'Last month'], ['year', 'This year'], ['custom', 'Custom range'],
 ];
 // The segmented control shows the common ones; the rest sit behind "More".
-const PRIMARY_PRESETS = ['today', 'yesterday', '7d', '30d', 'month'];
+const PRIMARY_PRESETS = ['today', 'week', 'month'];
 const presetName = (p) => PRESETS.find(([k]) => k === p)?.[1] ?? p;
 
 const parseDay = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
 const lastOfMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+const shortDay = (s) => parseDay(s).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+const dayMonth = (s) => parseDay(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+/** "Mon 22 Sep" / "16–22 Sep" / "24 Aug – 22 Sep" for a range. */
+export function rangeLabel(range) {
+  if (!range) return '';
+  if (range.from === range.to) return shortDay(range.from);
+  const a = parseDay(range.from);
+  const b = parseDay(range.to);
+  if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${a.getDate()}–${dayMonth(range.to)}`;
+  return `${dayMonth(range.from)} – ${dayMonth(range.to)}`;
+}
 
 /**
  * The period a range is compared with — the one a manager means, not just
@@ -123,92 +146,125 @@ export function useReportParams(defaultPreset, filterKeys = []) {
   return { preset, range, filters, set, query };
 }
 
-/** Close a popover on an outside click or Escape (focus goes back to its button). */
-function useDismiss(open, setOpen, wrapRef, buttonRef) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); buttonRef?.current?.focus(); } };
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
-  }, [open, setOpen, wrapRef, buttonRef]);
-}
-
-const Chevron = <svg className="r6-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>;
+const segBtn = (on) => cx(
+  'inline-flex items-center justify-center gap-1 min-h-[30px] px-[13px] rounded-md text-[13px] whitespace-nowrap transition-colors',
+  on ? 'bg-white text-mq-ink font-semibold shadow-mq-seg' : 'text-mq-on-tint font-medium hover:text-mq-ink',
+);
 
 /**
- * The period: a segmented control (Today · Yesterday · 7 days · 30 days · This
- * month · More ▾) from 768px up, a single <select> on phones (both rendered,
- * CSS picks one). Custom adds two date inputs.
+ * The period: Today · This week · This month · More ▾ (Yesterday, 7 days,
+ * 30 days, Last month, This year, Custom range). Custom adds two date inputs.
  */
 export function PeriodPicker({ preset, range, set }) {
-  const [open, setOpen] = useState(false);
-  const wrap = useRef(null);
-  const btn = useRef(null);
-  const menu = useRef(null);
-  useDismiss(open, setOpen, wrap, btn);
-  useEffect(() => { if (open) menu.current?.querySelector('button')?.focus(); }, [open]);
-  const choose = (p) => {
-    setOpen(false);
+  const choose = (p, close) => {
+    close?.();
     set(p === 'custom' ? { preset: 'custom', from: range.from, to: range.to } : { preset: p });
   };
   const inMore = !PRIMARY_PRESETS.includes(preset);
   return (
-    <>
-      <select className="input rpt-preset r6-period-sel" value={preset} onChange={(e) => choose(e.target.value)} aria-label="Period">
-        {PRESETS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>
-      <div className="r6-period" ref={wrap}>
-        <div className="seg" role="group" aria-label="Period">
-          {PRIMARY_PRESETS.map((p) => (
-            <button key={p} type="button" className={preset === p ? 'active' : ''} aria-pressed={preset === p} onClick={() => choose(p)}>{presetName(p)}</button>
-          ))}
-          <button ref={btn} type="button" className={inMore ? 'active' : ''} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-            {inMore ? presetName(preset) : 'More'}{Chevron}
-          </button>
-        </div>
-        {open && (
-          <div className="rpt-menu-list r6-period-menu" role="menu" ref={menu}>
-            {PRESETS.filter(([p]) => !PRIMARY_PRESETS.includes(p)).map(([p, l]) => (
-              <button key={p} type="button" role="menuitemradio" aria-checked={preset === p} className={preset === p ? 'on' : ''} onClick={() => choose(p)}>{l}</button>
-            ))}
-          </div>
-        )}
+    <div className="inline-flex items-center gap-2 flex-wrap">
+      <div role="group" aria-label="Period" className="inline-flex flex-wrap bg-mq-chip border border-mq-line rounded-lg p-[3px] gap-0.5">
+        {PRIMARY_PRESETS.map((p) => (
+          <button key={p} type="button" className={segBtn(preset === p)} aria-pressed={preset === p} onClick={() => choose(p)}>{presetName(p)}</button>
+        ))}
+        <Popover
+          width={230}
+          trigger={({ open, toggle }) => (
+            <button type="button" className={segBtn(inMore)} aria-haspopup="menu" aria-expanded={open} onClick={toggle}>
+              {inMore ? presetName(preset) : 'More'}<Icon name="chevDown" size={12} stroke={2.4} />
+            </button>
+          )}
+        >
+          {({ close }) => (
+            <div role="menu">
+              {PRESETS.filter(([p]) => !PRIMARY_PRESETS.includes(p) && p !== 'custom').map(([p, l]) => (
+                <MenuItem key={p} active={preset === p} onClick={() => choose(p, close)} hint={rangeLabel(presetRange(p))}>{l}</MenuItem>
+              ))}
+              <MenuDivider />
+              <MenuItem active={preset === 'custom'} onClick={() => choose('custom', close)}>Custom range…</MenuItem>
+            </div>
+          )}
+        </Popover>
       </div>
       {preset === 'custom' && (
-        <span className="rpt-dates">
-          <input className="input" type="date" value={range.from} max={range.to} onChange={(e) => e.target.value && set({ preset: 'custom', from: e.target.value, to: range.to })} aria-label="From date" />
-          <span className="sub">to</span>
-          <input className="input" type="date" value={range.to} min={range.from} onChange={(e) => e.target.value && set({ preset: 'custom', from: range.from, to: e.target.value })} aria-label="To date" />
+        <span className="inline-flex items-center gap-1.5">
+          <input className={inputCls({ size: 'sm', className: 'w-auto' })} type="date" value={range.from} max={range.to} onChange={(e) => e.target.value && set({ preset: 'custom', from: e.target.value, to: range.to })} aria-label="From date" />
+          <span className="text-[12.5px] text-mq-on-tint">to</span>
+          <input className={inputCls({ size: 'sm', className: 'w-auto' })} type="date" value={range.to} min={range.from} onChange={(e) => e.target.value && set({ preset: 'custom', from: range.from, to: e.target.value })} aria-label="To date" />
         </span>
       )}
-    </>
+    </div>
   );
 }
 
 /** Kept for older imports — every report now uses the period control. */
 export const RangePicker = PeriodPicker;
 
-/**
- * "Filters (2)" — a disclosure that holds the filter selects, so phones get a
- * one-line toolbar. The panel wraps onto its own row inside the Toolbar.
- */
-export function FiltersButton({ active = 0, onClear, children }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
+/** "16–22 Sep · vs previous 7 days" — the right-hand toolbar note (design wording). */
+export function RangeNote({ preset, range, compare = true }) {
   return (
-    <>
-      <button type="button" className={`btn btn-ghost r6-fbtn${active ? ' on' : ''}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 5h18M6 12h12M10 19h4" /></svg>
-        Filters
-        {active > 0 && <span className="r6-chip"><span className="sr-only">, </span>{active}<span className="sr-only"> active</span></span>}
-      </button>
-      <div id={id} className="r6-fpanel" role="group" aria-label="Filters" hidden={!open}>
-        {children}
-        {active > 0 && onClear && <button type="button" className="btn btn-ghost btn-sm r6-fclear" onClick={onClear}>Clear filters</button>}
-      </div>
-    </>
+    <span className="text-[12.5px] text-mq-on-tint whitespace-nowrap">
+      {rangeLabel(range)}{compare && <> · {compareLabel(preset)}</>}
+    </span>
+  );
+}
+
+/**
+ * "Filters (2)" — the one filter control of a page. It sits beside the period
+ * control and holds every extra filter (category, people, account, channel,
+ * item, movement, role…) as labelled selects, with Clear all / Done. Pages
+ * never lay filters out as their own rows; the active ones show as chips
+ * (ActiveFilters) under the toolbar.
+ */
+export function FiltersButton({ active = 0, onClear, children, align = 'left' }) {
+  return (
+    <Popover
+      width={320}
+      align={align}
+      panelClassName="!p-0"
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          onClick={toggle}
+          className={cx(
+            'inline-flex items-center gap-[7px] min-h-[38px] px-[13px] rounded-lg border text-[13.5px] font-semibold whitespace-nowrap transition-colors max-nar:min-h-12',
+            active || open ? 'bg-mq-soft border-mq-primary text-mq-primary' : 'bg-white border-mq-line text-mq-body hover:bg-mq-canvas hover:border-mq-line-2',
+          )}
+        >
+          <Icon name="filter" size={15} stroke={2} />
+          Filters
+          {active > 0 && (
+            <span className="grid place-items-center min-w-5 h-5 px-[5px] rounded-full bg-mq-primary text-mq-cream text-[11.5px] font-bold tabular-nums">
+              <span className="sr-only">, </span>{active}<span className="sr-only"> active</span>
+            </span>
+          )}
+        </button>
+      )}
+    >
+      {({ close }) => (
+        <div role="group" aria-label="Filters">
+          <div className="flex flex-col gap-3 p-3.5">{children}</div>
+          <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-t border-mq-chip">
+            {onClear ? <Button variant="ghost" size="md" className="!px-3 text-mq-on-tint" onClick={onClear}>Clear all</Button> : <span />}
+            <Button variant="primary" size="md" onClick={close}>Done</Button>
+          </div>
+        </div>
+      )}
+    </Popover>
+  );
+}
+
+/** "Showing only [Cashier: Ali ✕] … Clear all" under the toolbar. items: [{key, label, onRemove}] */
+export function ActiveFilters({ items, onClear }) {
+  if (!items?.length) return null;
+  return (
+    <div className="flex items-center gap-2 flex-wrap rpt-noprint">
+      <span className="text-[12.5px] text-mq-muted">Showing only</span>
+      {items.map((it) => <FilterChip key={it.key} onRemove={it.onRemove} label={`Remove ${it.label}`}>{it.label}</FilterChip>)}
+      {onClear && <button type="button" onClick={onClear} className="text-[12.5px] font-semibold text-mq-cta hover:text-mq-primary">Clear all</button>}
+    </div>
   );
 }
 
@@ -216,7 +272,7 @@ export const CHANNEL_OPTIONS = [{ value: 'dine_in', label: 'Dine-in' }, { value:
 
 /** Dine-in / Delivery (rung up in the restaurant) · Online (placed through the online menu). URL key `channel`. */
 export function ChannelSelect({ value, onChange }) {
-  return <FilterSelect label="Channel" value={value} options={CHANNEL_OPTIONS} onChange={onChange} />;
+  return <FilterSelect label="Channel" value={value} options={CHANNEL_OPTIONS} onChange={onChange} all="All channels" />;
 }
 
 /** The money accounts a sale can land in (Settings accounts included), plus any the data shows. */
@@ -241,71 +297,77 @@ export function periodParams(preset, range) {
 }
 
 /**
- * "▲ 12% vs yesterday · $340" — coloured by whether the change is good (for
+ * "▲ 12% vs yesterday ($340)" — coloured by whether the change is good (for
  * costs, up is bad). A zero before shows `zero` (e.g. "no sales before").
  */
 export function Delta({ now, before, fmt = money, invert = false, vs = 'vs previous period', zero = 'nothing before' }) {
   if (before == null) return null;
-  if (!before && !now) return <span className="delta flat">no change {vs}</span>;
-  if (!before) return <span className="r6-delta-note">{zero}</span>;
+  const flat = <span className="inline-flex items-center rounded-full px-[7px] py-0.5 text-xs font-semibold bg-mq-chip text-mq-on-tint">no change</span>;
+  if (!before && !now) return <span className="inline-flex items-center gap-1.5 flex-wrap">{flat}<span>{vs}</span></span>;
+  if (!before) return <span className="text-mq-muted">{zero}</span>;
   const diff = now - before;
-  if (Math.abs(diff) < 0.005) return <span className="delta flat">no change {vs}</span>;
+  if (Math.abs(diff) < 0.005) return <span className="inline-flex items-center gap-1.5 flex-wrap">{flat}<span>{vs}</span></span>;
   const good = invert ? diff < 0 : diff > 0;
   // A % against a loss (or a flip from profit to loss) means nothing — show the amount instead.
   const change = before < 0 || now < 0 ? fmt(Math.abs(diff)) : `${Math.round((Math.abs(diff) / Math.abs(before)) * 100)}%`;
   return (
-    <span className="r6-delta">
-      <span className={`delta ${good ? 'up' : 'down'}`}><span aria-hidden="true">{diff > 0 ? '▲' : '▼'}</span><span className="sr-only">{diff > 0 ? 'up' : 'down'}</span> {change}</span>
+    <span className="inline-flex items-center gap-1.5 flex-wrap">
+      <span className={cx('inline-flex items-center gap-0.5 rounded-full px-[7px] py-0.5 text-xs font-semibold tabular-nums', good ? 'bg-mq-ok-bg text-mq-ok-ink' : 'bg-mq-danger-bg text-mq-danger-ink')}>
+        <span aria-hidden="true">{diff > 0 ? '▲' : '▼'}</span><span className="sr-only">{diff > 0 ? 'up' : 'down'}</span> {change}
+      </span>
       <span>{vs} ({fmt(before)})</span>
     </span>
   );
 }
 
-/** A labelled <select> filter bound to one URL key. */
-export function FilterSelect({ label, value, options, onChange }) {
+/** A labelled <select> filter bound to one URL key (inside FiltersButton). `all` names the empty choice. */
+export function FilterSelect({ label, value, options, onChange, all = 'All' }) {
   return (
-    <select className="input rpt-filter" value={value || ''} onChange={(e) => onChange(e.target.value)} aria-label={label}>
-      <option value="">{label}: all</option>
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <label className="flex flex-col gap-[5px] min-w-0">
+      <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">{label}</span>
+      <select className={selectCls()} value={value || ''} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+        <option value="">{all}</option>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
   );
 }
 
-/** Export ▾ (CSV downloads) + Print / PDF. */
+/** Export CSV ▾ (downloads) + Print. */
 export function ExportBar({ exports = [], print = true }) {
-  const [open, setOpen] = useState(false);
-  const wrap = useRef(null);
-  const btn = useRef(null);
-  useDismiss(open, setOpen, wrap, btn);
   if (!exports.length && !print) return null;
   return (
-    <div className="rpt-export">
-      {exports.length > 0 && (
-        <div className="rpt-menu" ref={wrap}>
-          <button ref={btn} type="button" className="btn btn-ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>Export CSV
-          </button>
-          {open && (
-            <div className="rpt-menu-list" role="menu" onClick={() => setOpen(false)}>
-              {exports.map((x) => <a key={x.href} role="menuitem" href={x.href} download>{x.label}</a>)}
+    <div className="inline-flex items-center gap-2 rpt-noprint">
+      {exports.length === 1 && (
+        <Button href={exports[0].href} variant="secondary" size="sm" icon="download" download>Export CSV</Button>
+      )}
+      {exports.length > 1 && (
+        <Popover
+          align="right"
+          width={240}
+          trigger={({ open, toggle }) => (
+            <Button variant="secondary" size="sm" icon="download" iconRight="chevDown" onClick={toggle} aria-expanded={open} aria-haspopup="menu">Export CSV</Button>
+          )}
+        >
+          {({ close }) => (
+            <div role="menu">
+              {exports.map((x) => (
+                <a key={x.href} role="menuitem" href={x.href} download onClick={close} className="flex items-center min-h-9 px-2.5 rounded-lg text-[13.5px] text-mq-ink hover:bg-mq-canvas">{x.label}</a>
+              ))}
             </div>
           )}
-        </div>
+        </Popover>
       )}
-      {print && (
-        <button type="button" className="btn btn-ghost" onClick={() => window.print()}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" /></svg>Print / PDF
-        </button>
-      )}
+      {print && <Button variant="secondary" size="sm" icon="print" onClick={() => window.print()}>Print</Button>}
     </div>
   );
 }
 
 export function Toolbar({ children, exports, print = true }) {
   return (
-    <div className="toolbar rpt-toolbar rpt-noprint">
+    <div className="flex items-center gap-2.5 flex-wrap rpt-noprint">
       {children}
-      <div className="grow" />
+      <span className="flex-1" />
       <ExportBar exports={exports} print={print} />
     </div>
   );
@@ -316,7 +378,7 @@ export const FILTER_LABELS = {
   channel: { dine_in: 'Dine-in', delivery: 'Delivery', online: 'Online' },
   movement: { purchase: 'Purchase', usage: 'Usage', waste: 'Waste', adjustment: 'Adjustment' },
   role: { cashier: 'Cashiers', waiter: 'Waiters', manager: 'Managers', admin: 'Admins' },
-  status: { voided: 'Voided', completed: 'Completed' },
+  status: { voided: 'Voided', completed: 'Completed', all: 'All' },
 };
 export const labelOf = (kind, v) => (v ? FILTER_LABELS[kind]?.[v] ?? null : null);
 
@@ -331,10 +393,10 @@ export function PrintHead({ title, range, preset, filters }) {
   const name = preset && preset !== 'custom' ? PRESETS.find(([k]) => k === preset)?.[1] : null;
   const dates = range.from === range.to ? range.from : `${range.from} → ${range.to}`;
   return (
-    <div className="rpt-printhead">
-      <div className="h-2">{title}</div>
-      <div className="sub">{name ? `${name} · ` : ''}{dates}</div>
-      <div className="sub">{bits.length ? `Filters — ${bits.join(' · ')}` : 'No filters applied'}</div>
+    <div className="hidden print:block mb-3">
+      <div className="text-xl font-semibold">{title}</div>
+      <div className="text-sm text-mq-muted">{name ? `${name} · ` : ''}{dates}</div>
+      <div className="text-sm text-mq-muted">{bits.length ? `Filters — ${bits.join(' · ')}` : 'No filters applied'}</div>
     </div>
   );
 }
@@ -345,101 +407,67 @@ export function ReportPrintCss() {
     <style jsx global>{`
       @media print {
         @page { size: A4; margin: 12mm; }
-        .jz .side, .jz .topbar, .jz .scrim, .rpt-noprint, .rpt-toolbar, .rpt-tabs { display: none !important; }
-        .jz .app, .jz .main, .jz .page { display: block !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
-        .jz .rpt-printhead { display: block !important; margin-bottom: 12px; }
-        .jz .table-scroll { max-height: none !important; overflow: visible !important; }
-        .jz .card, .jz .kpi { break-inside: avoid; box-shadow: none !important; }
-        .jz .reveal { animation: none !important; opacity: 1 !important; transform: none !important; }
+        [data-admin-chrome], .rpt-noprint { display: none !important; }
+        [data-admin-main] { display: block !important; margin: 0 !important; padding: 0 !important; height: auto !important; overflow: visible !important; }
+        [data-admin-main] * { box-shadow: none !important; }
+        [data-admin-main] [style*='max-height'] { max-height: none !important; overflow: visible !important; }
+        [data-admin-main] section { break-inside: avoid; }
       }
     `}</style>
   );
 }
 
-export function Kpi({ label, value, foot, tone = 'ink' }) {
-  return (
-    <div className="kpi">
-      <div className="kpi-top"><span className={`kpi-dot ${tone}`} /><span className="kpi-k">{label}</span></div>
-      <div className="kpi-v is-text">{value}</div>
-      {foot != null && <div className="kpi-foot"><span>{foot}</span></div>}
-    </div>
-  );
+/** Report KPI tile (label, value, foot) on the design-system tile. */
+export function Kpi({ label, value, foot, tone, href }) {
+  const dot = { ink: null, green: 'bg-mq-ok', gold: 'bg-mq-warn', rose: 'bg-mq-danger', sky: 'bg-mq-info', primary: 'bg-mq-primary' }[tone] ?? null;
+  return <UiKpi label={label} value={value} foot={foot} tone={dot} href={href} />;
 }
 
+/** Report card: title strip when `flush` (tables), plain padded title otherwise (charts). */
 export function Card({ eyebrow, title, action, children, flush, id }) {
+  if (flush) {
+    return (
+      <UiCard id={id} className="overflow-hidden">
+        <CardHeader title={title} sub={eyebrow} actions={action} />
+        {children}
+      </UiCard>
+    );
+  }
   return (
-    <div id={id} className={`card${flush ? '' : ' card-pad'} rpt-card`}>
-      <div className={flush ? 'card-h' : 'pad-h'}>
-        <div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<div className={flush ? 'ttl' : 'h-2'}>{title}</div></div>
-        {action}
-      </div>
+    <UiCard id={id} pad className="flex flex-col gap-3.5">
+      <CardTitle title={title} sub={eyebrow} actions={action} />
       {children}
-    </div>
+    </UiCard>
   );
 }
 
-/**
- * One series as thin columns (4px rounded tops on a shared baseline, 2px
- * gaps), recessive axis, hover/focus tooltip per column. The same numbers are
- * always available as a table next to it (the "table view"). By day unless
- * `keyOf`/`tick`/`name` say otherwise (e.g. HourBars).
- */
+/** One series by day (or hour via HourBars), on the shared Columns chart. */
 export function DayBars({
   rows, value = (r) => r.total, fmt = money, label = 'Sales',
   keyOf = (r) => r.day, tick = (r) => r.day.slice(5), name = (r) => r.day, unit = 'day',
 }) {
-  const [hover, setHover] = useState(null);
-  if (!rows?.length) return <div className="sub">No data in range.</div>;
-  const W = 720;
-  const H = 180;
-  const max = Math.max(...rows.map(value), 0) || 1;
-  const step = W / rows.length;
-  const bw = Math.max(2, Math.min(28, step - 2));
-  const every = Math.ceil(rows.length / 8);
-  const h = hover != null ? rows[hover] : null;
-  return (
-    <div className="daybars">
-      <div className="daybars-tip" aria-live="polite">
-        {h ? <><b>{fmt(value(h))}</b> {label.toLowerCase()} · {name(h)}{h.orders != null ? ` · ${h.orders} orders` : ''}</> : <span className="sub">Hover {/^[aeiou]|^hour/.test(unit) ? 'an' : 'a'} {unit} for its total</span>}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H + 22}`} role="img" aria-label={`${label} by ${unit}`} preserveAspectRatio="none">
-        <line x1="0" x2={W} y1={H} y2={H} className="daybars-axis" />
-        {rows.map((r, i) => {
-          const v = value(r);
-          const bh = v > 0 ? Math.max(2, (v / max) * (H - 8)) : 0;
-          const x = i * step + (step - bw) / 2;
-          return (
-            <g key={keyOf(r)} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)} tabIndex={0}>
-              <rect x={i * step} y="0" width={step} height={H} fill="transparent" />
-              {bh > 0 && (bw >= 8 && bh > 4
-                ? <path className={`daybars-bar${hover === i ? ' on' : ''}`} d={`M${x},${H} v${-(bh - 4)} q0,-4 4,-4 h${bw - 8} q4,0 4,4 v${bh - 4} z`} />
-                : <rect className={`daybars-bar${hover === i ? ' on' : ''}`} x={x} y={H - bh} width={bw} height={bh} />)}
-              {i % every === 0 && <text x={i * step + step / 2} y={H + 16} textAnchor="middle" className="daybars-lbl">{tick(r)}</text>}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
+  if (!rows?.length) return <Empty>No data in range.</Empty>;
+  const data = rows.map((r) => ({ key: keyOf(r), tick: tick(r), name: name(r), value: value(r), sub: r.orders != null ? `${r.orders} orders` : undefined }));
+  return <Columns rows={data} fmt={fmt} label={label} unit={unit} height={200} />;
 }
 
 const hh = (h) => `${String(h).padStart(2, '0')}:00`;
 
 /** Sales by hour of day: every hour from the first to the last busy one (no gaps). */
 export function HourBars({ rows }) {
-  if (!rows?.length) return <div className="sub">No sales in this range.</div>;
+  if (!rows?.length) return <Empty>No sales in this range.</Empty>;
   const byHour = new Map(rows.map((r) => [r.hour, r]));
   const first = Math.min(...rows.map((r) => r.hour));
   const last = Math.max(...rows.map((r) => r.hour));
   const filled = [];
   for (let h = first; h <= last; h++) filled.push(byHour.get(h) || { hour: h, orders: 0, total: 0 });
-  return <DayBars rows={filled} keyOf={(r) => r.hour} tick={(r) => hh(r.hour)} name={(r) => `${hh(r.hour)}–${hh(r.hour + 1)}`} unit="hour" />;
+  return <DayBars rows={filled} keyOf={(r) => r.hour} tick={(r) => hh(r.hour).slice(0, 2)} name={(r) => `${hh(r.hour)}–${hh(r.hour + 1)}`} unit="hour" />;
 }
 
 export function Empty({ children = 'Nothing in this range.' }) {
-  return <div className="td-empty" style={{ padding: 18 }}>{children}</div>;
+  return <EmptyState icon="reports">{children}</EmptyState>;
 }
 
 export function ErrorNote({ error }) {
-  return <div className="adm-error-banner" style={{ marginBottom: 16 }}>{error?.message || 'Couldn’t load this report.'}</div>;
+  return <Alert tone="danger" title="Couldn’t load this report">{error?.message || 'Check the connection and try again.'}</Alert>;
 }

@@ -9,78 +9,141 @@ import Field from '@/components/admin/Field';
 import { useFormValidation } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
 import { slugify, tagSchema } from '@/lib/schemas/menu';
+import {
+  Card, CardHeader, Button, Icon, ChoiceChip, Modal, ModalSpacer, Alert, EmptyState, ErrorState, RowSkeletons, inputCls, cx,
+} from '@/components/admin/ui';
 
-const VARIANTS = [{ value: 'default', label: 'Blue', dot: 'var(--primary)' }, { value: 'green', label: 'Green', dot: 'var(--primary-2)' }, { value: 'spicy', label: 'Spicy', dot: 'var(--rose)' }];
-const variantDot = (v) => (VARIANTS.find((x) => x.value === v) || VARIANTS[0]).dot;
-const plus = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>;
+// Tag.variant → the public menu's three tag styles. (The design's Grey has no
+// public-menu style, so it is not offered.)
+const COLOURS = [
+  { value: 'default', label: 'Maroon', dot: 'bg-mq-primary' },
+  { value: 'green', label: 'Green', dot: 'bg-mq-ok' },
+  { value: 'spicy', label: 'Red', dot: 'bg-mq-danger' },
+];
+const dotOf = (v) => (COLOURS.find((c) => c.value === v) || COLOURS[0]).dot;
 
 /**
- * Menu tags (dietary flags, badges) shown on dishes — part of the menu, so it
- * lives beside Categories. Everyone who opens the page sees them; only a
- * manager can add, edit or delete (the API enforces the same rule).
+ * Categories › Tags: labels shown on dishes (dietary flags, badges). Everyone
+ * who may view tags sees them; only `tags: act` adds, edits or deletes (the API
+ * enforces the same rule). The page's "New tag" button opens the modal through
+ * `setModal({})`.
  */
-export default function TagsCard({ canEdit }) {
-  const qc = useQueryClient();
-  const { confirm, dialog } = useConfirm();
-  const { data: tags = [] } = useQuery({ queryKey: ['tags'], queryFn: () => fetchJson('/api/tags') });
-  const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({ label: '', slug: '', variant: 'default' });
-
-  const [banner, setBanner] = useState('');
-  const v = useFormValidation(tagSchema, { label: form.label, slug: form.slug });
-
-  const save = useMutation({
-    mutationFn: (p) => fetchJson(p.id ? `/api/tags/${p.id}` : '/api/tags', { method: p.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: p.slug || slugify(p.label), label: p.label, variant: p.variant }) }),
-    onSuccess: () => { notify.success(modal?.id ? 'Tag updated' : 'Tag added', { title: 'Could not save the tag' }); qc.invalidateQueries({ queryKey: ['tags'] }); setModal(null); },
-    onError: (e) => reportSaveError(e, { form: v, setBanner, title: 'Could not save the tag', guess: { slug: /slug|already/i } }),
-  });
-  const del = useMutation({ mutationFn: (id) => fetchJson(`/api/tags/${id}`, { method: 'DELETE' }), onSuccess: () => { notify.success('Tag removed'); qc.invalidateQueries({ queryKey: ['tags'] }); }, onError: (e) => notify.error(e, { title: 'Could not delete the tag' }) });
-  const open = (t) => { v.reset(); setBanner(''); setForm({ label: t?.label || '', slug: t?.slug || '', variant: t?.variant || 'default' }); setModal(t || {}); };
-  const remove = async (t) => { if (await confirm({ title: 'Delete tag?', body: 'It will be removed from every item that uses it.', confirmLabel: 'Delete tag' })) del.mutate(t.id); };
+export default function TagsCard({ canEdit, modal, setModal }) {
+  const { data: tags = [], isLoading, error, refetch } = useQuery({ queryKey: ['tags'], queryFn: () => fetchJson('/api/tags') });
 
   return (
-    <section className="card set-sec" style={{ marginTop: 16 }}>
-      {dialog}
-      <div className="set-head">
-        <span className="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><path d="M7 7h.01" /></svg></span>
-        <div style={{ flex: 1 }}><h3>Tags</h3><p className="sub">Labels shown on menu items — dietary flags and badges. Pick them on each item.</p></div>
-        {canEdit && <button className="btn btn-ghost btn-sm" onClick={() => open(null)}>{plus}Add tag</button>}
-      </div>
-      <div className="set-body">
-        {tags.length === 0 ? <p className="sub">No tags yet{canEdit ? ' — add your first.' : '.'}</p> : (
-          <div className="tag-grid">
-            {tags.map((t) => (
-              <div className="tg" key={t.id}>
-                <span className="dot" style={{ background: variantDot(t.variant) }} />
-                <div style={{ minWidth: 0 }}><div className="nm">{t.label}</div><div className="ct">{t.slug}</div></div>
-                {canEdit && (
-                  <>
-                    <button className="ed" onClick={() => open(t)} aria-label={`Edit ${t.label}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg></button>
-                    <button className="ed danger" onClick={() => remove(t)} aria-label={`Delete ${t.label}`} disabled={del.isPending}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg></button>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {modal && (
-        <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
-          <div className="modal">
-            <div className="modal-h"><div className="mt"><div className="h-1">{modal.id ? 'Edit tag' : 'Add tag'}</div></div><button className="icon-btn" onClick={() => setModal(null)} aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg></button></div>
-            <form noValidate onSubmit={(e) => { e.preventDefault(); setBanner(''); v.setServerErrors({}); if (!v.check()) return; save.mutate({ id: modal.id, ...form, label: form.label.trim(), slug: form.slug.trim() }); }}>
-              <div className="modal-b">
-                <Field label="Label" required {...v.fieldProps('label')}><input className="input" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Bestseller" /></Field>
-                <Field label="Slug" hint="Optional. Lowercase letters, numbers and hyphens; made from the label when left blank." {...v.fieldProps('slug')}><input className="input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder={form.label ? slugify(form.label) : 'auto'} /></Field>
-                <div className="ff"><label htmlFor="tag-variant">Colour</label><select id="tag-variant" className="input" value={form.variant} onChange={(e) => setForm({ ...form, variant: e.target.value })}>{VARIANTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
-                {banner && <div className="adm-error-banner">{banner}</div>}
-              </div>
-              <div className="modal-f"><button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={save.isPending || !v.valid}>{save.isPending ? 'Saving…' : 'Save'}</button></div>
-            </form>
-          </div>
+    <Card className="overflow-hidden">
+      <CardHeader title="Tags on dishes" count={isLoading ? null : tags.length} sub="Pick them on each dish in Menu items" />
+      {error && <div className="p-4"><ErrorState error={error} onRetry={refetch} title="Couldn’t load the tags" /></div>}
+      {isLoading ? <RowSkeletons rows={3} /> : tags.length === 0 && !error ? (
+        <EmptyState
+          icon="menu"
+          title="No tags yet"
+          action={canEdit ? <Button variant="soft" size="sm" icon="plus" onClick={() => setModal({})}>New tag</Button> : null}
+        >
+          Tags like Vegetarian or Spicy show on the dish in the customer menu.
+        </EmptyState>
+      ) : (
+        <div className="p-4 grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(210px, 100%), 1fr))' }}>
+          {tags.map((t) => {
+            const n = t.itemCount ?? t._count?.items;
+            const body = (
+              <>
+                <span className={cx('w-2.5 h-2.5 rounded-full flex-none', dotOf(t.variant))} aria-hidden="true" />
+                <span className="flex flex-col gap-px min-w-0 flex-1">
+                  <span className="text-sm font-semibold text-mq-ink truncate">{t.label}</span>
+                  <span className="font-mq-mono text-[11.5px] text-mq-muted tabular-nums">{n == null ? t.slug : `${n} ${n === 1 ? 'dish' : 'dishes'}`}</span>
+                </span>
+                {canEdit && <span className="text-mq-muted"><Icon name="pen" size={15} stroke={1.9} /></span>}
+              </>
+            );
+            const cls = 'flex items-center gap-3 w-full min-h-[56px] text-left bg-mq-cream border border-mq-line rounded-[10px] px-[15px] py-[13px]';
+            return canEdit
+              ? <button key={t.id} type="button" onClick={() => setModal(t)} aria-label={`Edit ${t.label}`} className={cx(cls, 'transition-colors hover:border-mq-line-2 hover:bg-white focus-visible:outline-none focus-visible:shadow-mq-focus')}>{body}</button>
+              : <div key={t.id} className={cls}>{body}</div>;
+          })}
         </div>
       )}
-    </section>
+      {modal && canEdit && <TagModal key={modal.id ?? 'new'} tag={modal.id ? modal : null} onClose={() => setModal(null)} />}
+    </Card>
+  );
+}
+
+function TagModal({ tag, onClose }) {
+  const qc = useQueryClient();
+  const { confirm, dialog } = useConfirm();
+  const [form, setForm] = useState({ label: tag?.label || '', slug: tag?.slug || '', variant: tag?.variant || 'default' });
+  const [banner, setBanner] = useState('');
+  const v = useFormValidation(tagSchema, { label: form.label, slug: form.slug });
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: ['menu-items'] }); };
+
+  const save = useMutation({
+    mutationFn: (p) => fetchJson(tag ? `/api/tags/${tag.id}` : '/api/tags', {
+      method: tag ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug: p.slug || slugify(p.label), label: p.label, variant: p.variant }),
+    }),
+    onSuccess: () => { notify.success(tag ? 'Tag updated' : 'Tag added', { title: 'Could not save the tag' }); refresh(); onClose(); },
+    onError: (e) => reportSaveError(e, { form: v, setBanner, title: 'Could not save the tag', guess: { slug: /slug|already/i } }),
+  });
+  const del = useMutation({
+    mutationFn: (id) => fetchJson(`/api/tags/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { notify.success('Tag deleted'); refresh(); onClose(); },
+    onError: (e) => notify.error(e, { title: 'Could not delete the tag' }),
+  });
+
+  const remove = async () => {
+    const n = tag.itemCount ?? 0;
+    const ok = await confirm({
+      title: `Delete the ${tag.label} tag?`,
+      body: n ? `It comes off ${n} ${n === 1 ? 'dish' : 'dishes'}. The dishes stay on the menu.` : 'No dish uses it.',
+      confirmLabel: 'Delete tag',
+    });
+    if (ok) del.mutate(tag.id);
+  };
+  const submit = (e) => {
+    e.preventDefault();
+    setBanner(''); v.setServerErrors({});
+    if (!v.check()) return;
+    save.mutate({ ...form, label: form.label.trim(), slug: form.slug.trim() });
+  };
+  const busy = save.isPending || del.isPending;
+
+  return (
+    <Modal
+      eyebrow={tag ? 'Edit tag' : 'New tag'}
+      title={tag ? tag.label : 'Add a dish tag'}
+      onClose={onClose}
+      busy={busy}
+      footer={(
+        <>
+          {tag && <Button variant="danger-soft" size="lg" onClick={remove} disabled={busy}>Delete</Button>}
+          <ModalSpacer />
+          <Button size="lg" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button variant="primary" size="lg" type="submit" form="tag-form" disabled={busy || !v.valid}>{save.isPending ? 'Saving…' : tag ? 'Save changes' : 'Add tag'}</Button>
+        </>
+      )}
+    >
+      {dialog}
+      <form id="tag-form" noValidate onSubmit={submit} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+        <Field label="Label" required {...v.fieldProps('label')}>
+          <input className={inputCls({ size: 'lg' })} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Bestseller" />
+        </Field>
+        <Field label="Slug" hint="Optional. Made from the label when blank." {...v.fieldProps('slug')}>
+          <input className={inputCls({ size: 'lg', mono: true })} value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} placeholder={form.label ? slugify(form.label) : 'auto'} />
+        </Field>
+        <div className="sm:col-span-2 flex flex-col gap-[7px]" role="group" aria-label="Colour">
+          <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">Colour</span>
+          <div className="flex flex-wrap gap-2">
+            {COLOURS.map((c) => (
+              <ChoiceChip key={c.value} active={form.variant === c.value} onClick={() => setForm({ ...form, variant: c.value })}>
+                <span className={cx('w-2.5 h-2.5 rounded-full', form.variant === c.value ? 'bg-white' : c.dot)} aria-hidden="true" />
+                {c.label}
+              </ChoiceChip>
+            ))}
+          </div>
+        </div>
+        {banner && <Alert tone="danger" className="sm:col-span-2">{banner}</Alert>}
+      </form>
+    </Modal>
   );
 }

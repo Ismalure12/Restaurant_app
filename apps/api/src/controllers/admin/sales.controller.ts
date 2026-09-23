@@ -16,17 +16,21 @@ import type { DayRange } from '../../lib/time/businessTime.js';
 //     q      — order ID (KFG-260919-0042 / 42), receipt # (0007), customer or
 //              contact name/phone, table
 //     status — completed (default: counts as a sale) | voided (closed, then
-//              voided or declined)
+//              voided or declined) | all (both)
 //   JSON: cursor-paginated rows (?cursor=<id>&limit=50, max 200).
-//   Managers also get `summary` {count, total} on the first page
-//   (?summary=0 skips it) and ?format=csv (every matching row).
+//   Managers also get `summary` on the first page (?summary=0 skips it):
+//     {count, total} of the rows listed, plus — for the same range, filters
+//     and search whatever the status — sales {count,total} (completed),
+//     onAccount {count,total} (completed On account), voided {count,total},
+//     itemsSold (units) and dishes (distinct dish names) across the completed
+//     sales (OrderItem rows, one groupBy). And ?format=csv (every matching row).
 // Everyone on the Register: a cashier finds and reprints any sale; a waiter
 // sees only the sales they served or rang up (forced here, never a filter the
 // browser could drop); money totals and exports stay manager-only.
 // Items sold for the same view: GET /api/admin/sales/items.
 const querySchema = z.object({
   q: z.string().trim().max(80, 'Search is too long').optional(),
-  status: z.enum(['completed', 'voided'], { error: 'status must be completed or voided' }).optional(),
+  status: z.enum(['completed', 'voided', 'all'], { error: 'status must be completed, voided or all' }).optional(),
 });
 
 const ci = (q: string) => ({ contains: q, mode: 'insensitive' as const });
@@ -50,7 +54,13 @@ export function voidedWhere(range: DayRange): Prisma.OrderWhereInput {
 }
 
 type HistoryQuery =
-  | { ok: true; where: Prisma.OrderWhereInput; range: DayRange }
+  | {
+    ok: true;
+    where: Prisma.OrderWhereInput;
+    range: DayRange;
+    /** The same view split by status (for the manager summary): completed sales, and voided ones. */
+    parts: { sales: Prisma.OrderWhereInput; voided: Prisma.OrderWhereInput };
+  }
   | { ok: false; error: string };
 
 /**
@@ -71,17 +81,41 @@ export function historyQuery(req: Request, session: AdminSession): HistoryQuery 
     ? [{ OR: [{ waiterId: session.userId }, { staffId: session.userId }] }]
     : [];
   // AND keeps each part's own OR (sale = paid OR on account; search = any field).
+  const rest = [filtersWhere(filters.value), ...own, ...(q ? [searchWhere(q)] : [])];
+  const sale = salesWhere(range.value);
+  const voided = voidedWhere(range.value);
+  const statusWhere = status === 'voided' ? voided : status === 'all' ? { OR: [sale, voided] } : sale;
   return {
     ok: true,
     range: range.value,
-    where: {
-      AND: [
-        status === 'voided' ? voidedWhere(range.value) : salesWhere(range.value),
-        filtersWhere(filters.value),
-        ...own,
-        ...(q ? [searchWhere(q)] : []),
-      ],
-    },
+    where: { AND: [statusWhere, ...rest] },
+    parts: { sales: { AND: [sale, ...rest] }, voided: { AND: [voided, ...rest] } },
+  };
+}
+
+// Distinct dishes in one view are bounded by the menu; the cap only guards a runaway.
+const DISH_CAP = 2000;
+const sumOf = (a: { _sum: { total: unknown }; _count: { _all: number } }) => ({ count: a._count._all, total: round2(num(a._sum.total)) });
+
+/** Manager summary for one Sales history view — aggregates only, never rows. */
+async function historySummary(where: Prisma.OrderWhereInput, parts: { sales: Prisma.OrderWhereInput; voided: Prisma.OrderWhereInput }) {
+  const agg = (w: Prisma.OrderWhereInput) => prisma.order.aggregate({ where: w, _sum: { total: true }, _count: { _all: true } });
+  const [listed, sales, onAccount, voided, dishes] = await Promise.all([
+    agg(where),
+    agg(parts.sales),
+    agg({ AND: [parts.sales, { paymentMethod: 'invoice' }] }),
+    agg(parts.voided),
+    prisma.orderItem.groupBy({
+      by: ['name'], where: { order: parts.sales }, _sum: { quantity: true }, orderBy: { name: 'asc' }, take: DISH_CAP,
+    }),
+  ]);
+  return {
+    ...sumOf(listed),
+    sales: sumOf(sales),
+    onAccount: sumOf(onAccount),
+    voided: sumOf(voided),
+    itemsSold: dishes.reduce((n, d) => n + num(d._sum?.quantity), 0),
+    dishes: dishes.length,
   };
 }
 
@@ -108,19 +142,19 @@ export async function listSales(req: Request, res: Response) {
       return sendCsv(res, `sales_${range.fromKey}_${range.toKey}.csv`, LEDGER_CSV_HEADER, rows.map(ledgerCsvRow));
     }
     const wantSummary = isManager && !hasCursor && sp.get('summary') !== '0';
-    const [page, totals] = await Promise.all([
+    const [page, summary] = await Promise.all([
       prisma.order.findMany({
         where, select: LEDGER_SELECT, orderBy: LEDGER_ORDER, take: limit + 1,
         ...(hasCursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       }),
-      wantSummary ? prisma.order.aggregate({ where, _sum: { total: true }, _count: { _all: true } }) : null,
+      wantSummary ? historySummary(where, hq.parts) : null,
     ]);
     const hasMore = page.length > limit;
     const rows = (hasMore ? page.slice(0, limit) : page).map((o) => ledgerRow(o, prefix));
     return res.json({
       rows,
       nextCursor: hasMore ? rows[rows.length - 1].id : null,
-      ...(totals ? { summary: { count: totals._count._all, total: round2(num(totals._sum.total)) } } : {}),
+      ...(summary ? { summary } : {}),
     });
   } catch (err) {
     console.error('GET /api/admin/sales:', err);

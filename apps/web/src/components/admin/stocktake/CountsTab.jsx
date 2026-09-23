@@ -3,13 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchJson, parseApiError } from '@/lib/apiError';
+import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import { handleSaveError } from '@/components/admin/suppliers/saveError';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
-import Modal from '@/components/admin/Modal';
 import useConfirm from '@/hooks/useConfirm';
 import { money } from '@/lib/money';
+import {
+  Toolbar, Card, CardHeader, Button, Chip, Table, Th, Td, Tr, Modal, ModalSpacer, Alert, EmptyState, ErrorState,
+  RowSkeletons, SearchInput, ProgressBar, Overline, Icon, inputCls, cx,
+} from '@/components/admin/ui';
 
 const JSON_H = { 'Content-Type': 'application/json' };
 
@@ -19,7 +21,6 @@ const qty = (n) => String(qty3(Number(n)));
 const signedQty = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + qty(Math.abs(n));
 const dateOf = (d) => new Date(d).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 const round2 = (n) => Math.round(n * 100) / 100;
-const CheckIc = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="m9 14 2 2 4-4" /></svg>;
 
 // The queries a posted count changes: stock on hand, the movement ledgers, statements.
 const AFTER_POST = ['inventory', 'stock-counts', 'stock-count', 'statement', 'statement-months', 'inv-movements'];
@@ -41,34 +42,33 @@ export default function CountsTab() {
   const draft = rows.find((r) => r.status === 'draft');
   return (
     <>
-      <div className="toolbar">
-        <div className="note stm-note">A stock count means counting what is really on the shelf. The differences fix the stock figures and give the month its closing stock value.</div>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-primary" onClick={() => (draft ? setOpenId(draft.id) : start.mutate())} disabled={start.isPending}>
+      <Toolbar>
+        <p className="m-0 flex-[1_1_320px] text-[12.5px] text-mq-muted leading-normal">A stock count means counting what is really on the shelf. The differences fix the stock figures and give the month its closing stock value.</p>
+        <Button variant="primary" icon={draft ? undefined : 'plus'} onClick={() => (draft ? setOpenId(draft.id) : start.mutate())} disabled={start.isPending}>
           {draft ? 'Continue count' : start.isPending ? 'Starting…' : 'Start count'}
-        </button>
-      </div>
-      <div className="card reveal" style={{ overflow: 'hidden' }}>
-        <div className="card-h"><div><div className="ttl">Stock counts</div><div className="note">{rows.length} on record</div></div></div>
-        {list.isLoading ? <RowsSkeleton rows={3} className="card-pad" /> : list.isError ? (
-          <div className="card-pad"><div className="adm-error-banner">{parseApiError(list.error)}</div></div>
+        </Button>
+      </Toolbar>
+      <Card className="overflow-hidden">
+        <CardHeader title="Stock counts" count={list.isLoading ? null : rows.length} />
+        {list.isLoading ? <RowSkeletons rows={3} /> : list.isError ? (
+          <div className="p-4"><ErrorState error={list.error} onRetry={list.refetch} /></div>
         ) : rows.length === 0 ? (
-          <div className="empty"><div className="empty-ring">{CheckIc}</div><p className="empty-title">No counts yet</p><p className="empty-sub">Start a count at the end of the month, after the shelves are counted.</p></div>
+          <EmptyState icon="orders" title="No counts yet">Start a count at the end of the month, after the shelves are counted.</EmptyState>
         ) : (
-          <div className="table-wrap"><table className="table" style={{ marginTop: 12 }}>
-            <thead><tr><th>Count date</th><th>Status</th><th className="num">Items</th><th className="num">Stock value</th><th /></tr></thead>
+          <Table label="Stock counts" minW={520}>
+            <thead><tr><Th>Count date</Th><Th>Status</Th><Th align="right">Items</Th><Th align="right">Stock value</Th><Th><span className="sr-only">Open</span></Th></tr></thead>
             <tbody>{rows.map((r) => (
-              <tr key={r.id}>
-                <td className="strong">{dateOf(r.countedOn)}</td>
-                <td>{r.status === 'draft' ? <span className="pill pill-amber"><span className="pdot" />In progress</span> : <span className="pill pill-green"><span className="pdot" />Posted</span>}</td>
-                <td className="num">{r.items}</td>
-                <td className="num">{r.status === 'draft' ? '—' : money(r.totalValue)}</td>
-                <td className="act"><button className="btn btn-ghost btn-sm" onClick={() => setOpenId(r.id)}>{r.status === 'draft' ? 'Continue' : 'View'}</button></td>
-              </tr>
+              <Tr key={r.id} onClick={() => setOpenId(r.id)} tone={r.status === 'draft' ? 'warn' : undefined}>
+                <Td strong className="whitespace-nowrap">{dateOf(r.countedOn)}</Td>
+                <Td>{r.status === 'draft' ? <Chip small tone="warn">In progress</Chip> : <Chip small tone="ok">Posted</Chip>}</Td>
+                <Td align="right" className="font-mq-mono tabular-nums">{r.items}</Td>
+                <Td money>{r.status === 'draft' ? '—' : money(r.totalValue)}</Td>
+                <Td align="right"><span className="text-[12.5px] font-semibold text-mq-cta">{r.status === 'draft' ? 'Continue' : 'View'}</span></Td>
+              </Tr>
             ))}</tbody>
-          </table></div>
+          </Table>
         )}
-      </div>
+      </Card>
     </>
   );
 }
@@ -91,9 +91,9 @@ function CountSheet({ id, onBack }) {
   return (
     <>
       {dialog}
-      <div className="toolbar"><button className="btn btn-ghost" onClick={back}>← All counts</button></div>
-      {isLoading ? <div className="card card-pad"><RowsSkeleton rows={6} /></div>
-        : isError ? <div className="adm-error-banner">{parseApiError(error)}</div>
+      <Toolbar><Button variant="ghost" icon="back" onClick={back}>All counts</Button></Toolbar>
+      {isLoading ? <Card><RowSkeletons rows={6} /></Card>
+        : isError ? <ErrorState error={error} />
           : <Sheet key={data.id} detail={data} dirty={dirty} setDirty={setDirty} onBack={onBack} />}
     </>
   );
@@ -133,20 +133,31 @@ function CountRow({ l, onChange, onReset }) {
   const tone = l.bad || l.blank ? 'bad' : !l.touched ? 'same' : l.diff > 0 ? 'up' : l.diff < 0 ? 'down' : 'same';
   // Only what the person types is clamped; a negative system figure shows as it is.
   const type = (v) => onChange(v.trim() !== '' && Number(v) < 0 ? '0' : v);
+  const stepBtn = 'grid place-items-center w-11 h-11 flex-none rounded-lg border border-mq-line bg-white text-mq-body text-lg font-semibold hover:bg-mq-canvas disabled:opacity-40 disabled:cursor-not-allowed';
   return (
-    <div className={`g2-cnt-row tone-${tone}${l.touched ? ' r6f-touched' : ''}`}>
-      <div className="g2-cnt-name">
-        <span className="g2-cnt-n">{l.name}</span>
-        <span className="g2-cnt-sys">Current stock: {qty(l.systemQty)} {l.unit}</span>
+    <div className={cx(
+      'flex flex-col tab:flex-row tab:items-center gap-2.5 tab:gap-4 px-4 py-3 border-b border-mq-chip last:border-b-0',
+      tone === 'bad' && 'bg-mq-danger-bg', tone === 'up' && 'shadow-[inset_3px_0_0_#0E7C5A]', tone === 'down' && 'shadow-[inset_3px_0_0_#B06A00]',
+    )}>
+      <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+        <span className="text-sm font-semibold text-mq-ink break-words">{l.name}</span>
+        <span className="text-xs text-mq-muted">Current stock: <span className="font-mq-mono tabular-nums">{qty(l.systemQty)}</span> {l.unit}</span>
       </div>
-      <div className="g2-cnt-ctl">
-        <button type="button" className="g2-step" onClick={() => bump(-1)} disabled={cur != null && cur <= 0} aria-label={`One less ${l.name}`}>−</button>
-        <input className={`input g2-cnt-in${l.bad || l.blank ? ' bad' : ''}`} type="number" inputMode="decimal" min="0" step={step} aria-label={`Counted ${l.name}`}
-          value={l.shown} onChange={(e) => type(e.target.value)} onFocus={(e) => e.target.select()} />
-        <button type="button" className="g2-step" onClick={() => bump(1)} aria-label={`One more ${l.name}`}>+</button>
-        <span className="g2-cnt-diff" aria-live="polite">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button type="button" className={stepBtn} onClick={() => bump(-1)} disabled={cur != null && cur <= 0} aria-label={`One less ${l.name}`}>−</button>
+        <input
+          className={inputCls({ mono: true, className: cx('!w-[104px] !h-11 text-center', (l.bad || l.blank) && '!border-mq-danger') })}
+          type="number" inputMode="decimal" min="0" step={step} aria-label={`Counted ${l.name}`} aria-invalid={l.bad || l.blank || undefined}
+          value={l.shown} onChange={(e) => type(e.target.value)} onFocus={(e) => e.target.select()}
+        />
+        <button type="button" className={stepBtn} onClick={() => bump(1)} aria-label={`One more ${l.name}`}>+</button>
+        <span
+          className={cx('text-[12.5px] min-w-[120px] flex items-center gap-2',
+            tone === 'bad' ? 'text-mq-danger-ink font-semibold' : tone === 'up' ? 'text-mq-ok-ink font-semibold' : tone === 'down' ? 'text-mq-warn-ink font-semibold' : 'text-mq-muted')}
+          aria-live="polite"
+        >
           {diffText(l)}
-          {l.touched && <button type="button" className="r6f-undo" onClick={onReset} aria-label={`Undo the change to ${l.name}`}>Undo</button>}
+          {l.touched && <button type="button" className="text-[12.5px] font-semibold text-mq-cta hover:text-mq-primary min-h-9 px-1" onClick={onReset} aria-label={`Undo the change to ${l.name}`}>Undo</button>}
         </span>
       </div>
     </div>
@@ -273,96 +284,116 @@ function Sheet({ detail, dirty, setDirty, onBack }) {
   return (
     <>
       {dialog}
-      <div className="card card-pad-lg stm-head reveal">
-        <div>
-          <div className="eyebrow">{draft ? 'Count in progress' : 'Posted count'}</div>
-          <div className="h-2">{dateOf(detail.countedOn)}</div>
-          {draft && <div className="note">{checked} checked · {changed} changed{badCount ? ` · ${badCount} need a number` : ''} <span className="muted">of {total} items</span></div>}
-          {!draft && <div className="note">Read only. The differences were posted as stock adjustments.</div>}
-          {draft && <div className="stm-bar" aria-hidden="true"><i style={{ width: `${total ? (checked / total) * 100 : 0}%` }} /></div>}
+      <Card pad className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col gap-1 flex-[1_1_260px] min-w-0">
+          <Overline>{draft ? 'Count in progress' : 'Posted count'}</Overline>
+          <div className="text-xl font-semibold tracking-[-.02em] text-mq-ink">{dateOf(detail.countedOn)}</div>
+          {draft && (
+            <div className="text-[12.5px] text-mq-muted">
+              <span className="font-mq-mono tabular-nums text-mq-ink">{checked}</span> checked · <span className="font-mq-mono tabular-nums text-mq-ink">{changed}</span> changed
+              {badCount ? <span className="text-mq-danger-ink"> · {badCount} need a number</span> : null} · of <span className="font-mq-mono tabular-nums">{total}</span> items
+            </div>
+          )}
+          {!draft && <div className="text-[12.5px] text-mq-muted">Read only. The differences were posted as stock adjustments.</div>}
+          {draft && <ProgressBar pct={total ? (checked / total) * 100 : 0} className="mt-1.5 max-w-[360px]" />}
         </div>
-        <div className="stm-tot"><div className="stm-k">{draft ? 'Stock value so far' : 'Closing stock value'}</div><div className="stm-big">{money(draft ? runningValue : detail.totalValue)}</div></div>
-      </div>
+        <div className="flex flex-col gap-1 text-right">
+          <span className="text-[12.5px] text-mq-muted">{draft ? 'Stock value so far' : 'Closing stock value'}</span>
+          <span className="font-mq-mono font-medium tracking-[-.03em] tabular-nums text-mq-ink" style={{ fontSize: 'clamp(20px,2vw,25px)' }}>{money(draft ? runningValue : detail.totalValue)}</span>
+        </div>
+      </Card>
 
-      <div className="toolbar">
-        <div className="search g2-cnt-search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items…" aria-label="Search items" />
-        </div>
-      </div>
+      <Toolbar>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search items…" aria-label="Search items" className="flex-[1_1_240px] max-w-[420px]" />
+      </Toolbar>
 
       {draft ? (
         <>
-          <div className="note g2-cnt-help">Each item shows the current stock. Change (− / + or type) only where the shelf is different; untouched items keep the current stock when you post.</div>
-          <div className="card reveal g2-cnt-card">
-            {stocked.length === 0 && zeros.length === 0 && <div className="empty"><p className="empty-title">No items match</p></div>}
+          <p className="m-0 text-[12.5px] text-mq-muted">Each item shows the current stock. Change (− / + or type) only where the shelf is different; untouched items keep the current stock when you post.</p>
+          <Card className="overflow-hidden">
+            {stocked.length === 0 && zeros.length === 0 && <EmptyState icon="search" title="No items match" />}
             {stocked.map(row)}
-          </div>
+          </Card>
           {zeroTotal > 0 && (!needle || zeros.length > 0) && (
-            <div className="card reveal g2-cnt-card g2-cnt-zero">
-              <button type="button" className="g2-cnt-zero-h" aria-expanded={zeroOpen} disabled={zeroForced} onClick={() => setShowZero((v) => !v)}>
+            <Card className="overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center justify-between gap-3 min-h-12 px-4 py-3 bg-mq-cream text-left text-sm font-semibold text-mq-ink disabled:cursor-default"
+                aria-expanded={zeroOpen} disabled={zeroForced} onClick={() => setShowZero((v) => !v)}
+              >
                 <span>Zero-stock items ({needle ? `${zeros.length} of ${zeroTotal}` : zeroTotal})</span>
-                <span className="muted">{zeroChanged ? `${zeroChanged} changed` : 'untouched = 0'} {zeroForced ? '' : zeroOpen ? '▴' : '▾'}</span>
+                <span className="flex items-center gap-2 text-[12.5px] font-medium text-mq-muted">
+                  {zeroChanged ? `${zeroChanged} changed` : 'untouched = 0'}
+                  {!zeroForced && <span className={cx('transition-transform', zeroOpen && 'rotate-180')}><Icon name="chevDown" size={15} /></span>}
+                </span>
               </button>
-              {zeroOpen && zeros.map(row)}
-            </div>
+              {zeroOpen && <div className="border-t border-mq-line">{zeros.map(row)}</div>}
+            </Card>
           )}
         </>
       ) : (
-        <div className="card reveal" style={{ overflow: 'hidden' }}>
-          <div className="table-wrap"><table className="table stm-count">
-            <thead><tr><th>Item</th><th className="num">System</th><th className="num">Counted</th><th className="num">Difference</th><th className="num">Unit cost</th><th className="num">Value</th></tr></thead>
+        <Card className="overflow-hidden">
+          <Table label="Counted items" minW={640}>
+            <thead><tr><Th>Item</Th><Th align="right">System</Th><Th align="right">Counted</Th><Th align="right">Difference</Th><Th align="right">Unit cost</Th><Th align="right">Value</Th></tr></thead>
             <tbody>{parsed.filter(matches).sort(byName).map((l) => (
-              <tr key={l.itemId}>
-                <td className="strong">{l.name} <span className="muted">· {l.unit}</span></td>
-                <td className="num">{qty(l.systemQty)}</td>
-                <td className="num">{l.countedQty == null ? '—' : qty(l.countedQty)}</td>
-                <td className="num" style={l.diff ? { color: l.diff < 0 ? 'var(--rose)' : 'var(--primary-ink)', fontWeight: 600 } : undefined}>{l.diff == null ? '—' : l.diff === 0 ? '0' : signedQty(l.diff)}</td>
-                <td className="num muted">{l.unitCost != null ? money(l.unitCost) : '—'}</td>
-                <td className="num">{l.val != null ? money(l.val) : '—'}</td>
-              </tr>
+              <Tr key={l.itemId}>
+                <Td strong>{l.name} <span className="font-normal text-mq-muted">· {l.unit}</span></Td>
+                <Td align="right" className="font-mq-mono tabular-nums">{qty(l.systemQty)}</Td>
+                <Td align="right" className="font-mq-mono tabular-nums">{l.countedQty == null ? '—' : qty(l.countedQty)}</Td>
+                <Td align="right" className={cx('font-mq-mono tabular-nums', l.diff ? (l.diff < 0 ? 'text-mq-danger-ink font-semibold' : 'text-mq-ok-ink font-semibold') : '')}>{l.diff == null ? '—' : l.diff === 0 ? '0' : signedQty(l.diff)}</Td>
+                <Td align="right" className="font-mq-mono tabular-nums text-mq-muted">{l.unitCost != null ? money(l.unitCost) : '—'}</Td>
+                <Td money>{l.val != null ? money(l.val) : '—'}</Td>
+              </Tr>
             ))}</tbody>
-          </table></div>
-        </div>
+          </Table>
+        </Card>
       )}
 
-      {error && !confirming && <div className="adm-error-banner" style={{ marginTop: 14 }}>{error}</div>}
+      {error && !confirming && <Alert tone="danger">{error}</Alert>}
 
       {draft && (
-        <div className="stm-foot r6f-cnt-foot">
-          <button className="btn btn-danger" onClick={askDiscard} disabled={busy}>Discard draft</button>
-          <div className="r6f-grow" />
-          <span className="note">{dirty ? 'Unsaved changes' : 'Saved'}</span>
-          <button className="btn btn-ghost" onClick={() => { setError(''); save.mutate(); }} disabled={busy || !!badCount || !dirty}>{save.isPending ? 'Saving…' : 'Save draft'}</button>
-          <button className="btn btn-primary" onClick={askPost} disabled={busy || !!badCount}>Post count</button>
+        <div className="sticky bottom-0 z-[2] flex items-center gap-2.5 flex-wrap bg-white border border-mq-line rounded-xl shadow-mq-md px-4 py-3">
+          <Button variant="danger-soft" size="lg" onClick={askDiscard} disabled={busy}>Discard draft</Button>
+          <span className="flex-1" />
+          <span className={cx('text-[12.5px]', dirty ? 'text-mq-warn-ink font-semibold' : 'text-mq-muted')}>{dirty ? 'Unsaved changes' : 'Saved'}</span>
+          <Button size="lg" onClick={() => { setError(''); save.mutate(); }} disabled={busy || !!badCount || !dirty}>{save.isPending ? 'Saving…' : 'Save draft'}</Button>
+          <Button variant="primary" size="lg" onClick={askPost} disabled={busy || !!badCount}>Post count</Button>
         </div>
       )}
 
       {confirming && (
-        <Modal eyebrow="Post count" title="Post this stock count?" onClose={() => setConfirming(false)} busy={post.isPending}>
-          <div className="modal-b">
-            <p className="stm-p">Posting will:</p>
-            <ul className="stm-list">
-              <li>{changed} line{changed === 1 ? '' : 's'} you changed become{changed === 1 ? 's a' : ''} stock adjustment{changed === 1 ? '' : 's'}; untouched lines keep the current stock.</li>
-              <li>Fix the closing stock value at about <b>{money(runningValue)}</b> for the month statements (worked out again from the stock at the moment of posting).</li>
-              <li>This cannot be edited afterwards.</li>
-            </ul>
-            {error && <div className="adm-error-banner">{error}</div>}
-          </div>
-          <div className="modal-f">
-            <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={post.isPending}>Cancel</button>
-            <button className="btn btn-primary" onClick={() => { setError(''); post.mutate(); }} disabled={post.isPending}>{post.isPending ? 'Posting…' : 'Post count'}</button>
-          </div>
+        <Modal
+          eyebrow="Post count" title="Post this stock count?" icon="alert" tone="warn"
+          onClose={() => setConfirming(false)} busy={post.isPending} width={500}
+          footer={(
+            <>
+              <ModalSpacer />
+              <Button size="lg" onClick={() => setConfirming(false)} disabled={post.isPending}>Cancel</Button>
+              <Button variant="primary" size="lg" onClick={() => { setError(''); post.mutate(); }} disabled={post.isPending}>{post.isPending ? 'Posting…' : 'Post count'}</Button>
+            </>
+          )}
+        >
+          <p className="m-0 text-sm text-mq-body">Posting will:</p>
+          <ul className="m-0 mt-2 pl-5 list-disc flex flex-col gap-1.5 text-sm text-mq-body leading-normal">
+            <li>{changed} line{changed === 1 ? '' : 's'} you changed become{changed === 1 ? 's a' : ''} stock adjustment{changed === 1 ? '' : 's'}; untouched lines keep the current stock.</li>
+            <li>Fix the closing stock value at about <b className="font-mq-mono">{money(runningValue)}</b> for the month statements (worked out again from the stock at the moment of posting).</li>
+            <li>This cannot be edited afterwards.</li>
+          </ul>
+          {error && <Alert tone="danger" className="mt-3">{error}</Alert>}
         </Modal>
       )}
 
       {result && (
-        <Modal eyebrow="Count posted" title="Stock count posted" onClose={onBack}>
-          <div className="modal-b">
-            <p className="stm-p">{postedAdj} adjustment{postedAdj === 1 ? '' : 's'} recorded across {postedItems} items. Closing stock value: <b>{money(result.totalValue ?? runningValue)}</b>.</p>
-            <p className="stm-p">The month statements now use this value. <Link className="cash-link" href="/admin/dashboard/reports/statements">Open Statements →</Link></p>
-          </div>
-          <div className="modal-f"><button className="btn btn-primary" onClick={onBack}>Done</button></div>
+        <Modal
+          eyebrow="Count posted" title="Stock count posted" icon="check" tone="ok" onClose={onBack} width={480}
+          footer={<><ModalSpacer /><Button variant="primary" size="lg" onClick={onBack}>Done</Button></>}
+        >
+          <p className="m-0 text-sm text-mq-body leading-normal">
+            <span className="font-mq-mono">{postedAdj}</span> adjustment{postedAdj === 1 ? '' : 's'} recorded across <span className="font-mq-mono">{postedItems}</span> items. Closing stock value: <b className="font-mq-mono">{money(result.totalValue ?? runningValue)}</b>.
+          </p>
+          <p className="m-0 mt-2 text-sm text-mq-body">
+            The month statements now use this value. <Link className="font-semibold text-mq-cta hover:text-mq-primary" href="/admin/dashboard/reports/statements">Open Statements →</Link>
+          </p>
         </Modal>
       )}
     </>

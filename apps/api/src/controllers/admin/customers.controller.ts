@@ -10,6 +10,10 @@ import { num, round2 } from '../../lib/reports/common.js';
 
 type Balance = { owedBalance: number; invoiceCount: number };
 
+const OPEN = ['unpaid', 'partial'];
+/** An open (unpaid / part-paid) invoice whose due date has passed. */
+const overdueWhere = (now: Date): Prisma.InvoiceWhereInput => ({ status: { in: OPEN }, dueDate: { lt: now } });
+
 // Owed balance = sum(total - amountPaid) across every non-void invoice,
 // clamped at 0 (a payment can't make the balance negative)
 // invoiceOutstandingAgg, just scoped per customer instead of platform-wide.
@@ -40,10 +44,16 @@ export async function listCustomers(req: Request, res: Response) {
   const cursorParam = parseInt(searchParams.get('cursor') ?? '', 10);
 
   // ?owing=1 → only customers with an open (unpaid/partial) invoice.
+  // ?overdue=1 → only customers with an open invoice past its due date (the
+  // same rule as the "Overdue invoices" count below).
   const owing = searchParams.get('owing') === '1';
+  const overdue = searchParams.get('overdue') === '1';
+  const now = new Date();
   const where: Prisma.CustomerWhereInput = {
     ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' } }, { phone: { contains: q } }] } : {}),
-    ...(owing ? { invoices: { some: { status: { in: ['unpaid', 'partial'] } } } } : {}),
+    ...(overdue
+      ? { invoices: { some: overdueWhere(now) } }
+      : owing ? { invoices: { some: { status: { in: OPEN } } } } : {}),
   };
 
   try {
@@ -73,10 +83,11 @@ export async function listCustomers(req: Request, res: Response) {
 
     // Only compute the platform-wide summary on an unfiltered first page —
     // it doesn't change per search term/page and is wasted work otherwise.
-    if (!q && !owing && !Number.isFinite(cursorParam)) {
-      const [totalCustomers, overdue, allBalances] = await Promise.all([
+    if (!q && !owing && !overdue && !Number.isFinite(cursorParam)) {
+      const [totalCustomers, overdueAgg, openInvoices, allBalances] = await Promise.all([
         prisma.customer.count(),
-        prisma.invoice.count({ where: { status: { in: ['unpaid', 'partial'] }, dueDate: { lt: new Date() } } }),
+        prisma.invoice.aggregate({ where: overdueWhere(now), _sum: { total: true, amountPaid: true }, _count: { _all: true } }),
+        prisma.invoice.count({ where: { status: { in: OPEN } } }),
         prisma.invoice.groupBy({
           by: ['customerId'],
           where: { status: { not: 'void' } },
@@ -89,7 +100,15 @@ export async function listCustomers(req: Request, res: Response) {
         const balance = Math.max(0, Number(r._sum.total || 0) - Number(r._sum.amountPaid || 0));
         if (balance > 0) { customersWithBalance += 1; totalOutstanding += balance; }
       }
-      result.summary = { totalCustomers, customersWithBalance, totalOutstanding, overdueInvoices: overdue };
+      result.summary = {
+        totalCustomers,
+        customersWithBalance,
+        totalOutstanding,
+        overdueInvoices: overdueAgg._count._all,
+        // What is still owed on those overdue invoices, and how many invoices are open at all.
+        overdueAmount: Math.max(0, round2(num(overdueAgg._sum.total) - num(overdueAgg._sum.amountPaid))),
+        openInvoices,
+      };
     }
 
     return res.json(result);

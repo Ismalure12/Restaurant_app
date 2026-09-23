@@ -1,77 +1,58 @@
 const { test, expect } = require('@playwright/test');
+const { D, account } = require('./helpers');
 
-test.describe('Admin Authentication', () => {
-  test('A1 — Login page renders with email and password fields', async ({ page }) => {
+test.describe('Admin authentication', () => {
+  test('A1 — login page renders email, password and sign-in button', async ({ page }) => {
     await page.goto('/admin/login');
-
-    const emailInput = page.locator('input[type="email"]');
-    const passwordInput = page.locator('input[type="password"]');
-    const submitButton = page.locator('button[type="submit"]');
-
-    await expect(emailInput).toBeVisible();
-    await expect(passwordInput).toBeVisible();
-    await expect(submitButton).toBeVisible();
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toBeVisible();
+    await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
 
-  test('A2 — Invalid credentials show error', async ({ page }) => {
+  test('A2 — wrong credentials show an error and stay on the login page', async ({ page }) => {
     await page.goto('/admin/login');
-
-    await page.fill('input[type="email"]', 'wrong@example.com');
-    await page.fill('input[type="password"]', 'wrongpassword');
+    await page.fill('input[type="email"]', 'nobody@example.com');
+    await page.fill('input[type="password"]', 'wrong-password');
+    const res = page.waitForResponse((r) => r.url().includes('/api/auth/login') && r.request().method() === 'POST');
     await page.click('button[type="submit"]');
-
-    // Should show error or stay on login page
-    await page.waitForTimeout(1000);
+    expect((await res).status()).toBe(401);
     await expect(page).toHaveURL(/\/admin\/login/);
+    await expect(page.getByText(/invalid|incorrect|wrong/i).first()).toBeVisible();
   });
 
-  test('A4 — Unauthenticated access to dashboard redirects to login', async ({ page }) => {
-    // Clear any auth cookies
+  test('A3 — signed-out visitors are sent to the login page', async ({ page }) => {
     await page.context().clearCookies();
-
-    await page.goto('/admin/dashboard');
+    await page.goto(`${D}/orders`);
     await expect(page).toHaveURL(/\/admin\/login/);
   });
 
-  test('A3 — Valid login redirects to dashboard', async ({ page }) => {
-    const email = process.env.ADMIN_EMAIL;
-    const password = process.env.ADMIN_PASSWORD;
-
-    if (!email || !password) {
-      test.skip();
-      return;
+  test('A4 — the API refuses admin data without a session', async ({ request }) => {
+    for (const path of ['/api/auth/me', '/api/admin/orders', '/api/admin/sales', '/api/users', '/api/admin/settings']) {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(401);
     }
-
-    await page.goto('/admin/login');
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
-    await page.click('button[type="submit"]');
-
-    await page.waitForURL('**/admin/dashboard**', { timeout: 10000 });
-    await expect(page).toHaveURL(/\/admin\/dashboard/);
   });
 
-  test('A5 — Logout clears session', async ({ page }) => {
-    const email = process.env.ADMIN_EMAIL;
-    const password = process.env.ADMIN_PASSWORD;
+  test('A5 — valid login lands on the dashboard; sign out ends the session', async ({ page }) => {
+    const acc = account('admin');
+    test.skip(!acc, 'no admin account');
 
-    if (!email || !password) {
-      test.skip();
-      return;
-    }
-
-    // Login first
     await page.goto('/admin/login');
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
+    await page.fill('input[type="email"]', acc.email);
+    await page.fill('input[type="password"]', acc.password);
     await page.click('button[type="submit"]');
-    await page.waitForURL('**/admin/dashboard**', { timeout: 10000 });
+    await page.waitForURL(`**${D}**`, { timeout: 15000 });
 
-    // Click logout
-    const logoutBtn = page.locator('button').filter({ hasText: /logout/i });
-    await logoutBtn.click();
-
+    // Sign out sits in the expanded sidebar; on a narrow screen open it first.
+    const signOut = page.getByRole('button', { name: 'Sign out' });
+    if (!(await signOut.isVisible())) {
+      const opener = page.getByRole('button', { name: /^(Menu|Expand navigation)$/ }).first();
+      await opener.click();
+    }
+    await signOut.click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Sign out' }).click();
     await page.waitForURL('**/admin/login**', { timeout: 10000 });
-    await expect(page).toHaveURL(/\/admin\/login/);
+
+    expect((await page.request.get('/api/auth/me')).status()).toBe(401);
   });
 });

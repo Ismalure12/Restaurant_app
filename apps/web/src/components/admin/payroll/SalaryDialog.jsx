@@ -8,6 +8,7 @@ import { useFormValidation } from '@/lib/formValidation';
 import { salaryFormSchema } from '@/lib/schemas/payroll';
 import Field from '@/components/admin/Field';
 import { reportSaveError } from '@/lib/saveError';
+import { Alert, Button, Modal, ModalSpacer, Segmented, inputCls, cx } from '@/components/admin/ui';
 import { money, monthLabel } from './payrollUi';
 
 const MODES = [
@@ -79,60 +80,66 @@ export default function SalaryDialog({ people, thisMonth, onClose }) {
   const modeInfo = MODES.find((m) => m.key === mode);
 
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !save.isPending) onClose(); }}>
-      <div className="modal pr-modal" role="dialog" aria-modal="true" aria-labelledby="sal-title">
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">Change salary</div><div className="h-1" id="sal-title" style={{ marginTop: 3 }}>{who}</div></div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" disabled={save.isPending}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
+    <Modal
+      eyebrow="Change salary"
+      title={who}
+      icon="arrowUp"
+      onClose={onClose}
+      busy={save.isPending}
+      width={520}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+          <Button variant="primary" size="lg" type="submit" form="salary-form" disabled={save.isPending || !valid}>
+            {save.isPending ? 'Saving…' : `Save from ${monthLabel(fromMonth)}`}
+          </Button>
+        </>
+      )}
+    >
+      <form id="salary-form" onSubmit={submit} noValidate className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-1.5">
+          <span aria-hidden="true" className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">How</span>
+          <Segmented label="How" size="lg" className="w-full [&>button]:flex-1" options={MODES.map((m) => ({ value: m.key, label: m.label }))} value={mode} onChange={setMode} />
         </div>
-        <form onSubmit={submit} noValidate style={{ display: 'contents' }}>
-          <div className="modal-b">
-            <div className="ff">
-              <label id="sal-mode">How</label>
-              <div className="seg seg-full" role="group" aria-labelledby="sal-mode">
-                {MODES.map((m) => <button key={m.key} type="button" className={mode === m.key ? 'active' : ''} onClick={() => setMode(m.key)}>{m.label}</button>)}
+        <div className="grid grid-cols-1 tab:grid-cols-2 gap-3.5">
+          <Field label={modeInfo.hint} required {...fv.fieldProps('value')}>
+            {(a11y) => (
+              <div className="relative">
+                {mode !== 'percent' && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-mq-muted font-mq-mono pointer-events-none">$</span>}
+                <input
+                  {...a11y}
+                  className={inputCls({ size: 'lg', mono: true, className: mode === 'percent' ? 'pr-8' : 'pl-7' })}
+                  type="number" step="0.01" inputMode="decimal" value={value}
+                  onChange={(e) => setValue(e.target.value)} autoFocus placeholder={mode === 'percent' ? '10' : '0.00'}
+                />
+                {mode === 'percent' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-mq-muted font-mq-mono pointer-events-none">%</span>}
               </div>
-            </div>
-            <div className="g2-cols">
-              <Field label={modeInfo.hint} required {...fv.fieldProps('value')}>
-                {(a11y) => (
-                  <div className="pr-affix">
-                    {mode !== 'percent' && <span>$</span>}
-                    <input {...a11y} className={`input${a11y['aria-invalid'] ? ' input-err' : ''}`} type="number" step="0.01" inputMode="decimal" value={value}
-                      onChange={(e) => setValue(e.target.value)} autoFocus placeholder={mode === 'percent' ? '10' : '0.00'} />
-                    {mode === 'percent' && <span>%</span>}
-                  </div>
-                )}
-              </Field>
-              <Field label="Starts from" required {...fv.fieldProps('fromMonth')}>
-                <input className="input" type="month" value={fromMonth} min={thisMonth} onChange={(e) => setFromMonth(e.target.value)} />
-              </Field>
-            </div>
-            <div className="note">Months before {monthLabel(fromMonth)} keep their salary. Payments already made don’t change.</div>
+            )}
+          </Field>
+          <Field label="Starts from" required {...fv.fieldProps('fromMonth')}>
+            <input className={inputCls({ size: 'lg' })} type="month" value={fromMonth} min={thisMonth} onChange={(e) => setFromMonth(e.target.value)} />
+          </Field>
+        </div>
+        <p className="m-0 text-xs text-mq-muted">Months before {monthLabel(fromMonth)} keep their salary. Payments already made don’t change.</p>
 
-            <div className="pr-preview" aria-live="polite">
-              {!debounced ? <div className="sub">Enter an amount to see the new salaries.</div>
-                : preview.isLoading ? <div className="sub">Working it out…</div>
-                  : preview.isError ? (isConnectionError(preview.error) ? <div className="sub">Can’t work out the new salaries right now.</div> : <div className="adm-error-banner">{parseApiError(preview.error)}</div>)
-                    : changes.map((c) => (
-                      <div className="pr-prev-row" key={c.staffId}>
-                        <span className="pr-prev-nm">{c.name}</span>
-                        <span className="mono sub">{money(c.from)}</span>
-                        <span aria-hidden="true">→</span>
-                        <span className={`mono strong${c.to > c.from ? ' pr-up' : c.to < c.from ? ' pr-down' : ''}`}>{money(c.to)}</span>
-                      </div>
-                    ))}
-            </div>
-            {error && <div className="adm-error-banner">{error}</div>}
-          </div>
-          <div className="modal-f">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={save.isPending || !valid}>
-              {save.isPending ? 'Saving…' : `Save from ${monthLabel(fromMonth)}`}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex flex-col bg-mq-cream border border-mq-line rounded-[10px] px-3.5 py-2.5 max-h-[240px] overflow-y-auto" aria-live="polite">
+          {!debounced ? <span className="text-[12.5px] text-mq-muted py-1">Enter an amount to see the new salaries.</span>
+            : preview.isLoading ? <span className="text-[12.5px] text-mq-muted py-1">Working it out…</span>
+              : preview.isError ? (isConnectionError(preview.error)
+                ? <span className="text-[12.5px] text-mq-muted py-1">Can’t work out the new salaries right now.</span>
+                : <Alert tone="danger">{parseApiError(preview.error)}</Alert>)
+                : changes.map((c) => (
+                  <div key={c.staffId} className="flex items-center gap-2.5 py-1.5 border-b border-mq-chip last:border-b-0 text-[13px]">
+                    <span className="flex-1 min-w-0 truncate text-mq-ink">{c.name}</span>
+                    <span className="font-mq-mono tabular-nums text-mq-muted">{money(c.from)}</span>
+                    <span aria-hidden="true" className="text-mq-faint">→</span>
+                    <span className={cx('font-mq-mono tabular-nums font-semibold', c.to > c.from ? 'text-mq-ok-ink' : c.to < c.from ? 'text-mq-danger-ink' : 'text-mq-ink')}>{money(c.to)}</span>
+                  </div>
+                ))}
+        </div>
+        {error && <Alert tone="danger">{error}</Alert>}
+      </form>
+    </Modal>
   );
 }

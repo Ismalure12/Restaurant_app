@@ -1,41 +1,43 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { flushSync } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchJson, parseApiError } from '@/lib/apiError';
+import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import useConfirm from '@/hooks/useConfirm';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import useAccess from '@/hooks/useAccess';
+import ReceiptDoc from '@/components/admin/ReceiptDoc';
+import { usePrintDoc } from '@/components/admin/printShared';
+import {
+  Button, IconButton, Card, Chip, Kpi, KpiGrid, KpiSkeletons, Table, Th, Td, Tr, EmptyState, RowSkeletons, ErrorState, cx,
+} from '@/components/admin/ui';
 import SalaryDialog from './SalaryDialog';
 import PayDialog from './PayDialog';
 import SalaryHistory from './SalaryHistory';
 import { ROLE_LABEL, day, initials, money, shiftMonth } from './payrollUi';
 
-const Ico = {
-  prev: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m15 18-6-6 6-6" /></svg>,
-  next: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 18 6-6-6-6" /></svg>,
-  up: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 17 17 7M9 7h8v8" /></svg>,
-  cash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>,
-};
-
 /**
  * Staff › Payroll. Pick a month; everyone's salary FOR THAT MONTH (salary
  * history — a raise applies from its month on), paid or not. Select people to
  * raise or pay them together, or act on one row. Paying records a "Salaries"
- * expense; Undo removes it.
+ * expense; Undo removes it. A paid row prints an 80mm payslip.
  */
 export default function PayrollPanel() {
   const qc = useQueryClient();
   const { confirm, dialog } = useConfirm();
+  const { canAct } = useAccess();
+  const canPay = canAct('payroll');
   const [month, setMonth] = useState(null); // null = this month (the server decides, in the business time zone)
   const [thisMonth, setThisMonth] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [salaryFor, setSalaryFor] = useState(null); // [] people | null closed | 'all'
   const [payFor, setPayFor] = useState(null);
   const [historyOf, setHistoryOf] = useState(null);
+  const [slip, setSlip] = useState(null);
+  const [, printDoc] = usePrintDoc('payslip');
 
-  const { data, isLoading, isError, error } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['payroll', month || 'current'],
     queryFn: async () => {
       const r = await fetchJson(`/api/admin/payroll${month ? `?month=${month}` : ''}`);
@@ -67,99 +69,153 @@ export default function PayrollPanel() {
   const askUndo = async (r) => {
     if (await confirm({ title: `Undo ${r.name}’s ${data.label} salary?`, body: `The ${money(r.payment.amount)} salary expense is deleted and the month shows as unpaid again.`, confirmLabel: 'Undo payment' })) undo.mutate(r.payment.id);
   };
+  // Render the payslip with this person's data, then print it (hidden iframe).
+  const printSlip = (p) => {
+    flushSync(() => setSlip(p));
+    printDoc('payslip');
+  };
+  const slipFromRow = (r) => ({ name: r.name, role: r.role, monthLabel: data.label, salary: r.salary, payment: r.payment });
 
   return (
-    <div className="pr">
+    <div className="flex flex-col gap-4">
       {dialog}
-      <div className="pr-head">
-        <div className="pr-month" role="group" aria-label="Month">
-          <button type="button" className="icon-btn" onClick={() => go(shiftMonth(shown, -1))} disabled={!shown} aria-label="Previous month">{Ico.prev}</button>
-          <div className="pr-month-l"><div className="eyebrow">Payroll</div><div className="h-2">{data?.label || '…'}</div></div>
-          <button type="button" className="icon-btn" onClick={() => go(shiftMonth(shown, 1))} disabled={!shown || shown >= current} aria-label="Next month">{Ico.next}</button>
-          {shown && current && shown !== current && <button type="button" className="btn btn-ghost btn-sm" onClick={() => go(null)}>This month</button>}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="inline-flex items-center gap-2.5" role="group" aria-label="Month">
+          <IconButton icon="chevLeft" label="Previous month" size={44} iconSize={18} onClick={() => go(shiftMonth(shown, -1))} disabled={!shown} />
+          <span className="min-w-[130px] text-center text-[15px] font-semibold text-mq-ink">{data?.label || '…'}</span>
+          <IconButton icon="chevRight" label="Next month" size={44} iconSize={18} onClick={() => go(shiftMonth(shown, 1))} disabled={!shown || shown >= current} />
+          {shown && current && shown !== current && <Button variant="ghost" size="sm" onClick={() => go(null)}>This month</Button>}
         </div>
-        <Link className="btn btn-ghost btn-sm" href="/admin/dashboard/expenses?q=Salaries">Salaries in Expenses</Link>
+        <span className="flex-1" />
+        <Button variant="ghost" size="sm" href="/admin/dashboard/expenses?q=Salaries">Salaries in Expenses</Button>
       </div>
 
-      <div className="kpi-row pr-kpis">
-        <div className="kpi"><div className="kpi-top"><span className="kpi-dot ink" /><span className="kpi-k">Due for {data?.label || 'the month'}</span></div><div className="kpi-v is-text mono">{s ? money(s.due) : '—'}</div><div className="kpi-foot"><span>{s ? `${s.people} on payroll` : ''}</span></div></div>
-        <div className="kpi"><div className="kpi-top"><span className="kpi-dot green" /><span className="kpi-k">Paid</span></div><div className="kpi-v is-text mono">{s ? money(s.paid) : '—'}</div><div className="kpi-foot"><span>{s ? `${s.people - s.unpaidCount} of ${s.people} people` : ''}</span></div></div>
-        <div className="kpi"><div className="kpi-top"><span className="kpi-dot amber" /><span className="kpi-k">Still to pay</span></div><div className="kpi-v is-text mono">{s ? money(s.remaining) : '—'}</div><div className="kpi-foot"><span>{s ? (s.unpaidCount ? `${s.unpaidCount} ${s.unpaidCount === 1 ? 'person' : 'people'}` : 'Everyone is paid') : ''}</span></div></div>
-        <div className="kpi"><div className="kpi-top"><span className="kpi-dot sky" /><span className="kpi-k">No salary set</span></div><div className="kpi-v is-text mono">{data ? data.withoutSalary : '—'}</div><div className="kpi-foot"><span>active staff</span></div></div>
-      </div>
+      {isLoading ? <KpiSkeletons count={3} /> : s && (
+        <div className="flex flex-col gap-1.5">
+          <KpiGrid min={210}>
+            <Kpi label={`Payroll · ${data.label}`} value={money(s.due)} foot={`${s.people} ${s.people === 1 ? 'person' : 'people'} on salary`} />
+            <Kpi label="Paid" value={money(s.paid)} foot={`${s.people - s.unpaidCount} of ${s.people} paid`} tone="bg-mq-ok" />
+            <Kpi label="Outstanding" value={money(s.remaining)} foot={s.unpaidCount ? `${s.unpaidCount} ${s.unpaidCount === 1 ? 'salary' : 'salaries'} to pay` : 'Everyone is paid'} tone={s.unpaidCount ? 'bg-mq-warn' : undefined} />
+          </KpiGrid>
+          {data.withoutSalary > 0 && (
+            <p className="m-0 text-xs text-mq-muted">
+              <span className="font-mq-mono">{data.withoutSalary}</span> active {data.withoutSalary === 1 ? 'person has' : 'people have'} no salary set — they’re not counted above.
+            </p>
+          )}
+        </div>
+      )}
 
-      <div className="card pr-card">
-        <div className="pr-bar">
-          <label className="pr-check" title={allOn ? 'Clear selection' : 'Select everyone'}>
-            <input type="checkbox" checked={allOn} ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allOn; }} onChange={toggleAll} disabled={!rows.length} aria-label="Select everyone" />
-          </label>
+      <Card className="overflow-hidden">
+        <div className={cx('flex items-center gap-2.5 flex-wrap px-4 py-2.5 border-b border-mq-line', selected.size ? 'bg-mq-soft' : 'bg-mq-cream')}>
           {selected.size > 0 ? (
             <>
-              <span className="pr-bar-l"><b>{selected.size}</b> selected</span>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>Clear</button>
-              <div className="grow" />
-              <button type="button" className="btn btn-soft" onClick={() => setSalaryFor(chosen.map(pick))}>{Ico.up}Change salary</button>
-              <button type="button" className="btn btn-primary" disabled={!unpaidChosen.length} onClick={() => setPayFor(unpaidChosen.map(pick))}>
-                {Ico.cash}Pay {unpaidChosen.length || ''}
-              </button>
+              <span className="text-[13px] text-mq-ink"><b className="font-mq-mono">{selected.size}</b> selected</span>
+              <Button variant="ghost" size="xs" onClick={() => setSelected(new Set())}>Clear</Button>
+              <span className="flex-1" />
+              {canPay && <Button variant="soft" size="sm" icon="arrowUp" onClick={() => setSalaryFor(chosen.map(pick))}>Change salary</Button>}
+              {canPay && <Button variant="primary" size="sm" icon="cash" disabled={!unpaidChosen.length} onClick={() => setPayFor(unpaidChosen.map(pick))}>Pay selected{unpaidChosen.length ? ` · ${unpaidChosen.length}` : ''}</Button>}
             </>
           ) : (
             <>
-              <span className="pr-bar-l sub">Select people to raise or pay them together</span>
-              <div className="grow" />
-              <button type="button" className="btn btn-soft" onClick={() => setSalaryFor('all')} disabled={!rows.length}>{Ico.up}Raise everyone</button>
-              <button type="button" className="btn btn-primary" disabled={!unpaidAll.length} onClick={() => setPayFor(unpaidAll.map(pick))}>
-                {Ico.cash}{unpaidAll.length ? `Pay all remaining · ${money(unpaidAll.reduce((t, r) => t + r.salary, 0))}` : 'All paid'}
-              </button>
+              <span className="text-[12.5px] text-mq-muted">{canPay ? 'Select people to raise or pay them together' : `${rows.length} on the team`}</span>
+              <span className="flex-1" />
+              {canPay && <Button variant="soft" size="sm" icon="arrowUp" onClick={() => setSalaryFor('all')} disabled={!rows.length}>Raise everyone</Button>}
+              {canPay && (
+                <Button variant="primary" size="sm" icon="cash" disabled={!unpaidAll.length} onClick={() => setPayFor(unpaidAll.map(pick))}>
+                  {unpaidAll.length ? `Pay all remaining · ${money(unpaidAll.reduce((t, r) => t + r.salary, 0))}` : 'All paid'}
+                </Button>
+              )}
             </>
           )}
         </div>
 
-        {isLoading ? <RowsSkeleton className="card-pad" rows={4} height={44} /> : isError ? <div className="card-pad adm-error-banner">{parseApiError(error)}</div> : rows.length === 0 ? (
-          <div className="empty"><p className="empty-title">No staff yet</p><p className="empty-sub">Add staff in the Team tab, with a monthly salary.</p></div>
+        {isLoading ? <RowSkeletons rows={4} /> : isError ? <div className="p-4"><ErrorState error={error} onRetry={refetch} /></div> : rows.length === 0 ? (
+          <EmptyState icon="staff" title="No staff yet">Add staff in the Team tab, with a monthly salary.</EmptyState>
         ) : (
-          <table className="table pr-table">
-            <thead><tr><th className="pr-c-check"><span className="sr-only">Select</span></th><th>Person</th><th className="num">Salary</th><th>{data.label}</th><th className="num"><span className="sr-only">Actions</span></th></tr></thead>
+          <Table label="Payroll" minW={canPay ? 660 : 600} maxH={560}>
+            <thead>
+              <tr>
+                {canPay && (
+                  <Th className="w-[52px]">
+                    <label className="inline-grid place-items-center w-11 h-11 -m-3 cursor-pointer" title={allOn ? 'Clear selection' : 'Select everyone'}>
+                      <input type="checkbox" className="w-[18px] h-[18px] accent-mq-primary cursor-pointer" checked={allOn} ref={(el) => { if (el) el.indeterminate = selected.size > 0 && !allOn; }} onChange={toggleAll} aria-label="Select everyone" />
+                    </label>
+                  </Th>
+                )}
+                <Th>Person</Th>
+                <Th align="right">Monthly salary</Th>
+                <Th>{data.label}</Th>
+                <Th align="right"><span className="sr-only">Actions</span></Th>
+              </tr>
+            </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.staffId} className={selected.has(r.staffId) ? 'on' : ''}>
-                  <td className="pr-c-check"><label className="pr-check"><input type="checkbox" checked={selected.has(r.staffId)} onChange={() => toggle(r.staffId)} aria-label={`Select ${r.name}`} /></label></td>
-                  <td className="pr-c-person">
-                    <div className="pr-person">
-                      <span className={`pr-av role-${r.role}`} aria-hidden="true">{initials(r.name)}</span>
-                      <div><div className="strong">{r.name}{!r.isActive && <span className="pill pill-xs pill-ghost">inactive</span>}</div><div className="sub">{ROLE_LABEL[r.role] || r.role}</div></div>
-                    </div>
-                  </td>
-                  <td className="num pr-c-salary" data-l="Salary">
-                    {r.salary > 0 ? <span className="mono strong">{money(r.salary)}</span> : <span className="sub">Not set</span>}
-                    {r.changedFrom != null && <div><span className={`pill pill-xs ${r.salary >= r.changedFrom ? 'pill-green' : 'pill-rose'}`}>{r.salary >= r.changedFrom ? '↑' : '↓'} from {money(r.changedFrom)}</span></div>}
-                    {r.next && <div className="sub pr-next">{money(r.next.amount)} from {r.next.label}</div>}
-                  </td>
-                  <td className="pr-c-status" data-l="Status">
+                <Tr key={r.staffId} selected={selected.has(r.staffId)} tone={r.payment ? undefined : r.salary > 0 ? 'warn' : undefined}>
+                  {canPay && (
+                    <Td className="w-[52px]">
+                      <label className="inline-grid place-items-center w-11 h-11 -m-3 cursor-pointer">
+                        <input type="checkbox" className="w-[18px] h-[18px] accent-mq-primary cursor-pointer" checked={selected.has(r.staffId)} onChange={() => toggle(r.staffId)} aria-label={`Select ${r.name}`} />
+                      </label>
+                    </Td>
+                  )}
+                  <Td>
+                    <span className="inline-flex items-center gap-3 min-w-0">
+                      <span className={cx('grid place-items-center w-9 h-9 rounded-[10px] flex-none text-[12.5px] font-semibold', r.isActive ? 'bg-mq-deep text-mq-cream' : 'bg-mq-chip text-mq-chip-ink')} aria-hidden="true">{initials(r.name)}</span>
+                      <span className="flex flex-col gap-px min-w-0">
+                        <span className="flex items-center gap-1.5 font-semibold text-mq-ink">{r.name}{!r.isActive && <Chip tone="off" small dot={false}>Inactive</Chip>}</span>
+                        <span className="text-[11.5px] text-mq-muted">{ROLE_LABEL[r.role] || r.role}</span>
+                      </span>
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    {r.salary > 0 ? <span className="font-mq-mono tabular-nums font-medium text-mq-ink">{money(r.salary)}</span> : <span className="text-mq-muted">Not set</span>}
+                    {r.changedFrom != null && (
+                      <div className={cx('text-[11.5px] font-semibold', r.salary >= r.changedFrom ? 'text-mq-ok-ink' : 'text-mq-danger-ink')}>
+                        {r.salary >= r.changedFrom ? '↑' : '↓'} from <span className="font-mq-mono">{money(r.changedFrom)}</span>
+                      </div>
+                    )}
+                    {r.next && <div className="text-[11.5px] text-mq-muted"><span className="font-mq-mono">{money(r.next.amount)}</span> from {r.next.label}</div>}
+                  </Td>
+                  <Td>
                     {r.payment ? (
-                      <><span className="pill pill-xs pill-green">Paid {money(r.payment.amount)}</span><div className="sub">{day(r.payment.paidAt)}{r.payment.paidBy ? ` · ${r.payment.paidBy}` : ''}</div></>
-                    ) : r.salary > 0 ? <span className="pill pill-xs pill-amber">Unpaid</span> : <span className="pill pill-xs pill-ghost">No salary</span>}
-                  </td>
-                  <td className="num pr-c-acts">
-                    <div className="pr-acts">
-                      {r.payment
-                        ? <button type="button" className="btn btn-ghost btn-sm" onClick={() => askUndo(r)} disabled={undo.isPending}>Undo</button>
-                        : r.salary > 0
-                          ? <button type="button" className="btn btn-primary btn-sm" onClick={() => setPayFor([pick(r)])}>Pay</button>
-                          : <button type="button" className="btn btn-soft btn-sm" onClick={() => setSalaryFor([pick(r)])}>Set salary</button>}
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => setHistoryOf(r.staffId)}>History</button>
+                      <>
+                        <Chip tone="ok" small>Paid <span className="font-mq-mono">{money(r.payment.amount)}</span></Chip>
+                        <div className="text-[11.5px] text-mq-muted mt-0.5">{day(r.payment.paidAt)}{r.payment.paidBy ? ` · ${r.payment.paidBy}` : ''}</div>
+                      </>
+                    ) : r.salary > 0 ? <Chip tone="warn" small>Unpaid</Chip> : <Chip tone="off" small>No salary</Chip>}
+                  </Td>
+                  <Td align="right">
+                    <div className="inline-flex items-center gap-1.5 justify-end flex-wrap">
+                      {r.payment ? (
+                        <>
+                          <Button variant="secondary" size="xs" icon="print" onClick={() => printSlip(slipFromRow(r))}>Payslip</Button>
+                          {canPay && <Button variant="ghost" size="xs" onClick={() => askUndo(r)} disabled={undo.isPending}>Undo</Button>}
+                        </>
+                      ) : canPay && (r.salary > 0
+                        ? <Button variant="primary" size="xs" onClick={() => setPayFor([pick(r)])}>Pay</Button>
+                        : <Button variant="soft" size="xs" onClick={() => setSalaryFor([pick(r)])}>Set salary</Button>)}
+                      <Button variant="ghost" size="xs" onClick={() => setHistoryOf(r.staffId)}>History</Button>
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
             </tbody>
-          </table>
+          </Table>
         )}
-      </div>
+      </Card>
 
       {salaryFor && current && <SalaryDialog people={salaryFor === 'all' ? null : salaryFor} thisMonth={current} onClose={() => { setSalaryFor(null); setSelected(new Set()); }} />}
       {payFor && <PayDialog people={payFor} month={data.month} label={data.label} onClose={() => { setPayFor(null); setSelected(new Set()); }} />}
-      {historyOf && <SalaryHistory staffId={historyOf} onClose={() => setHistoryOf(null)} onChangeSalary={(p) => { setHistoryOf(null); setSalaryFor([{ staffId: p.id, name: p.name }]); }} />}
+      {historyOf && (
+        <SalaryHistory
+          staffId={historyOf}
+          canChange={canPay}
+          onClose={() => setHistoryOf(null)}
+          onChangeSalary={(p) => { setHistoryOf(null); setSalaryFor([{ staffId: p.id, name: p.name }]); }}
+          onPayslip={printSlip}
+        />
+      )}
+      <ReceiptDoc kind="payslip" payslip={slip} />
     </div>
   );
 }

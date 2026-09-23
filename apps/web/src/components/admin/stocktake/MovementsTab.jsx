@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import { useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
-import { fetchJson, parseApiError } from '@/lib/apiError';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import { fetchJson } from '@/lib/apiError';
 import { money } from '@/lib/money';
+import {
+  Toolbar, Card, CardHeader, Segmented, Select, Table, Th, Td, Tr, LoadMoreBar, EmptyState, ErrorState, RowSkeletons,
+} from '@/components/admin/ui';
 
 
 const qtyText = (n) => Number(Number(n).toFixed(3)).toString();
@@ -53,47 +55,52 @@ export default function MovementsTab({ mode, items, onRecord }) {
 
   return (
     <>
-      <div className="toolbar">
+      <Toolbar>
         {kinds.length > 1 && (
-          <div className="seg">{kinds.map(([k, l]) => <button key={k} className={type === k ? 'active' : ''} onClick={() => setType(k)}>{l}</button>)}</div>
+          <Segmented label="Movement type" value={type} onChange={setType} options={kinds.map(([k, l]) => ({ value: k, label: l }))} />
         )}
-        <select className="input" style={{ width: 'auto' }} value={range} onChange={(e) => setRange(e.target.value)} aria-label="Date range">
+        <Select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Date range" className="!w-auto">
           {RANGES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <div style={{ flex: 1 }} />
-        <select className="input" style={{ width: 'auto', maxWidth: '100%' }} value="" aria-label="Record a movement" onChange={(e) => { const it = items.find((i) => String(i.id) === e.target.value); if (it) onRecord(it, mode === 'purchases' ? 'purchase' : type); }}>
-          <option value="">{mode === 'purchases' ? 'Record a purchase for…' : 'Record usage or waste for…'}</option>
-          {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-        </select>
-      </div>
-
-      <div className="card reveal" style={{ overflow: 'hidden' }}>
-        <div className="card-h"><div><div className="ttl">{label}</div><div className="note">{from} to {to}</div></div></div>
-        {q.isLoading ? <RowsSkeleton rows={5} className="card-pad" /> : q.isError ? (
-          <div className="card-pad"><div className="adm-error-banner">{parseApiError(q.error)}</div></div>
-        ) : rows.length === 0 ? (
-          <div className="empty"><p className="empty-title">Nothing recorded</p><p className="empty-sub">No {label.toLowerCase()} in this period.</p></div>
-        ) : (
-          <div className="table-wrap"><table className="table" style={{ marginTop: 12 }}>
-            <thead><tr><th>Date</th><th>Item</th><th className="num">Quantity</th>{costed && <th className="num">Cost</th>}<th>By</th><th>Note</th></tr></thead>
-            <tbody>{rows.map((m) => (
-              <tr key={m.id}>
-                <td className="muted" style={{ whiteSpace: 'nowrap' }}>{new Date(m.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}</td>
-                <td className="strong">{m.item}</td>
-                <td className="num">{m.quantity > 0 && m.type === 'adjustment' ? '+' : ''}{qtyText(m.quantity)} <span className="muted">{m.unit}</span></td>
-                {costed && <td className="num">{m.totalCost != null ? money(m.totalCost) : '—'}</td>}
-                <td className="muted">{m.staff || '—'}</td>
-                <td className="muted">{m.note || '—'}</td>
-              </tr>
-            ))}</tbody>
-          </table></div>
+        </Select>
+        <span className="flex-1" />
+        {items.length > 0 && (
+          <Select
+            value=""
+            aria-label="Record a movement"
+            className="!w-auto max-w-full"
+            onChange={(e) => { const it = items.find((i) => String(i.id) === e.target.value); if (it) onRecord(it, mode === 'purchases' ? 'purchase' : type); }}
+          >
+            <option value="">{mode === 'purchases' ? 'Record a purchase for…' : 'Record usage or waste for…'}</option>
+            {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+          </Select>
         )}
-      </div>
-      {q.hasNextPage && (
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <button className="btn btn-ghost" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>
-        </div>
-      )}
+      </Toolbar>
+
+      <Card className="overflow-hidden">
+        <CardHeader title={label} count={q.isLoading ? null : rows.length + (q.hasNextPage ? '+' : '')} sub={`${from} to ${to}`} />
+        {q.isLoading ? <RowSkeletons rows={5} /> : q.isError ? (
+          <div className="p-4"><ErrorState error={q.error} onRetry={q.refetch} /></div>
+        ) : rows.length === 0 ? (
+          <EmptyState icon="inventory" title="Nothing recorded">No {label.toLowerCase()} in this period.</EmptyState>
+        ) : (
+          <Table label={label} maxH={480} minW={costed ? 640 : 560}>
+            <thead>
+              <tr><Th>Date</Th><Th>Item</Th><Th align="right">Quantity</Th>{costed && <Th align="right">Cost</Th>}<Th>By</Th><Th>Note</Th></tr>
+            </thead>
+            <tbody>{rows.map((m) => (
+              <Tr key={m.id}>
+                <Td mono muted className="whitespace-nowrap">{new Date(m.createdAt).toLocaleDateString([], { day: 'numeric', month: 'short' })}</Td>
+                <Td strong>{m.item}</Td>
+                <Td align="right" className="font-mq-mono tabular-nums whitespace-nowrap">{m.quantity > 0 && m.type === 'adjustment' ? '+' : ''}{qtyText(m.quantity)} <span className="text-mq-muted">{m.unit}</span></Td>
+                {costed && <Td money>{m.totalCost != null ? money(m.totalCost) : '—'}</Td>}
+                <Td muted>{m.staff || '—'}</Td>
+                <Td muted className="max-w-[260px] truncate" title={m.note || undefined}>{m.note || '—'}</Td>
+              </Tr>
+            ))}</tbody>
+          </Table>
+        )}
+        <LoadMoreBar shown={rows.length} hasMore={!!q.hasNextPage} loading={q.isFetchingNextPage} onMore={() => q.fetchNextPage()} noun="movements" />
+      </Card>
     </>
   );
 }

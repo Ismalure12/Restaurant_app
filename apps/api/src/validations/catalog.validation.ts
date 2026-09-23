@@ -70,3 +70,8 @@ export const tagSchema = z.object({
 export const itemTagsSchema = z.object({
   tagIds: z.array(z.number().int().positive()),
 });
+
+// GET /api/admin/menu-items/never-sold?days=30 — the look-back in business days.
+export const neverSoldQuerySchema = z.object({
+  days: z.coerce.number({ error: 'days must be a number' }).int('days must be a whole number').min(1, 'days must be 1 to 365').max(365, 'days must be 1 to 365').default(30),
+});

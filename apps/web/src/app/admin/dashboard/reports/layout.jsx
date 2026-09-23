@@ -1,33 +1,34 @@
 'use client';
 
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Page, Tabs } from '@/components/admin/ui';
 import { ReportPrintCss } from '@/components/admin/reports/ReportKit';
 
+const BASE = '/admin/dashboard/reports';
 const REPORT_TABS = [
-  { href: '/admin/dashboard/reports/sales', label: 'Sales' },
-  { href: '/admin/dashboard/reports/inventory', label: 'Inventory' },
-  { href: '/admin/dashboard/reports/financial', label: 'Financial' },
-  { href: '/admin/dashboard/reports/employees', label: 'Employees' },
-  { href: '/admin/dashboard/reports/statements', label: 'Statements' },
-  { href: '/admin/dashboard/reports/day-closes', label: 'Day closes' },
-];
+  { value: 'sales', label: 'Sales' },
+  { value: 'inventory', label: 'Inventory' },
+  { value: 'financial', label: 'Financial' },
+  { value: 'employees', label: 'Employees' },
+  { value: 'statements', label: 'Statements' },
+  { value: 'day-closes', label: 'Day closes' },
+].map((t) => ({ ...t, href: `${BASE}/${t.value}` }));
 
 // Reports hub shell: the report tabs, a Suspense boundary for the
 // URL-driven filters (useSearchParams), and the A4 print rules (ReportPrintCss,
 // only mounted on report pages so they never touch the 80mm receipt's @page).
+// The page title lives in the topbar; PrintHead prints each report's name.
 export default function ReportsLayout({ children }) {
   const pathname = usePathname();
+  const active = REPORT_TABS.find((t) => pathname.startsWith(t.href))?.value;
   return (
-    <div className="wrap rpt">
-      <nav className="rpt-tabs rpt-noprint" aria-label="Reports">
-        {REPORT_TABS.map((t) => (
-          <Link key={t.href} href={t.href} className={pathname.startsWith(t.href) ? 'on' : ''} aria-current={pathname.startsWith(t.href) ? 'page' : undefined}>{t.label}</Link>
-        ))}
+    <Page>
+      <nav aria-label="Reports" className="rpt-noprint">
+        <Tabs tabs={REPORT_TABS} value={active} />
       </nav>
       <Suspense fallback={null}>{children}</Suspense>
       <ReportPrintCss />
-    </div>
+    </Page>
   );
 }

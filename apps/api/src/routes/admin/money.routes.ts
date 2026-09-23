@@ -2,7 +2,7 @@
 // Fixed paths are listed before their :param siblings.
 import { Router } from 'express';
 import { defineRoute } from '../defineRoute.js';
-import { listAccounts, createAccount, setOpeningBalances, recordOwnerMoney, transferMoney, updateAccount, listAccountEntries } from '../../controllers/admin/accounts.controller.js';
+import { listAccounts, createAccount, setOpeningBalances, recordOwnerMoney, transferMoney, updateAccount, listAccountEntries, listTransfers } from '../../controllers/admin/accounts.controller.js';
 import { listCollections, getStaffAccounts, updateStaffAccounts } from '../../controllers/admin/collections.controller.js';
 import { listDayCloses, getDayClose, closeBusinessDay, reopenBusinessDay } from '../../controllers/admin/dayClose.controller.js';
 import { listMonthStatements, getMonthStatement, closeMonthStatement, reopenMonthStatement, listYearStatements, getYearStatement, closeYearStatement, reopenYearStatement, exportYearStatement } from '../../controllers/admin/statements.controller.js';
@@ -17,6 +17,7 @@ defineRoute(router, '/accounts', { GET: listAccounts, POST: createAccount });
 defineRoute(router, '/accounts/opening', { PUT: setOpeningBalances });
 defineRoute(router, '/accounts/owner', { POST: recordOwnerMoney });
 defineRoute(router, '/accounts/transfer', { POST: transferMoney });
+defineRoute(router, '/accounts/transfers', { GET: listTransfers });
 defineRoute(router, '/accounts/:id', { PUT: updateAccount });
 defineRoute(router, '/accounts/:id/entries', { GET: listAccountEntries });
 defineRoute(router, '/collections', { GET: listCollections });

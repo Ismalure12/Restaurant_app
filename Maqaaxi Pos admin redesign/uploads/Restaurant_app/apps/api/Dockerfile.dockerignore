@@ -1,0 +1,10 @@
+**
+!package.json
+!package-lock.json
+!apps/api/package.json
+!apps/web/package.json
+!apps/api/prisma.config.ts
+!apps/api/prisma/**
+!apps/api/tsconfig.json
+!apps/api/tsconfig.build.json
+!apps/api/src/**

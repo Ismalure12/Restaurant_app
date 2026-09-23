@@ -2,50 +2,61 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { fetchJson, parseApiError } from '@/lib/apiError';
+import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import { reportSaveError } from '@/lib/saveError';
 import { useFormValidation } from '@/lib/formValidation';
 import { dismissPaymentSchema } from '@/lib/schemas/sales';
 import Field from '@/components/admin/Field';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
 import { ORDER_COUNTS_KEY } from '@/hooks/useOrderCounts';
-import { Ic, MANAGER_ROLES, ago, cap, dt, initials, money } from './orderUi';
+import useAccess from '@/hooks/useAccess';
+import { Alert, Button, Card, CardHeader, Chip, Facts, Modal, ModalSpacer, textareaCls, cx } from '@/components/admin/ui';
+import { MANAGER_ROLES, age, cap, dt, money } from './orderUi';
+
+// Online checkouts where the customer was sent to Sifalo but no order exists
+// (yet). The server keeps asking Sifalo on its own (payment reconciler); the
+// Orders list shows the ones that need staff in "Needs a decision", with this
+// pane for the chosen one: check with Sifalo now (staff) or dismiss (manager,
+// with a reason, audited). Never shows the Sifalo reference.
 
 export const ONLINE_PAYMENTS_KEY = ['online-payments'];
 
-// Checkouts where the customer was sent to Sifalo but no order exists (yet).
-// The server keeps asking Sifalo on its own (payment reconciler); this is
-// where staff see the ones that need them and can help the customer.
-const STATUS = {
-  attention: { label: 'Needs attention', cls: 'pill-rose', color: 'var(--rose)', group: 'Needs attention — money may have moved' },
-  stuck: { label: 'No answer yet', cls: 'pill-amber', color: 'var(--amber)', group: 'Stuck — Sifalo hasn’t confirmed' },
-  checking: { label: 'Checking', cls: 'pill-sky', color: 'var(--sky)', group: 'Checking now' },
-  not_paid: { label: 'Not paid', cls: 'pill-ghost', color: 'var(--faint)', group: 'Not paid' },
-};
-const ORDER = ['attention', 'stuck', 'checking', 'not_paid'];
-
-const call = (phone) => `tel:+${String(phone).startsWith('252') ? phone : `252${phone}`}`;
-
-export default function OnlinePaymentsPanel({ tabs, onOrderCreated }) {
-  const qc = useQueryClient();
-  const [selId, setSelId] = useState(null);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [dismissing, setDismissing] = useState(null);
-
-  const { data, isLoading, isError, error } = useQuery({
+/** GET /api/admin/online-payments → the payments array. One key, one shape (also refreshed by useLiveOrders). */
+export function useOnlinePayments({ enabled = true } = {}) {
+  const q = useQuery({
     queryKey: ONLINE_PAYMENTS_KEY,
     queryFn: () => fetchJson('/api/admin/online-payments'),
     refetchInterval: 30_000,
+    enabled,
   });
+  const payments = useMemo(() => (Array.isArray(q.data?.payments) ? q.data.payments : []), [q.data]);
+  return { ...q, payments };
+}
+
+// attention + stuck = the badge's "stuck payments" (need a decision);
+// checking = just started, not_paid = Sifalo says nobody paid.
+export const PAY_STATUS = {
+  attention: { label: 'Needs attention', tone: 'danger', stuck: true },
+  stuck: { label: 'Stuck payment', tone: 'danger', stuck: true },
+  checking: { label: 'Checking', tone: 'info' },
+  not_paid: { label: 'Not paid', tone: 'off' },
+};
+export const isStuck = (p) => Boolean(PAY_STATUS[p.status]?.stuck);
+
+const call = (phone) => `tel:+${String(phone).startsWith('252') ? phone : `252${phone}`}`;
+
+/**
+ * The chosen payment: who, how much, why it's here, and what staff can do.
+ * onResolved(orderId|null) — Sifalo confirmed it (an order now exists) or it
+ * was dismissed; the caller refreshes its selection.
+ */
+export default function PaymentDetail({ payment: p, onBack, onResolved }) {
+  const qc = useQueryClient();
+  const [dismissing, setDismissing] = useState(false);
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => fetchJson('/api/auth/me'), staleTime: 5 * 60 * 1000 });
   const canDismiss = MANAGER_ROLES.includes(me?.role);
-
-  const payments = useMemo(() => (Array.isArray(data?.payments) ? data.payments : []), [data]);
-  const groups = useMemo(() => ORDER
-    .map((key) => ({ key, title: STATUS[key].group, items: payments.filter((p) => p.status === key) }))
-    .filter((g) => g.items.length), [payments]);
-  const sel = payments.find((p) => p.id === selId);
+  const canRecheck = useAccess().canAct('orders');
+  const st = PAY_STATUS[p.status] || PAY_STATUS.checking;
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ONLINE_PAYMENTS_KEY });
@@ -53,14 +64,12 @@ export default function OnlinePaymentsPanel({ tabs, onOrderCreated }) {
   };
 
   const recheck = useMutation({
-    mutationFn: (id) => fetchJson(`/api/admin/online-payments/${id}/recheck`, { method: 'POST' }),
+    mutationFn: () => fetchJson(`/api/admin/online-payments/${p.id}/recheck`, { method: 'POST' }),
     onSuccess: (res) => {
       if (res.state === 'paid') {
         notify.success('Payment confirmed by Sifalo — the order is now in Orders');
         qc.invalidateQueries({ queryKey: ['orders-all'] });
-        setSelId(null);
-        setDetailOpen(false);
-        onOrderCreated?.(res.orderId);
+        onResolved?.(res.orderId ?? null);
       } else if (res.state === 'pending') {
         notify.info('Sifalo still shows it as pending — the server keeps checking on its own');
       } else {
@@ -71,147 +80,80 @@ export default function OnlinePaymentsPanel({ tabs, onOrderCreated }) {
     onError: (e) => notify.error(e, { title: 'Could not check with Sifalo' }),
   });
 
-  return (
-    <div className={`ord${detailOpen ? ' detail-open' : ''}`}>
-      <section className="ord-list">
-        <div className="ol-top">{tabs}</div>
-        <div className="ol-scroll">
-          {isLoading ? (
-            <div style={{ padding: 16 }}><RowsSkeleton rows={4} height={52} /></div>
-          ) : isError ? (
-            <div className="ol-empty">Couldn&rsquo;t load online payments. {parseApiError(error)}</div>
-          ) : groups.length === 0 ? (
-            <div className="ol-empty">Every online payment has its order. Nothing to check.</div>
-          ) : groups.map((g) => (
-            <div key={g.key}>
-              <div className="ol-group-h">{g.title}<span className="cnt">{g.items.length}</span></div>
-              {g.items.map((p) => {
-                const st = STATUS[p.status] || STATUS.checking;
-                return (
-                  <button type="button" key={p.id} className={`oli${p.id === selId ? ' sel' : ''}`} onClick={() => { setSelId(p.id); setDetailOpen(true); }} style={{ width: '100%', textAlign: 'left' }}>
-                    <div className="oli-ic" style={{ background: 'var(--sky-soft)', color: 'var(--sky)' }}>{initials(p.name)}</div>
-                    <div className="oli-main">
-                      <div className="oli-top"><span className="blip" style={{ background: st.color }} /><span className="oli-who">{p.name}</span></div>
-                      <div className="oli-sub"><span className="mono">{p.phone}</span> · {cap(p.orderType)}</div>
-                    </div>
-                    <div className="oli-r">
-                      <div className="oli-amt">{money(p.total)}</div>
-                      <span className={`pill pill-xs ${st.cls}`}>{st.label}</span>
-                      <div className="oli-time">{ago(p.startedAt || p.createdAt)}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-          <div className="ol-more op-foot">The server asks Sifalo about every unconfirmed payment on its own — for 48 hours.</div>
-        </div>
-      </section>
-
-      <section className="ord-detail">
-        {!sel ? (
-          <div className="od-empty">
-            <div>
-              <div className="empty-ring">{Ic.cash}</div>
-              <div className="empty-title">Select a payment</div>
-              <div className="empty-sub">A customer says they paid but has no order? Find them here, check with Sifalo again, or call them.</div>
-            </div>
-          </div>
-        ) : (
-          <div className="od-scroll">
-            <PaymentDetail
-              key={sel.id}
-              p={sel}
-              checking={recheck.isPending && recheck.variables === sel.id}
-              onRecheck={() => recheck.mutate(sel.id)}
-              canDismiss={canDismiss}
-              onDismiss={() => setDismissing(sel)}
-              onBack={() => setDetailOpen(false)}
-            />
-          </div>
-        )}
-      </section>
-
-      {dismissing && (
-        <DismissModal
-          payment={dismissing}
-          onClose={() => setDismissing(null)}
-          onDone={(res) => {
-            setDismissing(null);
-            if (res?.orderId) {
-              qc.invalidateQueries({ queryKey: ['orders-all'] });
-              onOrderCreated?.(res.orderId);
-            } else {
-              notify.success('Payment dismissed');
-            }
-            setSelId(null);
-            setDetailOpen(false);
-            refresh();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function PaymentDetail({ p, checking, onRecheck, canDismiss, onDismiss, onBack }) {
-  const st = STATUS[p.status] || STATUS.checking;
   const facts = [
     ['Customer', p.name],
-    ['Phone', <a key="ph" className="mono" href={call(p.phone)}>{p.phone}</a>],
+    ['Phone', <a key="ph" className="font-mq-mono text-[12.5px] text-mq-cta hover:text-mq-primary" href={call(p.phone)}>{p.phone}</a>],
     ['Service', `Online · ${cap(p.orderType)}`],
     p.orderType === 'dine_in' && ['Table', p.tableNumber || '—'],
     p.orderType === 'delivery' && ['Deliver to', p.address || '—'],
-    ['Sent to Sifalo', dt(p.startedAt || p.createdAt)],
-    ['Last asked Sifalo', p.lastCheckedAt ? `${dt(p.lastCheckedAt)} · ${p.checks} ${p.checks === 1 ? 'time' : 'times'}` : 'Not yet'],
+    ['Sent to Sifalo', <span key="s" className="font-mq-mono text-[12.5px] tabular-nums">{dt(p.startedAt || p.createdAt)}</span>],
+    ['Last asked', p.lastCheckedAt ? `${dt(p.lastCheckedAt)} · ${p.checks} ${p.checks === 1 ? 'time' : 'times'}` : 'Not yet'],
   ].filter(Boolean);
+  const btn = 'max-nar:h-12';
 
   return (
-    <div className="odv odv-embedded">
-      <button className="btn btn-ghost btn-sm odv-back" onClick={onBack}>{Ic.back}All payments</button>
-      <section className="odv-hero">
-        <div className="odv-hero-main">
-          <div className="odv-code">Online payment</div>
-          <div className="odv-who">{p.name}</div>
-          <div className="odv-pills">
-            <span className={`pill ${st.cls}`}><span className="pdot" />{st.label}</span>
-            <span className="pill pill-ghost">No order yet</span>
+    <div className="flex flex-col min-h-full">
+      <div className="flex-1 flex flex-col gap-4 w-full max-w-[820px] mx-auto px-4 py-5 tab:px-6">
+        {onBack && <Button variant="secondary" size="sm" icon="chevLeft" onClick={onBack} className="self-start max-nar:h-11">All orders</Button>}
+
+        <Card pad={false} className={cx('flex items-start justify-between gap-4 flex-wrap px-5 py-[18px]', st.stuck && 'shadow-[inset_3px_0_0_#C8321F]')}>
+          <div className="min-w-0 flex-[1_1_220px] flex flex-col gap-1">
+            <span className="font-mq-mono text-xs font-semibold text-mq-muted">Online payment · no order yet</span>
+            <span className="text-[26px] font-semibold tracking-[-.02em] leading-tight text-mq-ink break-words">{p.name}</span>
+            <span className="flex flex-wrap gap-1.5 mt-1.5">
+              <Chip tone={st.tone}>{st.label}</Chip>
+              <Chip tone="off" dot={false}>Online · {cap(p.orderType)}</Chip>
+            </span>
           </div>
-        </div>
-        <div className="odv-hero-side">
-          <div className="odv-total">{money(p.total)}</div>
-          {p.charged !== p.total && <div className="odv-receipt">Test charge {money(p.charged)} sent to Sifalo</div>}
-        </div>
-      </section>
+          <div className="text-right flex-none">
+            <div className="font-mq-mono text-[32px] font-medium tracking-[-.03em] leading-none tabular-nums text-mq-ink">{money(p.total)}</div>
+            <div className="text-[12.5px] text-mq-muted mt-1.5">{age(p.startedAt || p.createdAt)} ago</div>
+            {p.charged !== p.total && <div className="text-xs text-mq-muted mt-1">Test charge {money(p.charged)} sent to Sifalo</div>}
+          </div>
+        </Card>
 
-      <div className={`note op-reason op-${p.status}`}>{p.reason}</div>
+        {p.reason && <Alert tone={p.status === 'attention' ? 'danger' : p.status === 'not_paid' ? 'info' : 'warn'}>{p.reason}</Alert>}
 
-      <div className="odv-actions">
-        <button className="btn btn-primary" onClick={onRecheck} disabled={checking}>{Ic.check}{checking ? 'Asking Sifalo…' : 'Check with Sifalo now'}</button>
-        <a className="btn btn-ghost" href={call(p.phone)}>Call customer</a>
-        <div className="grow" />
+        <Card className="overflow-hidden">
+          <CardHeader title="What they ordered" />
+          <p className="m-0 px-4 py-3 text-sm text-mq-body break-words">{p.items || '—'}</p>
+          <div className="flex items-baseline justify-between gap-3 px-4 py-3 bg-mq-cream border-t border-mq-line text-[17px] font-bold text-mq-ink">
+            <span>Total</span><span className="font-mq-mono tabular-nums">{money(p.total)}</span>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <CardHeader title="Details" />
+          <div className="p-4"><Facts items={facts} /></div>
+        </Card>
+        <p className="m-0 text-xs text-mq-muted">The server asks Sifalo about every unconfirmed payment on its own — for 48 hours.</p>
+      </div>
+
+      <div className="sticky bottom-0 z-[2] bg-white border-t border-mq-line px-4 py-3 tab:px-5 flex flex-wrap items-center gap-2">
+        {canRecheck && (
+          <Button variant="primary" size="lg" icon="refresh" className={cx('flex-[1_1_180px]', btn)} onClick={() => recheck.mutate()} disabled={recheck.isPending}>
+            {recheck.isPending ? 'Asking Sifalo…' : 'Check with Sifalo now'}
+          </Button>
+        )}
+        <Button size="lg" href={call(p.phone)} className={btn}>Call customer</Button>
         {canDismiss && p.status !== 'checking' && (
-          <button className="btn btn-danger" onClick={onDismiss}>{Ic.x}Dismiss</button>
+          <Button variant="danger-soft" size="lg" icon="x" className={btn} onClick={() => setDismissing(true)}>Dismiss</Button>
         )}
       </div>
 
-      <div className="odv-grid">
-        <div className="odv-main">
-          <section className="card odv-card">
-            <div className="odv-card-h"><span className="ttl">What they ordered</span></div>
-            <div className="op-items">{p.items || '—'}</div>
-            <div className="odv-tot"><div className="r t"><span>Total</span><span className="mono">{money(p.total)}</span></div></div>
-          </section>
-        </div>
-        <aside className="odv-side">
-          <section className="card odv-card">
-            <div className="odv-card-h"><span className="ttl">Details</span></div>
-            <dl className="odv-facts">
-              {facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-            </dl>
-          </section>
-        </aside>
-      </div>
+      {dismissing && (
+        <DismissModal
+          payment={p}
+          onClose={() => setDismissing(false)}
+          onDone={(res) => {
+            setDismissing(false);
+            if (res?.orderId) qc.invalidateQueries({ queryKey: ['orders-all'] });
+            else notify.success('Payment dismissed');
+            refresh();
+            onResolved?.(res?.orderId ?? null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -235,32 +177,37 @@ function DismissModal({ payment, onClose, onDone }) {
     },
   });
   const submit = (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (!form.check() || dismiss.isPending) return;
     form.setServerErrors(null);
     dismiss.mutate();
   };
 
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !dismiss.isPending) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Dismiss online payment">
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">Dismiss online payment</div><div className="h-1" style={{ marginTop: 3 }}>{payment.name} · {money(payment.total)}</div></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">{Ic.x}</button>
-        </div>
-        <form noValidate onSubmit={submit} style={{ display: 'contents' }}>
-          <div className="modal-b">
-            <div className="note">Sifalo is asked one last time first — if the payment went through, its order is created instead. Dismiss only when you&rsquo;ve spoken to the customer or refunded them in the Sifalo portal. Recorded in the audit log.</div>
-            <Field label="Reason" required {...form.fieldProps('reason')}>
-              <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Called the customer — they never paid" autoFocus />
-            </Field>
-          </div>
-          <div className="modal-f">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={dismiss.isPending}>Cancel</button>
-            <button type="submit" className="btn btn-danger" disabled={dismiss.isPending || !form.valid}>{dismiss.isPending ? 'Checking with Sifalo…' : 'Dismiss'}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Modal
+      title={`Dismiss ${payment.name}’s payment?`}
+      eyebrow="Online payment"
+      sub="Sifalo is asked one last time first — if the payment went through, its order is created instead. Dismiss only when you’ve spoken to the customer or refunded them in the Sifalo portal. Recorded in the audit log."
+      icon="x"
+      tone="danger"
+      width={480}
+      onClose={onClose}
+      busy={dismiss.isPending}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={dismiss.isPending}>Keep it</Button>
+          <Button variant="danger" size="lg" type="submit" form="dismiss-payment-form" disabled={dismiss.isPending || !form.valid}>
+            {dismiss.isPending ? 'Checking with Sifalo…' : `Dismiss ${money(payment.total)}`}
+          </Button>
+        </>
+      )}
+    >
+      <form id="dismiss-payment-form" noValidate onSubmit={submit}>
+        <Field label="Reason" required {...form.fieldProps('reason')}>
+          <textarea className={textareaCls()} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Called the customer — they never paid" />
+        </Field>
+      </form>
+    </Modal>
   );
 }

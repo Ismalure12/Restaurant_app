@@ -32,6 +32,10 @@ COPY --from=build --chown=node:node /app/apps/api/prisma.config.ts ./apps/api/pr
 WORKDIR /app/apps/api
 USER node
 EXPOSE 4000
+# GET /api/health is public and does not touch the database, so polling it is
+# free. node:22-bookworm-slim has no curl, hence node's own fetch.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # SIGTERM drains in-flight requests before exit — give it time:
 #   docker stop -t 130 <container>
 CMD ["node", "dist/index.js"]

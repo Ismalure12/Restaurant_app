@@ -10,7 +10,7 @@ import { activeAccounts } from '../../lib/money/cashBook.js';
 import { accountBalances, readCalendar, OPENING_DATE_KEY, statementRow, statementRows, statementTotals } from '../../lib/money/moneyReads.js';
 import { audit } from '../../lib/db/audit.js';
 import { assertOpenDay, sendHttpError } from '../../lib/closing/dayClose.js';
-import { localStamp, parseRange, sendCsv } from '../../lib/reports/common.js';
+import { localStamp, num, parseRange, round2, sendCsv } from '../../lib/reports/common.js';
 import { formatOrderCode, getOrderPrefix } from '../../lib/orders/orderCode.js';
 import { env } from '../../config/env.js';
 
@@ -323,6 +323,81 @@ export async function listAccountEntries(req: Request<{ id: string }>, res: Resp
     });
   } catch (err) {
     console.error(`GET /api/admin/accounts/${id}/entries:`, err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// GET /api/admin/accounts/transfers?from&to&cursor&limit — Cash & accounts ›
+// Transfers & owner: every transfer between accounts and every owner
+// capital/drawings movement in the range, newest first. A transfer is two
+// cash-book rows sharing a transferId; the page walks the money-out leg (plus
+// the one-row owner entries) and loads the matching money-in legs in ONE query,
+// so each transfer is one row "From → To". Cursor = the listed row's id.
+const TRANSFER_KINDS = ['transfer', 'owner_in', 'owner_out'] as const;
+const transfersQuery = z.object({
+  cursor: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+const LEG_SELECT = {
+  id: true, businessDay: true, occurredAt: true, kind: true, amount: true, note: true, transferId: true,
+  account: { select: { id: true, label: true, kind: true } },
+  createdBy: { select: { name: true, email: true } },
+} as const;
+
+export async function listTransfers(req: Request, res: Response) {
+  const auth = await requirePage(prisma, req, 'cash', 'view');
+  if (auth.error) return res.status(auth.status).json({ error: auth.error });
+  const range = parseRange(req);
+  if (!range.ok) return res.status(400).json({ error: range.error });
+  const sp = searchParams(req);
+  const parsed = transfersQuery.safeParse({ cursor: sp.get('cursor') || undefined, limit: sp.get('limit') || undefined });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid query' });
+  const { cursor, limit = 50 } = parsed.data;
+  const { fromKey, toKey } = range.value;
+
+  try {
+    const page = await prisma.accountEntry.findMany({
+      where: {
+        businessDay: { gte: fromKey, lte: toKey },
+        OR: [{ kind: 'transfer', amount: { lt: 0 } }, { kind: { in: ['owner_in', 'owner_out'] } }],
+      },
+      select: LEG_SELECT,
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    const hasMore = page.length > limit;
+    const legs = hasMore ? page.slice(0, limit) : page;
+    const ids = [...new Set(legs.map((l) => l.transferId).filter((t): t is string => !!t))];
+    const ins = ids.length
+      ? await prisma.accountEntry.findMany({
+        where: { transferId: { in: ids }, kind: 'transfer', amount: { gt: 0 } },
+        select: { transferId: true, account: { select: { id: true, label: true, kind: true } } },
+        take: ids.length * 2,
+      })
+      : [];
+    const toOf = new Map(ins.map((l) => [l.transferId, l.account]));
+    const acct = (a: { id: number; label: string; kind: string } | null | undefined) =>
+      (a ? { id: a.id, label: a.kind === 'cash' ? 'Cash' : a.label } : null);
+
+    const rows = legs.map((l) => {
+      const kind = l.kind as (typeof TRANSFER_KINDS)[number];
+      const amount = round2(Math.abs(num(l.amount)));
+      return {
+        id: l.id,
+        day: l.businessDay,
+        at: l.occurredAt,
+        kind,
+        amount,
+        from: kind === 'owner_in' ? null : acct(l.account),
+        to: kind === 'owner_in' ? acct(l.account) : kind === 'owner_out' ? null : acct(toOf.get(l.transferId)),
+        note: l.note,
+        by: l.createdBy ? l.createdBy.name?.trim() || l.createdBy.email : null,
+      };
+    });
+    return res.json({ rows, nextCursor: hasMore ? legs[legs.length - 1].id : null });
+  } catch (err) {
+    console.error('GET /api/admin/accounts/transfers:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

@@ -10,8 +10,9 @@ import { num, round2 } from '../../lib/reports/common.js';
 
 // GET  /api/admin/tables — the restaurant's tables. Everyone on the Register
 //      gets the ACTIVE ones (id, name) for the table picker; `?status=1`
-//      (manager) returns every table with its unpaid tab (count + total) so the
-//      Tables page shows which are busy.
+//      (manager) returns every table with its unpaid tab (count + total, the
+//      oldest open order's id + createdAt as `orderId`/`oldestAt`) so the
+//      Tables page shows which are busy and for how long.
 // POST /api/admin/tables — a manager adds a table.
 export const tableFields = {
   name: z.string().trim().min(1, 'Give the table a name').max(20, 'Table name is too long (max 20)'),
@@ -34,20 +35,25 @@ export async function listTables(req: Request, res: Response) {
       take: 500,
     });
     if (!withStatus) return res.json(tables.map((t) => ({ id: t.id, name: t.name })));
+    // One read of every open dine-in order, oldest first — so the first one
+    // seen per table is its oldest (orderId / oldestAt), no per-table query.
     const tabs = await prisma.order.findMany({
       where: { status: 'open', orderType: 'dine_in' },
-      select: { tableNumber: true, total: true },
+      select: { id: true, tableNumber: true, total: true, createdAt: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 500,
     });
-    const busy = new Map<string, { tabs: number; total: number }>();
+    type Busy = { tabs: number; total: number; orderId: number | null; oldestAt: Date | null };
+    const busy = new Map<string, Busy>();
     for (const t of tabs) {
       const key = tableKey(t.tableNumber ?? '');
-      const cur = busy.get(key) ?? { tabs: 0, total: 0 };
+      const cur = busy.get(key) ?? { tabs: 0, total: 0, orderId: t.id, oldestAt: t.createdAt };
       cur.tabs += 1;
       cur.total = round2(cur.total + num(t.total));
       busy.set(key, cur);
     }
-    return res.json(tables.map((t) => ({ id: t.id, name: t.name, isActive: t.isActive, sortOrder: t.sortOrder, ...(busy.get(tableKey(t.name)) ?? { tabs: 0, total: 0 }) })));
+    const free: Busy = { tabs: 0, total: 0, orderId: null, oldestAt: null };
+    return res.json(tables.map((t) => ({ id: t.id, name: t.name, isActive: t.isActive, sortOrder: t.sortOrder, ...(busy.get(tableKey(t.name)) ?? free) })));
   } catch (err) {
     console.error('GET /api/admin/tables:', err);
     return res.status(500).json({ error: 'Internal server error' });

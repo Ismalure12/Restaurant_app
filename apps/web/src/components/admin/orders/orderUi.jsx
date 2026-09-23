@@ -1,17 +1,28 @@
 import { money } from '@/lib/money';
-// Labels, pills and small helpers shared by the Orders list, the order detail
-// view (Orders and Sales report) and the order modals — one vocabulary.
+import Icon from '@/components/admin/ui/icons';
+// Labels, status tones and small helpers shared by the Orders list, the order
+// detail view (Orders, Sales history, the sale drawer) and the order modals —
+// one vocabulary (docs/admin-design-system.md §5). `tone` is a ui/Chip tone.
 
 export { money };
 export const cap = (t) => ({ dine_in: 'Dine-in', delivery: 'Delivery' }[t] || t);
 export const initials = (s) => (s || '').replace(/[^a-zA-Z0-9 ]/g, '').split(' ').map((x) => x[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '#';
 export const dt = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
+export const hm = (d) => (d ? new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
 export function ago(date) {
   const s = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
   if (s < 60) return 'just now';
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+/** "24 min" / "2 h 5 min" / "3 d" — how long something has been waiting. */
+export function age(date) {
+  if (!date) return '';
+  const m = Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 60000));
+  if (m < 60) return `${m} min`;
+  if (m < 1440) return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+  return `${Math.floor(m / 1440)} d`;
 }
 
 export const MANAGER_ROLES = ['admin', 'manager'];
@@ -20,21 +31,21 @@ export const METHOD_LABEL = {
   waafi: 'EVC/ZAAD', edahab: 'eDahab', pbwallet: 'Premier Wallet', sifalo: 'Sifalo Pay',
 };
 
-// Order status. 'open' is the internal name of a pay-later order — staff see "Unpaid".
+// Order status. 'open' is the internal name of a pay-later order — staff see "In kitchen" / "Unpaid".
 export const STATUS = {
-  pending: { label: 'Awaiting', cls: 'pill-amber', color: 'var(--amber)' },
-  open: { label: 'In kitchen', cls: 'pill-sky', color: 'var(--sky)' },
-  confirmed: { label: 'Completed', cls: 'pill-green', color: 'var(--primary)' },
-  declined: { label: 'Declined', cls: 'pill-rose', color: 'var(--rose)' },
-  voided: { label: 'Voided', cls: 'pill-ghost', color: 'var(--faint)' },
+  pending: { label: 'Awaiting', tone: 'warn', pulse: true },
+  open: { label: 'In kitchen', tone: 'info' },
+  confirmed: { label: 'Completed', tone: 'ok' },
+  declined: { label: 'Declined', tone: 'plain' },
+  voided: { label: 'Voided', tone: 'off', strike: true },
 };
 
-/** Money state of an order, as one pill: Paid · Unpaid · On account · Refunded. */
+/** Money state of an order, as one chip: Paid · Unpaid · On account · Refunded. */
 export function payPill(o) {
-  if (o.paymentStatus === 'refunded') return { cls: 'pill-rose', label: 'Refunded' };
-  if (o.paymentStatus === 'paid') return { cls: 'pill-green', label: 'Paid' };
-  if (o.paymentMethod === 'invoice') return { cls: 'pill-gold', label: 'On account' };
-  return { cls: 'pill-amber', label: 'Unpaid' };
+  if (o.paymentStatus === 'refunded') return { tone: 'off', label: 'Refunded' };
+  if (o.paymentStatus === 'paid') return { tone: 'ok', label: 'Paid' };
+  if (o.paymentMethod === 'invoice') return { tone: 'info', label: 'On account' };
+  return { tone: 'warn', label: 'Unpaid' };
 }
 /** Unpaid at the counter (pay-later, not billed to an account) — can take payment. */
 export const isPayLater = (o) => o.status === 'open';
@@ -43,14 +54,15 @@ export const isUnpaid = (o) => o.paymentStatus === 'unpaid' && o.status !== 'voi
 
 export const whoOf = (o) => o.contactName || o.customer?.name || (o.orderType === 'delivery' ? 'Delivery' : (o.tableNumber ? `Table ${o.tableNumber}` : 'Walk-in'));
 
+/** Kept for older imports: the kit icons by the names this file used to export. */
 export const Ic = {
-  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg>,
-  x: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg>,
-  pen: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>,
-  print: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" /></svg>,
-  back: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>,
-  plus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" /></svg>,
-  cash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 10v4M18 10v4" /></svg>,
+  check: <Icon name="check" />,
+  x: <Icon name="x" />,
+  pen: <Icon name="pen" />,
+  print: <Icon name="print" />,
+  back: <Icon name="back" />,
+  plus: <Icon name="plus" />,
+  cash: <Icon name="cash" />,
 };
 
 // Mirrors the PATCH / void routes' refusals so buttons explain themselves

@@ -1,43 +1,42 @@
 'use client';
 
-import { useId, useState } from 'react';
 import Link from 'next/link';
+import { Alert, Icon, cx } from '@/components/admin/ui';
 import { monthLabel } from './StatementDoc';
 
 /**
- * One-line "can this period be closed?" status.
+ * "Can this period be closed?" checklist card.
  *   items: [{ key, label, done, links?: [{ href, label }] }]
  * All done  -> a quiet green "Ready to close".
- * Otherwise -> "N things left before closing", click to open the checklist
- *              (ticks for what is done, links for what is missing).
+ * Otherwise -> the list: ticks for what is done, links for what is missing.
  */
-export default function Readiness({ items }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
+export default function Readiness({ items, title = 'Before this period can be closed' }) {
   const left = items.filter((i) => !i.done);
   if (!items.length) return null;
-  if (!left.length) {
-    return <div className="g5-ready ok" role="status"><span className="g5-dot" aria-hidden="true">✓</span>Ready to close</div>;
-  }
+  if (!left.length) return <Alert tone="ok" title="Ready to close">Every check is done.</Alert>;
   return (
-    <div className="g5-ready warn">
-      <button type="button" className="g5-ready-b" aria-expanded={open} aria-controls={id} onClick={() => setOpen((v) => !v)}>
-        <span className="g5-dot" aria-hidden="true">{left.length}</span>
-        {left.length === 1 ? '1 thing left before closing' : `${left.length} things left before closing`}
-        <span className="g5-chev" aria-hidden="true">{open ? '▾' : '▸'}</span>
-      </button>
-      {open && (
-        <ul id={id} className="g5-checks">
-          {items.map((i) => (
-            <li key={i.key} className={i.done ? 'done' : 'todo'}>
-              <span className="g5-tick" aria-hidden="true">{i.done ? '✓' : '○'}</span>
-              <span className="g5-lbl">{i.label}<span className="sr-only">{i.done ? ' (done)' : ' (still to do)'}</span></span>
-              {!i.done && (i.links || []).map((l) => <Link key={l.href} className="btn btn-ghost btn-sm" href={l.href}>{l.label}</Link>)}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <section className="flex flex-col gap-2.5 bg-white border border-mq-line rounded-xl px-4 py-3.5 shadow-mq-card" aria-label={title}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="m-0 text-sm font-semibold text-mq-ink">{title}</h3>
+        <span className="text-xs text-mq-muted">{left.length === 1 ? '1 thing left' : `${left.length} things left`}</span>
+      </div>
+      <ul className="m-0 p-0 list-none flex flex-col gap-2">
+        {items.map((i) => (
+          <li key={i.key} className="flex items-center gap-2.5 flex-wrap text-[13.5px] text-mq-ink">
+            <span
+              aria-hidden="true"
+              className={cx('grid place-items-center w-[22px] h-[22px] rounded-full flex-none', i.done ? 'bg-mq-ok-bg text-mq-ok-ink' : 'border-2 border-mq-warn')}
+            >
+              {i.done && <Icon name="check" size={12} stroke={3} />}
+            </span>
+            <span className={i.done ? 'text-mq-on-tint' : undefined}>{i.label}<span className="sr-only">{i.done ? ' (done)' : ' (still to do)'}</span></span>
+            {!i.done && (i.links || []).map((l) => (
+              <Link key={l.href} href={l.href} className="text-[13px] font-semibold text-mq-cta hover:text-mq-primary">{l.label} →</Link>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

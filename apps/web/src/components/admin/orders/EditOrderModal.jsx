@@ -9,7 +9,9 @@ import { editOrderSchema } from '@/lib/schemas/sales';
 import Field from '@/components/admin/Field';
 import { computeOrderTotals } from '@/lib/orderTotals';
 import TablePicker from '@/components/admin/TablePicker';
-import { Ic, money, whoOf } from './orderUi';
+import { Modal, ModalSpacer, Button, Segmented, Select, Overline, inputCls, selectCls, textareaCls, cx } from '@/components/admin/ui';
+import { Stepper } from './AddItemsModal';
+import { money, whoOf } from './orderUi';
 
 // Manager correction of a sale: full re-statement of items, service,
 // discount and contact, with a required reason. The server reprices it.
@@ -123,133 +125,148 @@ export default function EditOrderModal({ order, onClose, onSaved }) {
     });
   };
 
+  const line = (l) => [l.optionName, l.extras.map((x) => x.name).join(', '), l.notes && `“${l.notes}”`].filter(Boolean).join(' · ');
+
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget && !save.isPending) onClose(); }}>
-      <div className="modal" style={{ width: 'min(640px, 100%)' }} role="dialog" aria-modal="true" aria-label={`Edit order #${order.id}`}>
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">Manager edit · {order.code || `order #${order.id}`}</div><div className="h-1" style={{ marginTop: 3 }}>{whoOf(order)}</div></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">{Ic.x}</button>
+    <Modal
+      title={whoOf(order)}
+      eyebrow={`Manager edit · ${order.code || `order #${order.id}`}`}
+      icon="pen"
+      width={640}
+      onClose={onClose}
+      busy={save.isPending}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={save.isPending}>Cancel</Button>
+          <Button variant="primary" size="lg" type="submit" form="edit-order-form" disabled={save.isPending || !form.valid}>{save.isPending ? 'Saving…' : 'Save changes'}</Button>
+        </>
+      )}
+    >
+      <form id="edit-order-form" noValidate onSubmit={submit} className="flex flex-col gap-4">
+        {!isTab && (
+          <div className="flex flex-col gap-1.5">
+            <Overline>Service</Overline>
+            <Segmented
+              label="Service"
+              value={orderType}
+              onChange={setOrderType}
+              options={[{ value: 'dine_in', label: 'Dine-in' }, { value: 'delivery', label: 'Delivery' }]}
+            />
+          </div>
+        )}
+
+        {orderType === 'dine_in' ? (
+          <div className="grid gap-3 tab:grid-cols-2">
+            <Field label="Table">{(a) => <TablePicker {...a} value={tableNumber} onChange={setTableNumber} placeholder="Optional" />}</Field>
+            <Field label="Note"><input className={inputCls({ size: 'lg' })} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></Field>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 tab:grid-cols-2">
+              <Field label="Customer name"><input className={inputCls({ size: 'lg' })} value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Optional" /></Field>
+              <Field label="Phone" required {...form.fieldProps('contactPhone')}><input className={inputCls({ size: 'lg' })} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} /></Field>
+            </div>
+            <Field label="Delivery address" required {...form.fieldProps('address')}><input className={inputCls({ size: 'lg' })} value={address} onChange={(e) => setAddress(e.target.value)} /></Field>
+          </>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <Overline>Items</Overline>
+          <div className="rounded-[10px] border border-mq-line">
+            {lines.length === 0 ? (
+              <p className="m-0 px-3.5 py-3 text-[13px] text-mq-muted">No items left. Add one below, or close this and void the order instead.</p>
+            ) : lines.map((l) => (
+              <div key={l.uid} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5 border-b border-mq-chip last:border-b-0">
+                <div className="flex-1 min-w-[150px]">
+                  <div className="text-sm font-medium text-mq-ink">{l.name}</div>
+                  {line(l) && <div className="text-xs text-mq-muted">{line(l)}</div>}
+                </div>
+                <span className="font-mq-mono text-[13px] tabular-nums text-mq-ink">{money(l.unitPrice * l.quantity)}</span>
+                <Stepper value={l.quantity} name={l.name} min={1} onStep={(d) => setQty(l.uid, d)} />
+                <Button variant="danger-soft" size="xs" onClick={() => removeLine(l.uid)} aria-label={`Remove ${l.name}`}>Remove</Button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Select size="lg" className="flex-1 min-w-0" value={adding.itemId} onChange={(e) => setAdding({ itemId: e.target.value, opts: {} })} aria-label="Add a menu item">
+              <option value="">Add an item…</option>
+              {activeMenu.map((m) => <option key={m.id} value={m.id}>{m.name} · {money(m.price)}</option>)}
+            </Select>
+            <Button variant="soft" size="lg" onClick={confirmAdd} disabled={!addItem}>Add</Button>
+          </div>
+          {addItem?.optionGroups?.length > 0 && (
+            <div className="grid gap-3 tab:grid-cols-2">
+              {addItem.optionGroups.map((g) => (
+                <Field label={g.title} key={g.id}>
+                  <select className={selectCls({ size: 'lg' })} value={adding.opts[g.id] ?? g.options?.[0]?.id ?? ''} onChange={(e) => setAdding((a) => ({ ...a, opts: { ...a.opts, [g.id]: e.target.value } }))}>
+                    {(g.options || []).map((o) => <option key={o.id} value={o.id}>{o.name}{Number(o.priceAdd) > 0 ? ` +${money(o.priceAdd)}` : ''}</option>)}
+                  </select>
+                </Field>
+              ))}
+            </div>
+          )}
         </div>
-        <form noValidate onSubmit={submit} style={{ display: 'contents' }}>
-          <div className="modal-b">
-            {!isTab && <div className="ff">
-              <label>Service</label>
-              <div className="seg seg-full">
-                <button type="button" className={orderType === 'dine_in' ? 'active' : ''} onClick={() => setOrderType('dine_in')}>Dine-in</button>
-                <button type="button" className={orderType === 'delivery' ? 'active' : ''} onClick={() => setOrderType('delivery')}>Delivery</button>
-              </div>
-            </div>}
 
-            {orderType === 'dine_in' ? (
-              <div className="form-grid">
-                <div className="ff"><label htmlFor="ed-table">Table</label><TablePicker id="ed-table" value={tableNumber} onChange={setTableNumber} placeholder="Optional" /></div>
-                <div className="ff"><label htmlFor="ed-note">Note</label><input id="ed-note" className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></div>
-              </div>
-            ) : (
-              <>
-                <div className="form-grid">
-                  <div className="ff"><label htmlFor="ed-cname">Customer name</label><input id="ed-cname" className="input" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Optional" /></div>
-                  <Field label="Phone" required {...form.fieldProps('contactPhone')}><input className="input" type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} /></Field>
-                </div>
-                <Field label="Delivery address" required {...form.fieldProps('address')}><input className="input" value={address} onChange={(e) => setAddress(e.target.value)} /></Field>
-              </>
-            )}
-
-            <div className="ff">
-              <label>Items</label>
-              <div className="od-items">
-                {lines.length === 0 ? (
-                  <div className="note" style={{ padding: '12px 14px' }}>No items left. Add one below, or close this and void the order instead.</div>
-                ) : lines.map((l) => (
-                  <div className="tline" key={l.uid}>
-                    <span className="tline-q">{l.quantity}×</span>
-                    <div className="tline-main">
-                      <div className="tline-nm">{l.name}</div>
-                      {(l.optionName || l.extras.length > 0 || l.notes) && <div className="tline-opt">{[l.optionName, l.extras.map((x) => x.name).join(', '), l.notes && `“${l.notes}”`].filter(Boolean).join(' · ')}</div>}
-                    </div>
-                    <div className="tline-r">
-                      <span className="tline-pr">{money(l.unitPrice * l.quantity)}</span>
-                      <span className="tline-acts">
-                        <span className="tline-steps">
-                          <button type="button" onClick={() => setQty(l.uid, -1)} disabled={l.quantity <= 1} aria-label={`Decrease ${l.name}`}>−</button>
-                          <span>{l.quantity}</span>
-                          <button type="button" onClick={() => setQty(l.uid, 1)} disabled={l.quantity >= 99} aria-label={`Increase ${l.name}`}>+</button>
-                        </span>
-                        <button type="button" className="btn btn-danger btn-sm" onClick={() => removeLine(l.uid)} aria-label={`Remove ${l.name}`}>Remove</button>
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="ed-add">
-                <select className="input" value={adding.itemId} onChange={(e) => setAdding({ itemId: e.target.value, opts: {} })} aria-label="Add a menu item">
-                  <option value="">Add an item…</option>
-                  {activeMenu.map((m) => <option key={m.id} value={m.id}>{m.name} · {money(m.price)}</option>)}
-                </select>
-                <button type="button" className="btn btn-soft" onClick={confirmAdd} disabled={!addItem}>Add</button>
-              </div>
-              {addItem?.optionGroups?.length > 0 && (
-                <div className="form-grid">
-                  {addItem.optionGroups.map((g) => (
-                    <div className="ff" key={g.id}>
-                      <label>{g.title}</label>
-                      <select className="input" value={adding.opts[g.id] ?? g.options?.[0]?.id ?? ''} onChange={(e) => setAdding((a) => ({ ...a, opts: { ...a.opts, [g.id]: e.target.value } }))}>
-                        {(g.options || []).map((o) => <option key={o.id} value={o.id}>{o.name}{Number(o.priceAdd) > 0 ? ` +${money(o.priceAdd)}` : ''}</option>)}
-                      </select>
-                    </div>
-                  ))}
+        {!isTab && (
+          <div className="grid gap-3 tab:grid-cols-2">
+            <Field label="Discount" {...form.fieldProps('discountValue')}>
+              {(a) => (
+                <div className="flex gap-2">
+                  <input {...a} className={inputCls({ size: 'lg', mono: true, className: 'flex-1 min-w-0' })} type="number" min="0" step="0.01" inputMode="decimal" value={discValue} onChange={(e) => setDiscValue(e.target.value)} placeholder="0" />
+                  <Segmented
+                    label="Discount type"
+                    value={discType}
+                    onChange={setDiscType}
+                    className="flex-none"
+                    options={[{ value: 'fixed', label: '$' }, { value: 'percent', label: '%' }]}
+                  />
                 </div>
               )}
-            </div>
-
-            {!isTab && <div className="form-grid">
-              <Field label="Discount" {...form.fieldProps('discountValue')}>
-                {(a) => (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input {...a} className={`input${a['aria-invalid'] ? ' input-err' : ''}`} type="number" min="0" step="0.01" inputMode="decimal" value={discValue} onChange={(e) => setDiscValue(e.target.value)} placeholder="0" />
-                    <div className="seg" style={{ flexShrink: 0 }}>
-                      <button type="button" className={discType === 'fixed' ? 'active' : ''} onClick={() => setDiscType('fixed')} aria-label="Fixed amount">$</button>
-                      <button type="button" className={discType === 'percent' ? 'active' : ''} onClick={() => setDiscType('percent')} aria-label="Percent">%</button>
-                    </div>
-                  </div>
-                )}
-              </Field>
-              {orderType === 'delivery' && (
-                <Field label="Delivery fee" {...form.fieldProps('fee')}><input className="input" type="number" min="0" step="0.5" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0" /></Field>
-              )}
-            </div>}
-
-            <div className="od-tot boxed">
-              <div className="r"><span>Subtotal</span><span className="mono">{money(subCents / 100)}</span></div>
-              {!preview.error && preview.discount > 0 && <div className="r"><span>Discount</span><span className="mono rose">−{money(preview.discount)}</span></div>}
-              {!preview.error && preview.delivery > 0 && <div className="r"><span>Delivery fee</span><span className="mono">{money(preview.delivery)}</span></div>}
-              <div className="r t"><span>New total</span><span className="mono">{preview.error ? '—' : money(newTotal)}</span></div>
-              <div className="r"><span>Was</span><span className="mono">{money(prevTotal)}</span></div>
-              {!preview.error && delta !== 0 && (
-                <div className="r">
-                  <span>{delta < 0 ? (wasPaid ? 'Hand back to customer' : 'Reduction') : (wasPaid ? 'Collect from customer' : 'Increase')}</span>
-                  <span className={`mono ${delta < 0 ? 'rose' : 'green'}`}>{delta < 0 ? '−' : '+'}{money(Math.abs(delta))}</span>
-                </div>
-              )}
-            </div>
-            {totalProblem && <div className="field-err" role="alert">{totalProblem}</div>}
-            <div className="note">Prices are re-checked against the current menu when you save.</div>
-            {inv && (
-              <div className={`note${belowPaid ? ' warn' : ''}`}>
-                Invoice #{inv.id} will be updated to match. {money(paidOnInvoice)} is already paid on it{belowPaid ? ' — the new total can’t go below that. Void the order instead.' : '.'}
-              </div>
-            )}
-
-            <Field label="Reason for the edit" required {...form.fieldProps('reason')}>
-              <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Customer returned the fries" />
             </Field>
+            {orderType === 'delivery' && (
+              <Field label="Delivery fee" {...form.fieldProps('fee')}><input className={inputCls({ size: 'lg', mono: true })} type="number" min="0" step="0.5" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0" /></Field>
+            )}
           </div>
-          <div className="modal-f">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={save.isPending || !form.valid}>{save.isPending ? 'Saving…' : 'Save changes'}</button>
+        )}
+
+        <dl className="m-0 flex flex-col gap-1.5 rounded-[10px] border border-mq-line bg-mq-cream px-3.5 py-3 text-[13.5px]">
+          <Sum k="Subtotal" v={money(subCents / 100)} />
+          {!preview.error && preview.discount > 0 && <Sum k="Discount" v={`−${money(preview.discount)}`} tone="text-mq-danger-ink" />}
+          {!preview.error && preview.delivery > 0 && <Sum k="Delivery fee" v={money(preview.delivery)} />}
+          <div className="flex items-baseline justify-between gap-3 border-t border-mq-line mt-1 pt-2 text-base font-semibold text-mq-ink">
+            <dt>New total</dt><dd className="m-0 font-mq-mono tabular-nums">{preview.error ? '—' : money(newTotal)}</dd>
           </div>
-        </form>
-      </div>
+          <Sum k="Was" v={money(prevTotal)} />
+          {!preview.error && delta !== 0 && (
+            <Sum
+              k={delta < 0 ? (wasPaid ? 'Hand back to customer' : 'Reduction') : (wasPaid ? 'Collect from customer' : 'Increase')}
+              v={`${delta < 0 ? '−' : '+'}${money(Math.abs(delta))}`}
+              tone={delta < 0 ? 'text-mq-danger-ink' : 'text-mq-ok-ink'}
+            />
+          )}
+        </dl>
+        {totalProblem && <div className="text-xs font-medium text-mq-danger-ink" role="alert">{totalProblem}</div>}
+        <p className="m-0 text-xs text-mq-muted">Prices are re-checked against the current menu when you save.</p>
+        {inv && (
+          <p className={cx('m-0 text-xs', belowPaid ? 'text-mq-warn-ink font-medium' : 'text-mq-muted')}>
+            Invoice #{inv.id} will be updated to match. {money(paidOnInvoice)} is already paid on it{belowPaid ? ' — the new total can’t go below that. Void the order instead.' : '.'}
+          </p>
+        )}
+
+        <Field label="Reason for the edit" required {...form.fieldProps('reason')}>
+          <textarea className={textareaCls()} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Customer returned the fries" />
+        </Field>
+      </form>
+    </Modal>
+  );
+}
+
+function Sum({ k, v, tone = 'text-mq-ink' }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-mq-muted">{k}</dt>
+      <dd className={cx('m-0 font-mq-mono tabular-nums', tone)}>{v}</dd>
     </div>
   );
 }

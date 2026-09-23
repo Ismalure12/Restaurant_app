@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import { RowSkeletons } from '@/components/admin/ui';
 
 // The Menu report was merged into the Sales report (same filters, one source for
 // "what sold"). Old links and bookmarks land there with their period + category.
@@ -16,5 +16,5 @@ export default function MenuReportRedirect() {
     for (const k of KEEP) { const v = sp.get(k); if (v) next.set(k, v); }
     router.replace(`/admin/dashboard/reports/sales?${next}#dishes`);
   }, [sp, router]);
-  return <RowsSkeleton rows={3} height={80} />;
+  return <RowSkeletons rows={3} />;
 }

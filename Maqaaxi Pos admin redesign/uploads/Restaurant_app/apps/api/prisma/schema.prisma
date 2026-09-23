@@ -1,0 +1,791 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model AdminUser {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  // admin | manager | cashier | waiter | user
+  role          String    @default("user")
+  name          String?
+  phone         String?
+  isActive      Boolean   @default(true) @map("is_active")
+  resetCode     String?   @map("reset_code")
+  resetCodeExp  DateTime? @map("reset_code_exp")
+  // Failed reset-code attempts since the code was issued — locks out after 5.
+  resetAttempts Int       @default(0) @map("reset_attempts")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  ordersTaken             Order[]          @relation("OrderStaff")
+  ordersServed            Order[]          @relation("OrderWaiter")
+  ordersEdited            Order[]          @relation("OrderEditor")
+  ordersVoided            Order[]          @relation("OrderVoider")
+  stockMovements          StockMovement[]
+  expenses                Expense[]
+  invoicesCreated         Invoice[]        @relation("InvoiceCreator")
+  invoicePaymentsRecorded InvoicePayment[] @relation("InvoicePaymentRecorder")
+  salaryPayments          SalaryPayment[]  @relation("SalaryPaid")
+  salaryPaymentsMade      SalaryPayment[]  @relation("SalaryPaidBy")
+  salaryRates             SalaryRate[]     @relation("SalaryRateOf")
+  salaryRatesSet          SalaryRate[]     @relation("SalaryRateSetBy")
+  ordersCollected         Order[]          @relation("OrderCollector")
+  staffAccounts           StaffAccount[]
+  entriesCollected        AccountEntry[]   @relation("EntryCollector")
+  entriesCreated          AccountEntry[]   @relation("EntryCreator")
+  dayClosesMade           DayClose[]       @relation("DayClosedBy")
+  supplierPaymentsMade    SupplierPayment[] @relation("SupplierPaidBy")
+  stockCounts             StockCount[]     @relation("StockCountBy")
+  periodsClosed           PeriodClose[]    @relation("PeriodClosedBy")
+
+  @@map("admin_users")
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String
+  slug      String     @unique
+  kicker    String?
+  headline  String?
+  sub       String?
+  coverUrl  String?    @map("cover_url")
+  sortOrder Int        @default(0) @map("sort_order")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  items     MenuItem[]
+
+  @@map("categories")
+}
+
+model MenuItem {
+  id           Int           @id @default(autoincrement())
+  categoryId   Int           @map("category_id")
+  name         String
+  description  String?
+  price        Decimal       @db.Decimal(10, 2)
+  imageUrl     String?       @map("image_url")
+  kcal         String?
+  prepTime     String?       @map("prep_time")
+  pairing      String?
+  sortOrder    Int           @default(0) @map("sort_order")
+  isActive     Boolean       @default(true) @map("is_active")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  optionGroups OptionGroup[]
+  extras       ItemExtra[]
+  tags         ItemTag[]
+
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+model OptionGroup {
+  id         Int          @id @default(autoincrement())
+  menuItemId Int          @map("menu_item_id")
+  title      String
+  sortOrder  Int          @default(0) @map("sort_order")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  menuItem   MenuItem     @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options    ItemOption[]
+
+  @@index([menuItemId])
+  @@map("option_groups")
+}
+
+model ItemOption {
+  id            Int         @id @default(autoincrement())
+  optionGroupId Int         @map("option_group_id")
+  name          String
+  priceAdd      Decimal     @default(0) @map("price_add") @db.Decimal(10, 2)
+  sortOrder     Int         @default(0) @map("sort_order")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  optionGroup   OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  @@index([optionGroupId])
+  @@map("item_options")
+}
+
+model ItemExtra {
+  id         Int      @id @default(autoincrement())
+  menuItemId Int      @map("menu_item_id")
+  name       String
+  priceAdd   Decimal  @default(0) @map("price_add") @db.Decimal(10, 2)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+
+  @@index([menuItemId])
+  @@map("item_extras")
+}
+
+model Tag {
+  id        Int       @id @default(autoincrement())
+  slug      String    @unique
+  label     String
+  variant   String    @default("default") // default | green | spicy
+  createdAt DateTime  @default(now()) @map("created_at")
+  items     ItemTag[]
+
+  @@map("tags")
+}
+
+model ItemTag {
+  menuItemId Int      @map("menu_item_id")
+  tagId      Int      @map("tag_id")
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([menuItemId, tagId])
+  @@index([tagId])
+  @@map("item_tags")
+}
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  phone     String    @unique
+  name      String
+  address   String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  orders    Order[]
+  invoices  Invoice[]
+
+  @@map("customers")
+}
+
+// Someone who paid online through Sifalo (QR menu). Kept apart from Customer,
+// which is the back office's account/owing list. Created or refreshed (by
+// phone) when a payment is confirmed — there is no sign-up or password: the
+// wallet PIN at Sifalo is the only check. Used for checkout prefill and so
+// staff can see who ordered.
+model OnlineClient {
+  id        Int      @id @default(autoincrement())
+  phone     String   @unique
+  name      String
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  orders    Order[]
+
+  @@map("online_clients")
+}
+
+model PaymentSession {
+  id          Int      @id @default(autoincrement())
+  reference   String   @unique
+  phone       String
+  name        String
+  address     String?
+  orderType   String   @default("delivery") @map("order_type")
+  tableNumber String?  @map("table_number")
+  cartJson    Json     @map("cart_json")
+  amount      Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  // Sifalo hosted-checkout session id, stored when the customer returns so a
+  // still-pending payment can be re-verified by polling.
+  sid         String?  @unique
+  // Set when the customer is sent to Sifalo — until then nobody can have paid.
+  initiatedAt   DateTime? @map("initiated_at")
+  // Server-side reconciler bookkeeping (lib/paymentReconciler.ts): when Sifalo
+  // was last asked, how often, and what it said (pending, no_payment,
+  // declined_<code>, amount_mismatch …).
+  lastCheckedAt DateTime? @map("last_checked_at")
+  checkCount    Int       @default(0) @map("check_count")
+  lastResult    String?   @map("last_result")
+
+  @@index([createdAt])
+  @@map("payment_sessions")
+}
+
+model Order {
+  id                   Int            @id @default(autoincrement())
+  customerId           Int?           @map("customer_id")
+  // Online orders: the Sifalo payer. POS / On-account sales use customerId.
+  clientId             Int?           @map("client_id")
+  items                Json
+  total                Decimal        @db.Decimal(10, 2)
+  address              String?
+  orderType            String         @default("delivery") @map("order_type")
+  tableNumber          String?        @map("table_number")
+  // online = QR/Waafi · pos = walk-in taken by staff
+  source               String         @default("online")
+  staffId              Int?           @map("staff_id")
+  paymentMethod        String?        @map("payment_method") // cash | card | evc | invoice | waafi
+  paymentStatus        String         @default("unpaid") @map("payment_status") // unpaid | paid | refunded
+  amountReceived       Decimal?       @map("amount_received") @db.Decimal(10, 2)
+  discount             Decimal        @default(0) @db.Decimal(10, 2)
+  deliveryFee          Decimal        @default(0) @map("delivery_fee") @db.Decimal(10, 2)
+  contactName          String?        @map("contact_name")
+  contactPhone         String?        @map("contact_phone")
+  // waiter the order is attributed to — a login AdminUser with role 'waiter'
+  waiterId             Int?           @map("waiter_id")
+  // pending = preauth held, awaiting admin · confirmed = accepted/captured ·
+  // declined = pre-auth released · voided = manager cancelled the sale (terminal) ·
+  // open = a pay-later dine-in order: in the kitchen, shown as Unpaid (POS only)
+  status               String         @default("pending")
+  reference            String         @unique
+  // Sifalo sid of the payment (online orders). Unique: one payment pays for one
+  // order only — the replay guard for Sifalo's unauthenticated verify API.
+  paymentTransactionId String?        @unique @map("payment_transaction_id")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  // Last write of any kind. Nullable so rows predating the column stay NULL
+  // (truthfully "never touched"); doubles as the optimistic-concurrency token
+  // the edit/void routes guard their writes on.
+  updatedAt            DateTime?      @updatedAt @map("updated_at")
+  // Manager correction of the sale's content: who, when, why.
+  editedById           Int?           @map("edited_by_id")
+  editedAt             DateTime?      @map("edited_at")
+  editReason           String?        @map("edit_reason")
+  // Void / refund of the whole sale. Terminal — never cleared.
+  voidedById           Int?           @map("voided_by_id")
+  voidedAt             DateTime?      @map("voided_at")
+  voidReason           String?        @map("void_reason")
+  // When the sale closed: paid at the till, charged to a customer account,
+  // or paid online. NULL while a dine-in tab is still open. Every sales
+  // report is keyed on this, so a tab opened before midnight and paid after
+  // lands on the day it was paid.
+  closedAt             DateTime?      @map("closed_at")
+  // Daily receipt number (0001…), assigned when the sale closes and reset at
+  // local midnight (BUSINESS_TZ). receiptDay is that local date, YYYY-MM-DD.
+  receiptNo            Int?           @map("receipt_no")
+  receiptDay           String?        @map("receipt_day")
+  // Label of the Settings payment account that received the money (EVC,
+  // E-Dahab…) — a snapshot, so renaming an account never rewrites history.
+  paymentAccount       String?        @map("payment_account")
+  customer             Customer?      @relation(fields: [customerId], references: [id])
+  client               OnlineClient?  @relation(fields: [clientId], references: [id])
+  staff                AdminUser?     @relation("OrderStaff", fields: [staffId], references: [id])
+  waiter               AdminUser?     @relation("OrderWaiter", fields: [waiterId], references: [id])
+  editor               AdminUser?     @relation("OrderEditor", fields: [editedById], references: [id])
+  voider               AdminUser?     @relation("OrderVoider", fields: [voidedById], references: [id])
+  // Set only when paymentMethod = 'invoice' — the sale was billed to a
+  // customer's account instead of collected at the counter.
+  invoice              Invoice?
+  // The waiter/cashier who physically took the money (their A/C, E/d, My
+  // Cash… or cash in hand). Null for online sales and older sales.
+  collectedById        Int?           @map("collected_by_id")
+  collectedBy          AdminUser?     @relation("OrderCollector", fields: [collectedById], references: [id])
+  entries              AccountEntry[]
+
+  // One receipt number per day — the last line of defense behind ReceiptCounter.
+  @@unique([receiptDay, receiptNo])
+  @@index([staffId])
+  @@index([waiterId])
+  @@index([editedById])
+  @@index([voidedById])
+  @@index([collectedById])
+  // Every revenue aggregate filters on this pair; voiding makes paymentStatus
+  // the load-bearing revenue filter.
+  @@index([paymentStatus, createdAt])
+  // Sales reports filter on the close time.
+  @@index([closedAt])
+  // Open tabs are listed by status.
+  @@index([status])
+  @@index([customerId])
+  @@index([clientId])
+  lines                OrderItem[]
+
+  @@map("orders")
+}
+
+// Per-day receipt counter. Incremented atomically (upsert + increment) inside
+// the transaction that closes a sale, so two tills closing at the same moment
+// can never print the same receipt number.
+model ReceiptCounter {
+  day  String @id // YYYY-MM-DD in BUSINESS_TZ
+  last Int
+
+  @@map("receipt_counters")
+}
+
+// A bill owed by a Customer who doesn't pay upfront (a tab, a monthly
+// account). Created either from a POS sale (paymentMethod = 'invoice', see
+// orderId) or standalone against a customer directly from the Invoicing page.
+// `items` is a snapshot independent of Order so an invoice's line detail
+// (and table/service info) survives even if the source order is deleted.
+model Invoice {
+  id          Int       @id @default(autoincrement())
+  customerId  Int       @map("customer_id")
+  // The POS sale that spawned this invoice, if any — null for a standalone
+  // invoice created directly against a customer with no register sale.
+  orderId     Int?      @unique @map("order_id")
+  items       Json // [{ name/description, quantity, unitPrice }]
+  subtotal    Decimal   @db.Decimal(10, 2)
+  discount    Decimal   @default(0) @db.Decimal(10, 2)
+  total       Decimal   @db.Decimal(10, 2)
+  amountPaid  Decimal   @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  // unpaid | partial | paid | void
+  status      String    @default("unpaid")
+  dueDate     DateTime? @map("due_date")
+  // Snapshot of the source order's service info, carried through for
+  // traceability (e.g. which table a dine-in tab belonged to).
+  tableNumber String?   @map("table_number")
+  orderType   String?   @map("order_type")
+  note        String?
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  order    Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  creator  AdminUser?       @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  payments InvoicePayment[]
+
+  @@index([status, createdAt])
+  @@index([customerId])
+  @@index([createdBy])
+  @@map("invoices")
+}
+
+// A single payment collected against an Invoice over time (partial/monthly
+// payments). The running total lives on Invoice.amountPaid; this table is
+// the audit trail of how it got there.
+model InvoicePayment {
+  id         Int      @id @default(autoincrement())
+  invoiceId  Int      @map("invoice_id")
+  amount     Decimal  @db.Decimal(10, 2)
+  method     String // cash | card | evc
+  // Settings payment-account label the money went into (snapshot), for evc.
+  account    String?
+  note       String?
+  recordedBy Int?     @map("recorded_by")
+  paidAt     DateTime @default(now()) @map("paid_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  invoice  Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recorder AdminUser?    @relation("InvoicePaymentRecorder", fields: [recordedBy], references: [id])
+  entry    AccountEntry?
+
+  @@index([invoiceId])
+  @@index([paidAt])
+  @@index([recordedBy])
+  @@map("invoice_payments")
+}
+
+model InventoryItem {
+  id           Int             @id @default(autoincrement())
+  name         String
+  unit         String
+  quantity     Decimal         @default(0) @db.Decimal(12, 3)
+  reorderLevel Decimal?        @map("reorder_level") @db.Decimal(12, 3)
+  // Manual fallback estimate only — once the item has purchase-movement
+  // history, the weighted-average cost derived from StockMovement.totalCost
+  // is used instead (see src/lib/inventoryCosting.js).
+  costPerUnit  Decimal?        @map("cost_per_unit") @db.Decimal(10, 2)
+  supplier     String?
+  isActive     Boolean         @default(true) @map("is_active")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  movements    StockMovement[]
+
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id              Int           @id @default(autoincrement())
+  inventoryItemId Int           @map("inventory_item_id")
+  type            String // purchase | usage | adjustment | waste
+  quantity        Decimal       @db.Decimal(12, 3) // signed delta
+  // Total price actually paid for this purchased quantity (purchase-type
+  // movements only) — NOT a per-unit price, because the per-unit price
+  // fluctuates day to day. Weighted-average unit cost for valuation is
+  // derived on read from sum(totalCost)/sum(quantity) across purchases —
+  // see src/lib/inventoryCosting.js.
+  totalCost       Decimal?      @map("total_cost") @db.Decimal(10, 2)
+  note            String?
+  staffId         Int?          @map("staff_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  // Purchases: who it was bought from, and whether it is still owed to them
+  // (bought on credit — no money moved yet; a SupplierPayment settles it).
+  supplierId      Int?          @map("supplier_id")
+  onCredit        Boolean       @default(false) @map("on_credit")
+  // The expense a paid-now purchase booked (so cost of goods never counts it twice).
+  expenseId       Int?          @unique @map("expense_id")
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  staff           AdminUser?    @relation(fields: [staffId], references: [id])
+  supplier        Supplier?     @relation(fields: [supplierId], references: [id])
+  expense         Expense?      @relation("MovementExpense", fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@index([inventoryItemId, createdAt])
+  @@index([type])
+  @@index([staffId])
+  @@index([supplierId])
+  @@map("stock_movements")
+}
+
+model Expense {
+  id                Int            @id @default(autoincrement())
+  category          String
+  amount            Decimal        @db.Decimal(10, 2)
+  note              String?
+  staffId           Int?           @map("staff_id")
+  incurredAt        DateTime       @default(now()) @map("incurred_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  staff             AdminUser?     @relation(fields: [staffId], references: [id])
+  // Set when this expense is a salary payment (Staff → Payroll).
+  salaryPayment     SalaryPayment?
+  // Business account the money came out of. Null only on expenses logged
+  // before the cash book existed.
+  paidFromAccountId Int?           @map("paid_from_account_id")
+  paidFrom          MoneyAccount?  @relation(fields: [paidFromAccountId], references: [id])
+  entry             AccountEntry?
+  movement          StockMovement? @relation("MovementExpense")
+
+  @@index([incurredAt])
+  @@index([staffId])
+  @@index([paidFromAccountId])
+  @@map("expenses")
+}
+
+// One month's salary paid to one staff member. The money itself is the linked
+// Expense (so it counts in Expenses and the Financial report); deleting that
+// expense cascades here, re-opening the month. One payment per person per month.
+model SalaryPayment {
+  id        Int        @id @default(autoincrement())
+  staffId   Int        @map("staff_id")
+  month     String // YYYY-MM
+  amount    Decimal    @db.Decimal(10, 2)
+  note      String?
+  paidAt    DateTime   @default(now()) @map("paid_at")
+  paidById  Int?       @map("paid_by_id")
+  expenseId Int        @unique @map("expense_id")
+  staff     AdminUser  @relation("SalaryPaid", fields: [staffId], references: [id], onDelete: Cascade)
+  paidBy    AdminUser? @relation("SalaryPaidBy", fields: [paidById], references: [id])
+  expense   Expense    @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, month])
+  @@index([month])
+  @@index([paidById])
+  @@map("salary_payments")
+}
+
+// A staff member's monthly salary from `fromMonth` onward. The salary for
+// month M is the rate with the greatest fromMonth <= M, so a raise changes that
+// month and later while earlier months keep their amount (lib/salary.ts).
+// Amount 0 = no salary from that month.
+model SalaryRate {
+  id        Int        @id @default(autoincrement())
+  staffId   Int        @map("staff_id")
+  amount    Decimal    @db.Decimal(10, 2)
+  fromMonth String     @map("from_month") // YYYY-MM
+  setById   Int?       @map("set_by_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  staff     AdminUser  @relation("SalaryRateOf", fields: [staffId], references: [id], onDelete: Cascade)
+  setBy     AdminUser? @relation("SalaryRateSetBy", fields: [setById], references: [id], onDelete: SetNull)
+
+  @@unique([staffId, fromMonth])
+  @@index([setById])
+  @@map("salary_rates")
+}
+
+model SocialLink {
+  id        Int      @id @default(autoincrement())
+  platform  String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("social_links")
+}
+
+// Simple key/value app settings (e.g. delivery_fee). Managed on the Settings page.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
+
+// ── Money: business accounts, staff collection numbers, the cash book ────
+// docs/system-blueprint.md §3. A business account is where money really sits
+// (cash, each mobile wallet, the Mastercard, the bank, Sifalo online). Staff
+// never hold a balance: a payment a waiter takes on their own A/C number is
+// written straight into the business A/C account, tagged with who collected
+// it — everything they collect is handed over at the end of the day.
+model MoneyAccount {
+  id             Int      @id @default(autoincrement())
+  // cash | wallet | card | bank | gateway
+  kind           String
+  label          String   @unique
+  // The business's own number (printed on receipts for wallets).
+  number         String?
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @default(0) @map("sort_order")
+  // Counted/statement balance on the opening date (Setting opening_date).
+  openingBalance Decimal  @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  entries       AccountEntry[]
+  staffAccounts StaffAccount[]
+  expenses      Expense[]
+  closeLines    DayCloseLine[]
+  supplierPayments SupplierPayment[]
+
+  @@map("money_accounts")
+}
+
+// A waiter's or cashier's own number for one business wallet (their A/C,
+// E/d, My Cash…). Printed on the bill so the customer knows where to send the
+// money; the money counts in the business wallet it points to.
+model StaffAccount {
+  id        Int          @id @default(autoincrement())
+  staffId   Int          @map("staff_id")
+  accountId Int          @map("account_id")
+  number    String
+  createdAt DateTime     @default(now()) @map("created_at")
+  staff     AdminUser    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  account   MoneyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, accountId])
+  @@index([accountId])
+  @@map("staff_accounts")
+}
+
+// The cash book: one signed row per money movement, written in the same
+// transaction as the thing that moved the money. Balance of an account =
+// openingBalance + sum(amount) from the opening date on.
+model AccountEntry {
+  id               Int      @id @default(autoincrement())
+  accountId        Int      @map("account_id")
+  amount           Decimal  @db.Decimal(12, 2)
+  // sale | invoice_payment | refund | adjustment | expense | salary |
+  // transfer | owner_in | owner_out | over_short
+  kind             String
+  // Local business day (YYYY-MM-DD) the movement belongs to.
+  businessDay      String   @map("business_day")
+  occurredAt       DateTime @default(now()) @map("occurred_at")
+  collectedById    Int?     @map("collected_by_id")
+  orderId          Int?     @map("order_id")
+  invoicePaymentId Int?     @unique @map("invoice_payment_id")
+  expenseId        Int?     @unique @map("expense_id")
+  supplierPaymentId Int?    @unique @map("supplier_payment_id")
+  // Pairs the two rows of one transfer between accounts.
+  transferId       String?  @map("transfer_id")
+  // A refund/correction points at the row it reverses.
+  reversesId       Int?     @unique @map("reverses_id")
+  note             String?
+  createdById      Int?     @map("created_by_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  account        MoneyAccount    @relation(fields: [accountId], references: [id])
+  collectedBy    AdminUser?      @relation("EntryCollector", fields: [collectedById], references: [id])
+  createdBy      AdminUser?      @relation("EntryCreator", fields: [createdById], references: [id])
+  order          Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  invoicePayment InvoicePayment? @relation(fields: [invoicePaymentId], references: [id], onDelete: Cascade)
+  expense        Expense?        @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  supplierPayment SupplierPayment? @relation(fields: [supplierPaymentId], references: [id], onDelete: Cascade)
+  reverses       AccountEntry?   @relation("EntryReverses", fields: [reversesId], references: [id])
+  reversedBy     AccountEntry?   @relation("EntryReverses")
+
+  @@index([accountId, businessDay])
+  @@index([businessDay, collectedById])
+  @@index([collectedById])
+  @@index([createdById])
+  @@index([orderId])
+  @@index([transferId])
+  @@map("account_entries")
+}
+
+// Who did what to money, menu prices or settings (voids, edits, account
+// changes, opening balances…). Append-only.
+model AuditLog {
+  id       Int      @id @default(autoincrement())
+  actorId  Int?     @map("actor_id")
+  action   String
+  entity   String
+  entityId String?  @map("entity_id")
+  meta     Json?
+  at       DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// ── Day close (docs/system-blueprint.md §3.4) ────────────────────────────
+// A manager closes each business day once it has ended: what each business
+// account should hold vs what was counted (the difference becomes an
+// `over_short` cash-book row), and a frozen Z-report snapshot. A closed day is
+// locked (assertOpenDay). Reopening keeps the row (isClosed=false) with who
+// and why; the audit log keeps the history.
+model DayClose {
+  businessDay  String   @id @map("business_day")
+  isClosed     Boolean  @default(true) @map("is_closed")
+  closedAt     DateTime @default(now()) @map("closed_at")
+  closedById   Int?     @map("closed_by_id")
+  // The Z-report as it stood at close (sales, collections, voids, checks).
+  snapshot     Json
+  reopenedAt   DateTime? @map("reopened_at")
+  reopenedById Int?      @map("reopened_by_id")
+  reopenReason String?   @map("reopen_reason")
+
+  lines    DayCloseLine[]
+  closedBy AdminUser? @relation("DayClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  @@index([closedById])
+  @@map("day_closes")
+}
+
+model DayCloseLine {
+  id          Int      @id @default(autoincrement())
+  businessDay String   @map("business_day")
+  accountId   Int      @map("account_id")
+  opening     Decimal  @db.Decimal(12, 2)
+  moneyIn     Decimal  @map("money_in") @db.Decimal(12, 2)
+  moneyOut    Decimal  @map("money_out") @db.Decimal(12, 2)
+  expected    Decimal  @db.Decimal(12, 2)
+  // What was counted (cash) or read from the app/statement; null = not counted.
+  counted     Decimal? @db.Decimal(12, 2)
+
+  day     DayClose     @relation(fields: [businessDay], references: [businessDay], onDelete: Cascade)
+  account MoneyAccount @relation(fields: [accountId], references: [id])
+
+  @@unique([businessDay, accountId])
+  @@index([accountId])
+  @@map("day_close_lines")
+}
+
+// ── Month close (docs/system-blueprint.md §3.3 / §3.5) ───────────────────
+
+// Expense categories with a kind: operating costs, payroll, or stock purchases
+// (cost of goods — counted through Inventory purchases, not as operating).
+model ExpenseCategory {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  // operating | payroll | stock_purchase
+  kind String @default("operating")
+
+  @@map("expense_categories")
+}
+
+model Supplier {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  phone     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  movements StockMovement[]
+  payments  SupplierPayment[]
+
+  @@map("suppliers")
+}
+
+// Money paid to a supplier against what is owed for credit purchases. One
+// `supplier_payment` cash-book row (money out of the account it came from).
+model SupplierPayment {
+  id          Int      @id @default(autoincrement())
+  supplierId  Int      @map("supplier_id")
+  amount      Decimal  @db.Decimal(12, 2)
+  accountId   Int      @map("account_id")
+  note        String?
+  paidAt      DateTime @default(now()) @map("paid_at")
+  paidById    Int?     @map("paid_by_id")
+
+  supplier Supplier      @relation(fields: [supplierId], references: [id])
+  account  MoneyAccount  @relation(fields: [accountId], references: [id])
+  paidBy   AdminUser?    @relation("SupplierPaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+  entry    AccountEntry?
+
+  @@index([supplierId, paidAt])
+  @@index([accountId])
+  @@index([paidById])
+  @@map("supplier_payments")
+}
+
+// A stocktake: every stock item counted on a day. Posting it books the
+// differences as `adjustment` movements and fixes the stock value at each
+// item's weighted-average cost (closing stock for the month's cost of goods).
+model StockCount {
+  id          Int       @id @default(autoincrement())
+  countedOn   String    @map("counted_on") // YYYY-MM-DD
+  // draft | posted
+  status      String    @default("draft")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  postedAt    DateTime? @map("posted_at")
+  createdById Int?      @map("created_by_id")
+  // Total value of the counted stock (set when posted).
+  totalValue  Decimal?  @map("total_value") @db.Decimal(12, 2)
+
+  lines     StockCountLine[]
+  createdBy AdminUser? @relation("StockCountBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([countedOn])
+  @@index([createdById])
+  @@map("stock_counts")
+}
+
+model StockCountLine {
+  id         Int      @id @default(autoincrement())
+  countId    Int      @map("count_id")
+  itemId     Int      @map("item_id")
+  systemQty  Decimal  @map("system_qty") @db.Decimal(12, 3)
+  countedQty Decimal? @map("counted_qty") @db.Decimal(12, 3)
+  unitCost   Decimal? @map("unit_cost") @db.Decimal(10, 4)
+
+  count StockCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+
+  @@unique([countId, itemId])
+  @@index([itemId])
+  @@map("stock_count_lines")
+}
+
+// A closed month ("2026-09") or financial year ("FY2026"): the frozen
+// statements and the lock. Reopening keeps the row (isClosed=false).
+model PeriodClose {
+  period       String    @id
+  // month | year
+  kind         String
+  isClosed     Boolean   @default(true) @map("is_closed")
+  closedAt     DateTime  @default(now()) @map("closed_at")
+  closedById   Int?      @map("closed_by_id")
+  snapshot     Json
+  reopenedAt   DateTime? @map("reopened_at")
+  reopenReason String?   @map("reopen_reason")
+
+  closedBy AdminUser? @relation("PeriodClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  @@index([closedById])
+  @@map("period_closes")
+}
+
+// ── Order lines (docs/system-blueprint.md §5 P2) ─────────────────────────
+// One row per cart line, written next to Order.items (the JSON stays for
+// receipts/kitchen tickets). Reports group on these instead of parsing JSON
+// and matching names. `menuItemId` / `categoryName` are SNAPSHOTS — a menu
+// item or category deleted later leaves the line intact.
+model OrderItem {
+  id           Int     @id @default(autoincrement())
+  orderId      Int     @map("order_id")
+  menuItemId   Int?    @map("menu_item_id")
+  name         String
+  categoryName String? @map("category_name")
+  optionName   String? @map("option_name")
+  extras       Json?
+  unitPrice    Decimal @map("unit_price") @db.Decimal(10, 2)
+  quantity     Int
+  lineTotal    Decimal @map("line_total") @db.Decimal(10, 2)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([menuItemId])
+  @@map("order_items")
+}
+
+// The restaurant's tables. The Register picks from this list so "5", "T5" and
+// "Table 5" stop being three different tables (Order.tableNumber keeps the
+// table's name as a snapshot).
+model DiningTable {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@map("dining_tables")
+}

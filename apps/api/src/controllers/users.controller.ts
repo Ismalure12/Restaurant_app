@@ -7,6 +7,8 @@ import { createUserSchema, updateUserSchema } from '../validations/users.validat
 import { readJson } from '../utils/body.js';
 import { currentMonth, groupRates, salaryFor } from '../lib/money/salary.js';
 import { audit } from '../lib/db/audit.js';
+import { rangeFromQuery } from '../lib/time/businessTime.js';
+import { num, round2, salesWhere } from '../lib/reports/common.js';
 
 // Anyone given Staff › Act may manage accounts, but never above themselves:
 // an account's role (and the role handed out) must rank at most the editor's,
@@ -25,18 +27,45 @@ export async function listUsers(req: Request, res: Response) {
       return res.status(auth.status).json({ error: auth.error });
     }
 
-    const [users, rates] = await Promise.all([
+    // Managers (and admins) also get each person's last 7 business days on
+    // the Staff cards: sales they rang up OR served, and voided sales they
+    // rang up or served. Two groupBy reads over (staffId, waiterId) pairs, so
+    // a sale where one person did both counts once — never a query per person.
+    const withStats = auth.session.role === 'admin' || auth.session.role === 'manager';
+    const week = withStats ? rangeFromQuery(null, null, { defaultDays: 7 }).range : undefined;
+
+    const [users, rates, sold, voided] = await Promise.all([
       prisma.adminUser.findMany({
         select: { id: true, email: true, role: true, name: true, phone: true, isActive: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
         take: 500,
       }),
       prisma.salaryRate.findMany({ select: { staffId: true, amount: true, fromMonth: true }, take: 5000 }),
+      week
+        ? prisma.order.groupBy({ by: ['staffId', 'waiterId'], where: salesWhere(week), _sum: { total: true }, _count: { _all: true } })
+        : null,
+      week
+        ? prisma.order.groupBy({ by: ['staffId', 'waiterId'], where: { voidedAt: { gte: week.from, lt: week.to } }, _count: { _all: true } })
+        : null,
     ]);
     // Current monthly salary, from salary history (0 = none on file).
     const ratesOf = groupRates(rates);
     const month = currentMonth();
-    return res.json(users.map((u) => ({ ...u, salary: salaryFor(ratesOf.get(u.id) ?? [], month) })));
+    const mine = <T extends { staffId: number | null; waiterId: number | null }>(rows: T[], id: number) =>
+      rows.filter((r) => r.staffId === id || r.waiterId === id);
+    return res.json(users.map((u) => {
+      const row = { ...u, salary: salaryFor(ratesOf.get(u.id) ?? [], month) };
+      if (!sold || !voided) return row;
+      const s = mine(sold, u.id);
+      return {
+        ...row,
+        stats7d: {
+          sales: round2(s.reduce((t, r) => t + num(r._sum.total), 0)),
+          orders: s.reduce((t, r) => t + r._count._all, 0),
+          voids: mine(voided, u.id).reduce((t, r) => t + r._count._all, 0),
+        },
+      };
+    }));
   } catch {
     return res.status(500).json({ error: 'Internal server error' });
   }

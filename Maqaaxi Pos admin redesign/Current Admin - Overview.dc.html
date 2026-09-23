@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;550;600;650;700&family=Geist+Mono:wght@400;500;600;650;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; background: #f4f6f4; font-family: Geist, system-ui, sans-serif; color: #11211a; -webkit-font-smoothing: antialiased; letter-spacing: -0.011em; line-height: 1.5; }
+  a { color: #14543d; text-decoration: none; }
+  a:hover { color: #1f6b4f; }
+  @keyframes jzShimmer { to { background-position: -200% 0; } }
+  @keyframes jzPulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+</style>
+</helmet>
+
+<div style="display: grid; grid-template-columns: 268px 1fr; min-height: 100vh; background: #f4f6f4; background-image: radial-gradient(120% 90% at 100% 0%, #eef3ef 0%, #f4f6f4 46%, #f1f3f1 100%)">
+
+  <aside style="position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; background: #ffffff; border-right: 1px solid #e4e9e4; z-index: 30">
+    <div style="padding: 18px 18px 14px; display: flex; align-items: center; gap: 11px">
+      <span style="width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; background: #fff; border: 1px solid #e4e9e4; display: grid; place-items: center; box-shadow: 0 1px 2px rgba(20,40,30,.05); overflow: hidden"><img src="assets/logo-icon.png" alt="Maqaaxi Pos" style="width: 30px; height: 30px; object-fit: contain; display: block" /></span>
+      <div><div style="font-size: 17px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.1">Maqaaxi Pos</div></div>
+    </div>
+
+    <div style="flex: 1; overflow-y: auto; padding: 6px 12px 12px">
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Home</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; position: relative; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 600; color: #14543d; background: #e7f1ec; margin-bottom: 1px"><span style="position: absolute; left: -12px; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: #1f6b4f"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>Overview</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Sell</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="4" y="3" width="16" height="18" rx="2" /><rect x="7" y="6" width="10" height="4" rx="1" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01M16 17h.01" /></svg>Register</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="M9 12h6M9 16h4" /></svg>Orders<span style="margin-left: auto; font-family: 'Geist Mono', monospace; font-size: 11.5px; font-weight: 600; background: #b9831c; color: #fff; border-radius: 20px; padding: 1px 7px; min-width: 18px; text-align: center">5</span></a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="3" y="9" width="18" height="4" rx="1.5" /><path d="M6 13v7M18 13v7M9 9V5h6v4" /></svg>Tables</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Money</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5z" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>Sales history</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>Cash &amp; accounts</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M6 16c0-1.66 1.34-3 3-3s3 1.34 3 3M14 9h4M14 13h4" /></svg>Customers</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4" /><path d="M4 6v12a2 2 0 0 0 2 2h14v-4" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></svg>Expenses</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Menu</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z" /><path d="M6 1v3M10 1v3M14 1v3" /></svg>Menu Items</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>Categories &amp; tags</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Back office</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7L12 12l8.7-5M12 22V12" /></svg>Inventory</a>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>Staff</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">Insights</div>
+        <a href="#" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M8 17V11M12 17V7M16 17v-4" /></svg>Reports</a>
+      </div>
+      <div style="margin-top: 14px">
+        <div style="font-size: 11px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d; padding: 0 10px 7px">System</div>
+        <button type="button" style="display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 8px; font-size: 15px; font-weight: 500; color: #69756e; width: 100%; text-align: left; background: none; border: 0; cursor: pointer; font-family: inherit; margin-bottom: 1px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="width: 18px; height: 18px; flex-shrink: 0; display: block"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>Settings<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style="width: 15px; height: 15px; margin-left: auto; opacity: .7; display: block"><path d="m6 9 6 6 6-6" /></svg></button>
+        <div style="margin: 1px 0 6px 20px; padding-left: 9px; border-left: 1px solid #e4e9e4; display: flex; flex-direction: column; gap: 1px">
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #69756e">General</a>
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #69756e">Money</a>
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #69756e">Staff access</a>
+          <a href="#" style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #69756e">Audit log</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 12px; border-top: 1px solid #e4e9e4; display: flex; flex-direction: column; gap: 4px">
+      <button type="button" style="display: flex; align-items: center; gap: 10px; padding: 7px 9px; border-radius: 8px; width: 100%; text-align: left; background: none; border: 0; cursor: pointer; font-family: inherit">
+        <span style="width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: linear-gradient(135deg, #1f6b4f, #154b38); color: #fff; display: grid; place-items: center; font-size: 12.5px; font-weight: 650">M</span>
+        <span style="flex: 1; min-width: 0">
+          <span style="display: block; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Manager</span>
+          <span style="display: block; font-size: 11.5px; color: #69756e; text-transform: capitalize">manager · sign out</span>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa39d" stroke-width="1.7" style="display: block"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></svg>
+      </button>
+    </div>
+  </aside>
+
+  <div style="min-width: 0; display: flex; flex-direction: column">
+    <header style="position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; height: 72px; padding: 0 28px; background: rgba(244,246,244,.8); backdrop-filter: saturate(160%) blur(12px); border-bottom: 1px solid #e4e9e4">
+      <div style="min-width: 60px; flex: 0 1 auto; overflow: hidden">
+        <div style="font-size: 19px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Overview</div>
+        <div style="font-size: 12.5px; color: #69756e; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">The business at a glance</div>
+      </div>
+      <div style="flex: 1"></div>
+      <div style="display: flex; align-items: center; gap: 9px; background: #ffffff; border: 1px solid #e4e9e4; border-radius: 8px; padding: 8px 12px; flex: 0 1 320px; min-width: 0; color: #69756e">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" style="width: 15px; height: 15px; flex-shrink: 0; display: block"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input placeholder="Search orders, customers, dishes…" style="border: none; outline: none; background: none; font-size: 16px; min-width: 0; color: #11211a; width: 100%; font-family: inherit" />
+        <kbd style="font-family: 'Geist Mono', monospace; font-size: 11px; color: #9aa39d; border: 1px solid #e4e9e4; border-radius: 5px; padding: 1px 5px; background: #f9faf9">⌘K</kbd>
+      </div>
+      <button type="button" style="width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0; background: #ffffff; border: 1px solid #e4e9e4; color: #69756e; display: grid; place-items: center; cursor: pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 17px; height: 17px; display: block"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg></button>
+      <a href="#" style="width: 40px; height: 40px; border-radius: 8px; flex-shrink: 0; background: #ffffff; border: 1px solid #e4e9e4; color: #69756e; display: grid; place-items: center; position: relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 17px; height: 17px; display: block"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg><span style="position: absolute; top: 8px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: #c0432e; box-shadow: 0 0 0 2px #ffffff"></span></a>
+      <a href="#" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; padding: 0 16px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; background: #1f6b4f; color: #fff; box-shadow: 0 1px 2px rgba(20,40,30,.05); white-space: nowrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; display: block"><path d="M12 5v14M5 12h14" /></svg><span>New order</span></a>
+    </header>
+
+    <div style="padding: 26px 28px 56px; max-width: 1320px; width: 100%">
+
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 18px">
+        <div style="display: inline-flex; background: #f2f4f2; border: 1px solid #e4e9e4; border-radius: 8px; padding: 3px; gap: 2px">
+          <button type="button" style="padding: 6px 13px; border-radius: 7px; font-size: 14px; font-weight: 550; color: #69756e; background: none; border: 0; cursor: pointer; font-family: inherit">Today</button>
+          <button type="button" style="padding: 6px 13px; border-radius: 7px; font-size: 14px; font-weight: 600; color: #11211a; background: #ffffff; border: 0; cursor: pointer; font-family: inherit; box-shadow: 0 1px 2px rgba(20,40,30,.05)">7 days</button>
+          <button type="button" style="padding: 6px 13px; border-radius: 7px; font-size: 14px; font-weight: 550; color: #69756e; background: none; border: 0; cursor: pointer; font-family: inherit">30 days</button>
+          <button type="button" style="padding: 6px 13px; border-radius: 7px; font-size: 14px; font-weight: 550; color: #69756e; background: none; border: 0; cursor: pointer; font-family: inherit">This month</button>
+          <button type="button" style="padding: 6px 13px; border-radius: 7px; font-size: 14px; font-weight: 550; color: #69756e; background: none; border: 0; cursor: pointer; font-family: inherit">Custom</button>
+        </div>
+        <button type="button" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; cursor: pointer; font-family: inherit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 16px; height: 16px; display: block"><path d="M3 6h18M7 12h10M10 18h4" /></svg>Filters</button>
+      </div>
+
+      <section style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -4px 0 16px">
+        <a href="#" style="flex: 1 1 360px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid #e8d8af; background: #f6eed9; border-radius: 11px; color: #11211a">
+          <span style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+            <b style="font-weight: 650">Close Fri, 19 Sep</b>
+            <span style="font-size: 12.5px; color: #2c3b34">2 finished days aren’t closed yet, oldest first.</span>
+          </span>
+          <span style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #1f6b4f; color: #fff">Close day<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></span>
+        </a>
+        <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 auto">
+          <li><a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 12px; border: 1px solid #e4e9e4; border-radius: 999px; background: #ffffff; color: #11211a; font-size: 12.5px; font-weight: 550; box-shadow: 0 1px 2px rgba(20,40,30,.05)"><span style="width: 9px; height: 9px; border-radius: 50%; background: #b9831c; flex-shrink: 0"></span>4 online orders to accept<svg viewBox="0 0 24 24" fill="none" stroke="#69756e" stroke-width="2" style="width: 14px; height: 14px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a></li>
+          <li><a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 12px; border: 1px solid #e4e9e4; border-radius: 999px; background: #ffffff; color: #11211a; font-size: 12.5px; font-weight: 550; box-shadow: 0 1px 2px rgba(20,40,30,.05)"><span style="width: 9px; height: 9px; border-radius: 50%; background: #2f6db0; flex-shrink: 0"></span>3 unpaid tabs · $96.50<svg viewBox="0 0 24 24" fill="none" stroke="#69756e" stroke-width="2" style="width: 14px; height: 14px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a></li>
+          <li><a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 12px; border: 1px solid #e4e9e4; border-radius: 999px; background: #ffffff; color: #11211a; font-size: 12.5px; font-weight: 550; box-shadow: 0 1px 2px rgba(20,40,30,.05)"><span style="width: 9px; height: 9px; border-radius: 50%; background: #c0432e; flex-shrink: 0"></span>7 items low on stock<svg viewBox="0 0 24 24" fill="none" stroke="#69756e" stroke-width="2" style="width: 14px; height: 14px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a></li>
+        </ul>
+      </section>
+
+      <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(224px, 1fr)); gap: 12px; margin-bottom: 12px">
+        <a href="#" style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; padding: 16px 17px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; color: #11211a">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 13px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #1f6b4f; flex-shrink: 0"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Net sales</span></div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: clamp(22px, 2.4vw, 30px); font-weight: 660; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere">$4,812.40</div>
+          <svg viewBox="0 0 200 36" preserveAspectRatio="none" style="display: block; width: 100%; margin-top: 8px; height: 36px; overflow: visible"><path d="M0 30 L28 26 L56 28 L84 18 L112 22 L140 12 L168 15 L200 5" fill="none" stroke="#1f6b4f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 7px; font-size: 12.5px; color: #69756e"><span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 600; color: #1f6b4f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width: 13px; height: 13px; display: block"><path d="M12 19V5M5 12l7-7 7 7" /></svg>12.4%</span>vs previous 7 days</div>
+        </a>
+        <a href="#" style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; padding: 16px 17px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; color: #11211a">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 13px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #d6ddd6; flex-shrink: 0"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Orders</span></div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: clamp(22px, 2.4vw, 30px); font-weight: 660; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere">318</div>
+          <div style="margin-top: 6px; font-size: 12.5px; color: #69756e">avg ticket <b style="font-family: 'Geist Mono', monospace; color: #2c3b34; font-weight: 600">$15.13</b></div>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 7px; font-size: 12.5px; color: #69756e"><span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 600; color: #c0432e"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width: 13px; height: 13px; display: block"><path d="M12 5v14M5 12l7 7 7-7" /></svg>3.1%</span>vs previous 7 days</div>
+        </a>
+        <a href="#" style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; padding: 16px 17px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; color: #11211a">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 13px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #1f6b4f; flex-shrink: 0"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Net profit</span></div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: clamp(22px, 2.4vw, 30px); font-weight: 660; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere">$1,204.80</div>
+          <div style="margin-top: 6px; font-size: 12.5px; color: #69756e">margin <b style="font-family: 'Geist Mono', monospace; color: #2c3b34; font-weight: 600">25%</b></div>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 7px; font-size: 12.5px; color: #69756e"><span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 600; color: #1f6b4f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width: 13px; height: 13px; display: block"><path d="M12 19V5M5 12l7-7 7 7" /></svg>8.0%</span>vs previous 7 days</div>
+        </a>
+        <a href="#" style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; padding: 16px 17px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; color: #11211a">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 13px"><span style="width: 9px; height: 9px; border-radius: 50%; background: #2f6db0; flex-shrink: 0"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Money in accounts</span></div>
+          <div style="font-family: 'Geist Mono', monospace; font-size: clamp(22px, 2.4vw, 30px); font-weight: 660; letter-spacing: -0.03em; line-height: 1.15; overflow-wrap: anywhere">$7,318.90</div>
+          <div style="margin-top: 6px; font-size: 12.5px; color: #69756e">right now, all accounts</div>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: auto; padding-top: 7px; font-size: 12.5px; color: #69756e"><span style="display: inline-flex; align-items: center; gap: 3px; font-weight: 600; color: #1f6b4f">+$684.00 today</span></div>
+        </a>
+      </section>
+
+      <ul style="list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); border: 1px solid #e4e9e4; border-radius: 11px; background: #ffffff; box-shadow: 0 1px 2px rgba(20,40,30,.05); overflow: hidden">
+        <li style="display: flex"><a href="#" style="flex: 1; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 11px 16px; min-height: 48px; color: #11211a"><span style="width: 9px; height: 9px; border-radius: 50%; background: #2f6db0"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">On account</span><b style="font-size: 15px; font-family: 'Geist Mono', monospace">$412.00</b><span style="grid-column: 2 / -1; font-size: 12.5px; color: #69756e">customers owe $1,286.40</span></a></li>
+        <li style="display: flex; border-left: 1px solid #eef1ee"><a href="#" style="flex: 1; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 11px 16px; min-height: 48px; color: #11211a"><span style="width: 9px; height: 9px; border-radius: 50%; background: #c0432e"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Expenses</span><b style="font-size: 15px; font-family: 'Geist Mono', monospace">$3,607.60</b><span style="grid-column: 2 / -1; font-size: 12.5px; color: #69756e"><span style="color: #1f6b4f; font-weight: 600">4.2%</span> vs previous 7 days</span></a></li>
+        <li style="display: flex; border-left: 1px solid #eef1ee"><a href="#" style="flex: 1; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 8px; padding: 11px 16px; min-height: 48px; color: #11211a"><span style="width: 9px; height: 9px; border-radius: 50%; background: #b9831c"></span><span style="font-size: 12.5px; color: #69756e; font-weight: 500">Voids</span><b style="font-size: 15px; font-family: 'Geist Mono', monospace">6</b><span style="grid-column: 2 / -1; font-size: 12.5px; color: #69756e">$142.00</span></a></li>
+      </ul>
+
+      <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); margin-bottom: 16px; overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+          <div style="min-width: 0">
+            <div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Trend</div>
+            <div style="font-weight: 640; font-size: 15px; letter-spacing: -0.01em; margin-top: 2px">Sales by day</div>
+          </div>
+          <a href="#" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; flex-shrink: 0">Sales report<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+        </div>
+        <div style="padding: 20px">
+          <div style="min-height: 22px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; font-size: 12.5px; color: #11211a; margin-bottom: 6px">
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #69756e"><span style="width: 10px; height: 10px; border-radius: 3px; background: #1f6b4f; display: inline-block"></span>Sales</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; color: #69756e"><span style="width: 14px; height: 0; border-top: 2px dashed #69756e; display: inline-block"></span>vs previous 7 days</span>
+          </div>
+          <svg viewBox="0 0 900 200" preserveAspectRatio="none" style="width: 100%; height: 200px; display: block; overflow: visible">
+            <line x1="0" y1="185" x2="900" y2="185" stroke="#d6ddd6" stroke-width="1" />
+            <rect x="24" y="96" width="78" height="89" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <rect x="150" y="74" width="78" height="111" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <rect x="276" y="112" width="78" height="73" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <rect x="402" y="52" width="78" height="133" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <rect x="528" y="86" width="78" height="99" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <rect x="654" y="28" width="78" height="157" rx="3" fill="#1f6b4f" opacity="1" />
+            <rect x="780" y="62" width="78" height="123" rx="3" fill="#1f6b4f" opacity="0.85" />
+            <path d="M63 118 L189 104 L315 128 L441 86 L567 108 L693 70 L819 92" fill="none" stroke="#69756e" stroke-width="1.6" stroke-dasharray="4 4" stroke-linejoin="round" />
+            <circle cx="693" cy="70" r="4" fill="#ffffff" stroke="#69756e" stroke-width="2" />
+          </svg>
+          <div style="display: flex; justify-content: space-between; margin-top: 6px; font-family: 'Geist Mono', monospace; font-size: 11px; color: #9aa39d">
+            <span>16/9</span><span>17/9</span><span>18/9</span><span>19/9</span><span>20/9</span><span>21/9</span><span>22/9</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: stretch; margin-bottom: 16px">
+        <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; overflow: hidden">
+          <div style="padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+            <div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Profit</div>
+            <div style="font-weight: 640; font-size: 15px; letter-spacing: -0.01em; margin-top: 2px">Covering costs</div>
+          </div>
+          <div style="padding: 20px">
+            <svg viewBox="0 0 420 190" style="width: 100%; height: auto; display: block; overflow: visible">
+              <line x1="0" y1="10" x2="420" y2="10" stroke="#e4e9e4" stroke-width="1" />
+              <line x1="0" y1="68" x2="420" y2="68" stroke="#e4e9e4" stroke-width="1" />
+              <line x1="0" y1="126" x2="420" y2="126" stroke="#e4e9e4" stroke-width="1" />
+              <line x1="0" y1="175" x2="420" y2="175" stroke="#d6ddd6" stroke-width="1" />
+              <path d="M0 168 L70 142 L140 118 L210 88 L280 66 L350 40 L420 16 L420 175 L0 175 Z" fill="#e7f1ec" />
+              <path d="M0 168 L70 142 L140 118 L210 88 L280 66 L350 40 L420 16" fill="none" stroke="#1f6b4f" stroke-width="2" stroke-linejoin="round" />
+              <path d="M0 172 L70 160 L140 146 L210 130 L280 118 L350 102 L420 88" fill="none" stroke="#c0432e" stroke-width="2" stroke-linejoin="round" />
+            </svg>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12.5px; color: #69756e">
+              <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #1f6b4f; display: inline-block"></span>Sales so far</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #c0432e; display: inline-block"></span>Expenses so far</span>
+            </div>
+            <p style="margin: 10px 0 0; font-size: 12.5px; color: #69756e; line-height: 1.5">Running totals for the period — the gap between the lines is your profit so far.</p>
+          </div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; overflow: hidden">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+            <div style="min-width: 0">
+              <div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Menu</div>
+              <div style="font-weight: 640; font-size: 15px; letter-spacing: -0.01em; margin-top: 2px">Top 5 dishes</div>
+            </div>
+            <a href="#" style="display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; flex-shrink: 0">All dishes<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+          </div>
+          <div style="padding: 20px">
+            <ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+              <li><div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">Grilled Ribeye Steak</span><span style="flex: none; font-weight: 600; font-family: 'Geist Mono', monospace">$1,232.00</span></div><div style="height: 8px; border-radius: 6px; background: #f6f8f6; margin-top: 5px; overflow: hidden"><span style="display: block; height: 100%; border-radius: 6px; width: 100%; background: #1f6b4f"></span></div><div style="font-size: 12.5px; color: #9aa39d; margin-top: 3px">56 sold · Mains</div></li>
+              <li><div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">BBQ Beef Ribs</span><span style="flex: none; font-weight: 600; font-family: 'Geist Mono', monospace">$969.00</span></div><div style="height: 8px; border-radius: 6px; background: #f6f8f6; margin-top: 5px; overflow: hidden"><span style="display: block; height: 100%; border-radius: 6px; width: 79%; background: #1f6b4f"></span></div><div style="font-size: 12.5px; color: #9aa39d; margin-top: 3px">51 sold · Mains</div></li>
+              <li><div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">Beef Burger</span><span style="flex: none; font-weight: 600; font-family: 'Geist Mono', monospace">$726.00</span></div><div style="height: 8px; border-radius: 6px; background: #f6f8f6; margin-top: 5px; overflow: hidden"><span style="display: block; height: 100%; border-radius: 6px; width: 59%; background: #1f6b4f"></span></div><div style="font-size: 12.5px; color: #9aa39d; margin-top: 3px">66 sold · Lunch</div></li>
+              <li><div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">Tagliatelle Bolognese</span><span style="flex: none; font-weight: 600; font-family: 'Geist Mono', monospace">$408.00</span></div><div style="height: 8px; border-radius: 6px; background: #f6f8f6; margin-top: 5px; overflow: hidden"><span style="display: block; height: 100%; border-radius: 6px; width: 33%; background: #1f6b4f"></span></div><div style="font-size: 12.5px; color: #9aa39d; margin-top: 3px">34 sold · Pasta &amp; Pizza</div></li>
+              <li><div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px"><span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0">Pizza Margherita</span><span style="flex: none; font-weight: 600; font-family: 'Geist Mono', monospace">$390.00</span></div><div style="height: 8px; border-radius: 6px; background: #f6f8f6; margin-top: 5px; overflow: hidden"><span style="display: block; height: 100%; border-radius: 6px; width: 32%; background: #1f6b4f"></span></div><div style="font-size: 12.5px; color: #9aa39d; margin-top: 3px">39 sold · Pasta &amp; Pizza</div></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 12px">
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 20px; background: #f2f4f2; color: #69756e; border: 1px solid #e4e9e4"><span style="width: 6px; height: 6px; border-radius: 50%; background: currentColor"></span>Right now</span>
+        <span style="font-size: 14px; color: #69756e">Today’s position — ignores the period and filters above.</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: stretch; margin-bottom: 16px">
+        <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; overflow: hidden">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+            <div style="min-width: 0"><div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Right now</div><div style="font-weight: 640; font-size: 15px; margin-top: 2px">Money in accounts</div></div>
+            <a href="#" style="display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; flex-shrink: 0">Cash &amp; accounts<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+          </div>
+          <div style="padding: 20px">
+            <ul style="list-style: none; margin: 0; padding: 0">
+              <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px">Cash<span style="font-size: 12.5px; color: #69756e">+$418.00 today</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$2,164.00</b></a></li>
+              <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px">A/C<span style="font-size: 12.5px; color: #69756e">+$196.00 today</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$3,012.40</b></a></li>
+              <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px">My Cash<span style="font-size: 12.5px; color: #69756e">+$70.00 today</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$1,286.50</b></a></li>
+              <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px">Card</span><b style="flex: none; font-family: 'Geist Mono', monospace">$856.00</b></a></li>
+              <li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; font-weight: 650; border-top: 1px solid #e4e9e4"><span style="font-size: 14px">Total</span><b style="font-family: 'Geist Mono', monospace">$7,318.90</b></li>
+            </ul>
+          </div>
+        </div>
+        <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); display: flex; flex-direction: column; overflow: hidden">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+            <div style="min-width: 0"><div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Right now</div><div style="font-weight: 640; font-size: 15px; margin-top: 2px">Collected today by person</div></div>
+            <a href="#" style="display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; flex-shrink: 0">Details<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+          </div>
+          <div style="padding: 20px">
+            <ul style="list-style: none; margin: 0; padding: 0">
+              <li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee"><span style="font-size: 14px">Cashier</span><b style="font-family: 'Geist Mono', monospace">$486.00</b></li>
+              <li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee"><span style="font-size: 14px">Waiter</span><b style="font-family: 'Geist Mono', monospace">$198.00</b></li>
+              <li style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; font-weight: 650; border-top: 1px solid #e4e9e4"><span style="font-size: 14px">Total</span><b style="font-family: 'Geist Mono', monospace">$684.00</b></li>
+            </ul>
+            <p style="margin: 10px 0 0; font-size: 12.5px; color: #69756e; line-height: 1.5">Staff collections are handed over to the business at the end of the day.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid #e4e9e4; border-radius: 11px; box-shadow: 0 1px 2px rgba(20,40,30,.05); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #eef1ee">
+          <div style="min-width: 0"><div style="font-size: 11.5px; font-weight: 650; letter-spacing: .13em; text-transform: uppercase; color: #9aa39d">Latest</div><div style="font-weight: 640; font-size: 15px; margin-top: 2px">Recent sales</div></div>
+          <a href="#" style="display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 7px; font-size: 14px; font-weight: 600; background: #ffffff; border: 1px solid #e4e9e4; color: #2c3b34; flex-shrink: 0">Sales history<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 15px; height: 15px; display: block"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+        </div>
+        <div style="padding: 20px">
+          <ul style="list-style: none; margin: 0; padding: 0">
+            <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px"><span style="font-family: 'Geist Mono', monospace; font-weight: 560; color: #11211a">ORD-1042</span><span style="font-size: 12.5px; color: #69756e; overflow: hidden; text-overflow: ellipsis">Table 5 · Cash · 22 Sep 13:48 · #42</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$64.50</b></a></li>
+            <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px"><span style="font-family: 'Geist Mono', monospace; font-weight: 560; color: #11211a">ORD-1041</span><span style="font-size: 12.5px; color: #69756e; overflow: hidden; text-overflow: ellipsis">Walk-in · A/C · 22 Sep 13:31 · #41</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$12.00</b></a></li>
+            <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px"><span style="font-family: 'Geist Mono', monospace; font-weight: 560; color: #11211a">ORD-1040</span><span style="font-size: 12.5px; color: #69756e; overflow: hidden; text-overflow: ellipsis">Delivery · My Cash · 22 Sep 12:55 · #40</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$27.25</b></a></li>
+            <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; border-bottom: 1px solid #eef1ee; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px"><span style="font-family: 'Geist Mono', monospace; font-weight: 560; color: #11211a">ORD-1039</span><span style="font-size: 12.5px; color: #69756e; overflow: hidden; text-overflow: ellipsis">Table 2 · Cash · 22 Sep 12:20 · #39</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$48.00</b></a></li>
+            <li><a href="#" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 8px 4px; color: #11211a"><span style="min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px"><span style="font-family: 'Geist Mono', monospace; font-weight: 560; color: #11211a">ORD-1038</span><span style="font-size: 12.5px; color: #69756e; overflow: hidden; text-overflow: ellipsis">Walk-in · Card · 22 Sep 11:58 · #38</span></span><b style="flex: none; font-family: 'Geist Mono', monospace">$19.00</b></a></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 1100}}"></script>
+</body>
+</html>

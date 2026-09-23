@@ -1,41 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { notify } from '@/lib/notify';
 import { isConnectionError } from '@/lib/apiError';
 
-/** The admin theme lives on <html data-theme>; keep sonner in step with it. */
-function useAdminTheme() {
-  const [theme, setTheme] = useState('light');
-  useEffect(() => {
-    const read = () => setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
-    read();
-    const obs = new MutationObserver(read);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
-  return theme;
-}
+// Dark toast (docs/admin-design-system.md §9). Top-centre, just under the
+// 60px topbar: never over the Register's Pay button or a modal's footer.
+const TOAST = {
+  toast: 'group flex items-start gap-2.5 w-full rounded-[10px] bg-mq-ink text-mq-cream px-[15px] py-[13px] shadow-mq-toast font-mq',
+  title: 'text-[13.5px] font-semibold leading-snug',
+  description: 'text-[12.5px] opacity-70 leading-snug mt-0.5',
+  icon: 'mt-0.5 flex-none',
+  success: '[&_[data-icon]]:text-[#6ED3A6]',
+  error: '[&_[data-icon]]:text-[#F2A597]',
+  warning: '[&_[data-icon]]:text-[#E0A846]',
+  info: '[&_[data-icon]]:text-[#9DC3E6]',
+  actionButton: '!bg-transparent !text-[#E9A3B6] !text-[12.5px] !font-semibold !px-1',
+  cancelButton: '!bg-transparent !text-mq-cream/70 !text-[12.5px]',
+  closeButton: '!bg-mq-ink !border-white/20 !text-mq-cream',
+};
 
 export function AppToaster() {
-  const theme = useAdminTheme();
-  // Top-centre, just under the 72px admin topbar: never over the Register's
-  // Pay button or a modal's footer buttons.
   return (
     <Toaster
       position="top-center"
-      theme={theme}
       closeButton
       gap={10}
-      offset={{ top: 84 }}
-      mobileOffset={{ top: 78, left: 12, right: 12 }}
+      offset={{ top: 70 }}
+      mobileOffset={{ top: 66, left: 12, right: 12 }}
       visibleToasts={3}
-      toastOptions={{
-        className: 'adm-toast',
-        classNames: { success: 'adm-toast-success', error: 'adm-toast-error', warning: 'adm-toast-warning', info: 'adm-toast-info' },
-      }}
+      toastOptions={{ unstyled: true, classNames: TOAST }}
     />
   );
 }

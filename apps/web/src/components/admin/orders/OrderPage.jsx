@@ -3,13 +3,12 @@
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchJson, parseApiError } from '@/lib/apiError';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
+import { Page, Alert, Icon, KpiSkeletons, RowSkeletons } from '@/components/admin/ui';
 import OrderDetailView from './OrderDetailView';
-import { Ic } from './orderUi';
 
 /**
  * A full-page order: loads GET /api/admin/orders/:id and renders the shared
- * OrderDetailView under a breadcrumb (Orders › KFG-… or Sales report › KFG-…).
+ * OrderDetailView under a breadcrumb (Orders › KFG-… or Sales history › KFG-…).
  */
 export default function OrderPage({ id, rootHref, rootLabel }) {
   const qc = useQueryClient();
@@ -25,25 +24,35 @@ export default function OrderPage({ id, rootHref, rootLabel }) {
   };
 
   const crumb = (
-    <nav className="adm-crumb">
-      <Link href={rootHref}>{Ic.back}{rootLabel}</Link>
-      <span className="sep">/</span>
-      <span>{order?.code || `Order ${id}`}</span>
+    <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-[13px] min-w-0">
+      <Link href={rootHref} className="inline-flex items-center gap-1.5 min-h-9 font-semibold text-mq-cta hover:text-mq-primary">
+        <Icon name="chevLeft" size={15} stroke={2} />{rootLabel}
+      </Link>
+      <span className="text-mq-faint" aria-hidden="true">/</span>
+      <span className="font-mq-mono text-[12.5px] text-mq-muted truncate">{order?.code || `Order ${id}`}</span>
     </nav>
   );
 
-  if (isLoading) return <div className="wrap odv-page">{crumb}<RowsSkeleton rows={5} height={64} /></div>;
+  if (isLoading) {
+    return (
+      <Page>
+        {crumb}
+        <KpiSkeletons count={1} />
+        <div className="bg-white border border-mq-line rounded-xl"><RowSkeletons rows={6} /></div>
+      </Page>
+    );
+  }
   if (isError) {
     return (
-      <div className="wrap odv-page">
+      <Page>
         {crumb}
-        <div className="adm-error-banner">{error?.status === 404 ? 'This order doesn’t exist.' : parseApiError(error)}</div>
-      </div>
+        <Alert tone="danger" title="Couldn’t open this order">{error?.status === 404 ? 'This order doesn’t exist.' : parseApiError(error)}</Alert>
+      </Page>
     );
   }
   return (
-    <div className="wrap odv-page">
+    <Page>
       <OrderDetailView order={order} crumb={crumb} onUpdated={onUpdated} />
-    </div>
+    </Page>
   );
 }

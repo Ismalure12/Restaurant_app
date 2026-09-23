@@ -8,6 +8,37 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Admin design system (docs/admin-design-system.md). Admin only —
+        // the public menu keeps the tokens below.
+        mq: {
+          primary: '#850D33',
+          cta: '#A31743',
+          deep: '#6E0B2A',
+          soft: '#F6E8EC',
+          'soft-2': '#EFD8DF',
+          'soft-line': '#EBD2D9',
+          focus: '#D9A8B8',
+          cream: '#FAFAF8',
+          white: '#FFFFFF',
+          canvas: '#F4F4F2',
+          chip: '#EFEFEA',
+          line: '#E5E5E0',
+          'line-2': '#D5D5CE',
+          faint: '#9A9A93',
+          muted: '#6E6E68',
+          'on-tint': '#57574F',
+          'chip-ink': '#5E5E57',
+          body: '#3D3D3A',
+          ink: '#1A1A18',
+          disabled: '#8E8E86',
+          prev: '#B8B8B0',
+          shimmer: '#F7F7F4',
+          violet: '#6B5CA5',
+          ok: { DEFAULT: '#0E7C5A', bg: '#E4F2EC', line: '#C6E4D8', ink: '#0A5C43' },
+          warn: { DEFAULT: '#B06A00', solid: '#8A5300', bg: '#FBF0DB', line: '#F0DDB6', ink: '#8A5300' },
+          danger: { DEFAULT: '#C8321F', hover: '#A62717', bg: '#FCEAE6', 'bg-hover': '#F8DCD5', line: '#F4D3CB', ink: '#9E2717' },
+          info: { DEFAULT: '#1F6FB2', bg: '#E6EFF7', line: '#C9DCEE', ink: '#185788' },
+        },
         // Maqaaxi Pos monochrome-maroon tokens (Goodir brand #850D33).
         // Key names blue/green kept so existing utility classes still resolve;
         // both map onto maroon shades.
@@ -43,6 +74,8 @@ module.exports = {
       fontFamily: {
         display: ['var(--font-cormorant)', 'Cormorant Garamond', 'Times New Roman', 'serif'],
         ui: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mq: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        'mq-mono': ['var(--font-jetbrains)', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
         card: '0 1px 2px rgba(110,11,42,.05), 0 10px 30px -12px rgba(110,11,42,.18)',
@@ -60,6 +93,18 @@ module.exports = {
         'icon-light': '0 4px 12px -2px rgba(0,0,0,.12)',
         'add-mini': '0 4px 10px -2px rgba(110,11,42,.35)',
         'pricebadge': '0 10px 24px -6px rgba(0,0,0,.25)',
+        // Admin design system elevation
+        'mq-card': '0 1px 2px rgba(26,26,24,.04)',
+        'mq-sm': '0 1px 2px rgba(26,26,24,.06)',
+        'mq-btn': '0 1px 2px rgba(26,26,24,.10)',
+        'mq-seg': '0 1px 2px rgba(26,26,24,.08)',
+        'mq-md': '0 2px 4px rgba(26,26,24,.04), 0 8px 24px -12px rgba(26,26,24,.14)',
+        'mq-lg': '0 18px 44px -18px rgba(26,26,24,.30)',
+        'mq-dialog': '0 24px 60px -20px rgba(26,26,24,.4)',
+        'mq-drawer': '-18px 0 44px -24px rgba(26,26,24,.2)',
+        'mq-nav': '18px 0 44px -24px rgba(26,26,24,.35)',
+        'mq-toast': '0 14px 36px -16px rgba(26,26,24,.5)',
+        'mq-focus': '0 0 0 3px rgba(133,13,51,.12)',
       },
       maxWidth: {
         shell: '440px',
@@ -73,6 +118,10 @@ module.exports = {
         lg: '1024px',
         xl: '1280px',
         '2xl': '1536px',
+        // Admin shell bands (docs/admin-design-system.md §11)
+        tab: '760px',
+        nar: '900px',
+        desk: '1080px',
       },
       keyframes: {
         menuFadeIn: {
@@ -117,6 +166,10 @@ module.exports = {
           '0%,100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-5px)' },
         },
+        mqShimmer: { to: { backgroundPosition: '-200% 0' } },
+        mqPulse: { '0%,100%': { opacity: '1' }, '50%': { opacity: '.3' } },
+        mqIn: { from: { opacity: '0', transform: 'translateY(6px)' }, to: { opacity: '1', transform: 'none' } },
+        mqSlide: { from: { opacity: '0', transform: 'translateX(16px)' }, to: { opacity: '1', transform: 'none' } },
       },
       animation: {
         'menu-fade-in': 'menuFadeIn .45s cubic-bezier(0.22, 1, 0.36, 1) both',
@@ -130,6 +183,10 @@ module.exports = {
         'menu-hand': 'menuHand 1.6s cubic-bezier(0.76, 0, 0.24, 1) infinite',
         'menu-slide-in': 'menuSlideIn .5s cubic-bezier(0.22, 1, 0.36, 1) both',
         'menu-floaty': 'menuFloaty 4s cubic-bezier(0.76, 0, 0.24, 1) infinite',
+        'mq-shimmer': 'mqShimmer 1.4s linear infinite',
+        'mq-pulse': 'mqPulse 2s ease-in-out infinite',
+        'mq-in': 'mqIn .18s ease-out both',
+        'mq-slide': 'mqSlide .22s ease-out both',
       },
       backdropBlur: {
         xs: '4px',

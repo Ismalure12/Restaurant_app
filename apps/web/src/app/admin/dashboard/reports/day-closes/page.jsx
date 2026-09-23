@@ -1,11 +1,12 @@
 'use client';
 
 import { useInfiniteQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { fetchJson } from '@/lib/apiError';
-import { RowsSkeleton } from '@/components/admin/Skeletons';
-import { Card, Empty, ErrorNote, money } from '@/components/admin/reports/ReportKit';
+import { ErrorNote, money } from '@/components/admin/reports/ReportKit';
+import {
+  Button, Card, CardHeader, EmptyState, Icon, RowSkeletons, Table, Td, Th, Tr, cx,
+} from '@/components/admin/ui';
 
 const signed = (n) => (Number(n) < 0 ? '-' : '+') + money(Math.abs(Number(n)));
 const dayHref = (day) => `/admin/dashboard/cash?tab=day-close&day=${day}`;
@@ -31,37 +32,54 @@ export default function DayClosesReportPage() {
     <>
       {q.isError && <ErrorNote error={q.error} />}
       {unclosed.length > 0 && (
-        <div className="card card-pad-lg cash-prompt" style={{ marginBottom: 16 }}>
-          <div className="note">{unclosed.length} finished {unclosed.length === 1 ? 'day is' : 'days are'} not closed yet, starting {unclosed[0]}.</div>
-          <Link href={dayHref(unclosed[0])} className="btn btn-primary">Close {unclosed[0]}</Link>
+        <div className="flex items-center gap-3.5 flex-wrap border border-mq-warn-line bg-mq-warn-bg rounded-xl px-4 py-3.5 rpt-noprint" role="status">
+          <span className="text-[13.5px] font-semibold text-mq-warn-ink" style={{ flex: '1 1 240px' }}>
+            {unclosed.length} finished {unclosed.length === 1 ? 'day is' : 'days are'} not closed yet, starting <span className="font-mq-mono">{unclosed[0]}</span>.
+          </span>
+          <Button href={dayHref(unclosed[0])} variant="primary" size="lg">Close {unclosed[0]}</Button>
         </div>
       )}
-      <Card eyebrow="Archive" title="Closed days" flush>
-        {q.isLoading ? <RowsSkeleton className="card-pad" rows={5} /> : rows.length === 0 ? <Empty>No day has been closed yet.</Empty> : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Day</th><th>Closed by</th><th className="num">Sales</th><th className="num">Net sales</th><th className="num">Over / short</th><th className="rpt-row-go" aria-hidden="true" /></tr></thead>
+      <Card className="overflow-hidden">
+        <CardHeader eyebrow="Archive" title="Closed days" />
+        {q.isLoading ? <RowSkeletons rows={5} /> : rows.length === 0 ? (
+          <EmptyState icon="calendar" title="No day has been closed yet" action={<Button href="/admin/dashboard/cash?tab=day-close" variant="soft" size="sm">Day close</Button>}>
+            Days are closed in Cash & accounts › Day close.
+          </EmptyState>
+        ) : (
+          <>
+            <Table maxH={460} minW={620} label="Closed days">
+              <thead><tr>
+                <Th>Day</Th><Th>Closed by</Th><Th align="right">Sales</Th><Th align="right">Net sales</Th><Th align="right">Over / short</Th>
+                <Th className="w-8"><span className="sr-only">Open</span></Th>
+              </tr></thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.day} className="rpt-row-link" onClick={() => router.push(dayHref(r.day))}>
-                    <td className="mono strong"><Link className="rpt-row-a" href={dayHref(r.day)} onClick={(e) => e.stopPropagation()}>{r.day}</Link><div className="sub">{when(r.closedAt)}</div></td>
-                    <td>{r.closedBy || '—'}</td>
-                    <td className="num">{r.sales}</td>
-                    <td className="num">{money(r.net)}</td>
-                    <td className={`num strong ${r.difference < 0 ? 'cash-neg' : r.difference > 0 ? 'cash-pos' : ''}`}>{r.difference === 0 ? '$0.00' : signed(r.difference)}</td>
-                    <td className="rpt-row-go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 6l6 6-6 6" /></svg></td>
-                  </tr>
+                  <Tr key={r.day} onClick={() => router.push(dayHref(r.day))} label={`Open the Z-report for ${r.day}`}>
+                    <Td>
+                      <span className="flex flex-col gap-px">
+                        <span className="font-mq-mono text-[12.5px] font-semibold text-mq-primary">{r.day}</span>
+                        <span className="text-xs text-mq-muted">{when(r.closedAt)}</span>
+                      </span>
+                    </Td>
+                    <Td>{r.closedBy || '—'}</Td>
+                    <Td mono align="right">{r.sales}</Td>
+                    <Td money>{money(r.net)}</Td>
+                    <Td money className={cx('font-semibold', r.difference < 0 ? '!text-mq-danger-ink' : r.difference > 0 ? '!text-mq-ok-ink' : '')}>
+                      {r.difference === 0 ? '$0.00' : signed(r.difference)}
+                    </Td>
+                    <Td className="text-mq-faint"><Icon name="chevRight" size={15} stroke={2} /></Td>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+            </Table>
+            {q.hasNextPage && (
+              <div className="flex justify-center px-4 py-2.5 bg-mq-cream border-t border-mq-line rounded-b-xl rpt-noprint">
+                <Button variant="secondary" size="xs" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Loading…' : 'Load older days'}</Button>
+              </div>
+            )}
+          </>
         )}
       </Card>
-      {q.hasNextPage && (
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <button className="btn btn-ghost" onClick={() => q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Loading…' : 'Load more'}</button>
-        </div>
-      )}
     </>
   );
 }

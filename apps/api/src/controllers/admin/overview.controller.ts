@@ -11,9 +11,11 @@ import { outstandingReceivables } from '../../lib/money/receivables.js';
 import { PAYROLL_ROLES } from './payroll.controller.js';
 import { accountBalances, collectionsOn, readCalendar } from '../../lib/money/moneyReads.js';
 
-// GET /api/admin/overview?from&to[&cfrom&cto]&source&orderType&account — the
-// manager's decision page, in one call. It SUMMARISES; the detail (accounts,
-// channels, hours, every dish) lives in the Sales report, which it links to.
+// GET /api/admin/overview?from&to[&cfrom&cto]&source&orderType&account&staffId&waiterId
+// — the manager's decision page, in one call. It SUMMARISES; the detail
+// (accounts, hours, every dish) lives in the Sales report, which it links to.
+// One-number-one-place exception (owner-approved): the sales by channel
+// (`byChannel`, same numbers as the Sales report) also shows here.
 //
 //   • The PERIOD part follows the range and filters and compares with
 //     `cfrom..cto` (the page picks a meaningful one: yesterday for today, the
@@ -141,6 +143,8 @@ export async function getOverview(req: Request, res: Response) {
       })),
       hours,
       cumulative,
+      // Dine-in · Delivery · Online for the period (owner-approved duplicate of the Sales report's).
+      byChannel: sales.byChannel,
       topDishes: sales.items.items.slice(0, 5),
       itemsValue: sales.items.totals.revenue,
       recent: recentRaw.map((o) => ledgerRow(o, prefix)),

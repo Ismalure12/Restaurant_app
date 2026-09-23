@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Modal, ModalSpacer, Button, Icon, textareaCls, cx } from '@/components/admin/ui';
 import { money } from '@/lib/money';
 
 
@@ -20,6 +21,35 @@ export function buildLine(item, optionParts = [], extras = [], quantity = 1, not
 }
 
 export const needsChoices = (item) => (item.optionGroups?.length ?? 0) > 0 || (item.extras?.length ?? 0) > 0;
+
+const GROUP_LABEL = 'text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted';
+
+/** One selectable row: radio (round) for an option, checkbox (square) for an extra. */
+function ChoiceRow({ on, round, name, priceAdd, onClick }) {
+  return (
+    <button
+      type="button"
+      role={round ? 'radio' : 'checkbox'}
+      aria-checked={on}
+      onClick={onClick}
+      className={cx(
+        'flex items-center gap-3 w-full min-h-12 px-3.5 rounded-lg border text-left text-sm transition-colors',
+        on ? 'bg-mq-soft border-mq-primary text-mq-ink' : 'bg-white border-mq-line text-mq-body hover:bg-mq-cream hover:border-mq-line-2',
+      )}
+    >
+      <span className={cx(
+        'grid place-items-center w-5 h-5 flex-none border',
+        round ? 'rounded-full' : 'rounded-[5px]',
+        on ? 'bg-mq-primary border-mq-primary text-white' : 'bg-white border-mq-line-2 text-transparent',
+      )}
+      >
+        <Icon name="check" size={12} stroke={3} />
+      </span>
+      <span className={cx('flex-1 min-w-0', on && 'font-semibold')}>{name}</span>
+      {Number(priceAdd) > 0 && <span className="font-mq-mono tabular-nums text-[13px] text-mq-muted">+{money(priceAdd)}</span>}
+    </button>
+  );
+}
 
 /**
  * Pick one option per group, any extras, notes and quantity for a menu item,
@@ -42,47 +72,58 @@ export default function ItemCustomizer({ item, eyebrow = 'Item', onClose, onAdd 
   const preview = buildLine(item, chosen.options, chosen.extras, qty).unitPrice * qty;
 
   return (
-    <div className="jz-modal-bk open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={item.name}>
-        <div className="modal-h">
-          <div className="mt"><div className="eyebrow">{eyebrow}</div><div className="h-1" style={{ marginTop: 3 }}>{item.name}</div></div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 6 6 18M6 6l12 12" /></svg></button>
-        </div>
-        <div className="modal-b">
-          {item.optionGroups?.map((g) => (
-            <div className="ff" key={g.id}>
-              <label>{g.title} · pick one</label>
-              <div className="opt-group">
-                {g.options?.map((o) => (
-                  <div key={o.id} className={`opt-line radio${selOptions[g.id] === o.id ? ' on' : ''}`} onClick={() => setSelOptions((p) => ({ ...p, [g.id]: o.id }))}>
-                    <span className="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg></span>
-                    <span className="opt-nm">{o.name}</span>{Number(o.priceAdd) > 0 && <span className="opt-pr">+{money(o.priceAdd)}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {item.extras?.length > 0 && (
-            <div className="ff">
-              <label>Extras · optional</label>
-              <div className="opt-group">
-                {item.extras.map((e) => (
-                  <div key={e.id} className={`opt-line${selExtras[e.id] ? ' on' : ''}`} onClick={() => setSelExtras((p) => ({ ...p, [e.id]: !p[e.id] }))}>
-                    <span className="ck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6 9 17l-5-5" /></svg></span>
-                    <span className="opt-nm">{e.name}</span>{Number(e.priceAdd) > 0 && <span className="opt-pr">+{money(e.priceAdd)}</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div className="ff"><label>Notes</label><textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. no onions, extra crispy" /></div>
-          <div className="ff"><label>Quantity</label><div className="qty-big"><button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))}>−</button><span>{qty}</span><button type="button" onClick={() => setQty((q) => q + 1)}>+</button></div></div>
-        </div>
-        <div className="modal-f">
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={() => onAdd(buildLine(item, chosen.options, chosen.extras, qty, notes))}>Add · {money(preview)}</button>
+    <Modal
+      eyebrow={eyebrow}
+      title={item.name}
+      onClose={onClose}
+      width={480}
+      footer={(
+        <>
+          <ModalSpacer />
+          <Button size="lg" onClick={onClose}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => onAdd(buildLine(item, chosen.options, chosen.extras, qty, notes))}>
+            Add · <span className="font-mq-mono tabular-nums">{money(preview)}</span>
+          </Button>
+        </>
+      )}
+    >
+      {/* data-autofocus: the dialog focuses this, not the notes box (no keyboard popping up on a tablet). */}
+      <div className="flex flex-col gap-4 outline-none" data-autofocus tabIndex={-1}>
+        {item.optionGroups?.map((g) => (
+          <div key={g.id} className="flex flex-col gap-2" role="radiogroup" aria-label={g.title}>
+            <div className={GROUP_LABEL}>{g.title} · pick one</div>
+            {g.options?.map((o) => (
+              <ChoiceRow key={o.id} round on={selOptions[g.id] === o.id} name={o.name} priceAdd={o.priceAdd}
+                onClick={() => setSelOptions((p) => ({ ...p, [g.id]: o.id }))} />
+            ))}
+          </div>
+        ))}
+        {item.extras?.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className={GROUP_LABEL}>Extras · optional</div>
+            {item.extras.map((e) => (
+              <ChoiceRow key={e.id} on={Boolean(selExtras[e.id])} name={e.name} priceAdd={e.priceAdd}
+                onClick={() => setSelExtras((p) => ({ ...p, [e.id]: !p[e.id] }))} />
+            ))}
+          </div>
+        )}
+        <label className="flex flex-col gap-1.5">
+          <span className={GROUP_LABEL}>Notes</span>
+          <textarea className={textareaCls('min-h-[72px]')} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. no onions, extra crispy" />
+        </label>
+        <div className="flex items-center justify-between gap-3">
+          <span className={GROUP_LABEL}>Quantity</span>
+          <span className="inline-flex items-center border border-mq-line rounded-lg overflow-hidden bg-white">
+            <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Fewer" className="grid place-items-center w-12 h-12 text-mq-body hover:bg-mq-chip hover:text-mq-ink disabled:text-mq-faint" disabled={qty <= 1}>
+              <Icon name="minus" size={18} stroke={2.4} />
+            </button>
+            <span className="min-w-[36px] text-center font-mq-mono tabular-nums text-[15px] font-semibold" aria-live="polite">{qty}</span>
+            <button type="button" onClick={() => setQty((q) => Math.min(99, q + 1))} aria-label="More" className="grid place-items-center w-12 h-12 text-mq-body hover:bg-mq-chip hover:text-mq-ink">
+              <Icon name="plus" size={18} stroke={2.4} />
+            </button>
+          </span>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
