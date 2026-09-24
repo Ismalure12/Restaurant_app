@@ -82,14 +82,19 @@ export function payToAccounts(wallets, payTo) {
 /**
  * The "Pay to:" block for a .rc-kv grid, spanning both columns: the accounts
  * flow inline ("A/C 521436  E/d 748079  My Cash 937875"), each label+number
- * kept together, so 2–3 fit on a line and the rest wrap to the next.
+ * kept together, so 2–3 fit on a line; the rest wrap to the next line and
+ * start under the FIRST account, not under "Pay to:":
+ *   Pay to:  A/C 5555555   E/d 333333333
+ *            My Cash 525525525
  */
 export function PayToRow({ accounts }) {
   if (!accounts.length) return null;
   return (
     <div className="rc-payto">
       <span className="k">Pay to:</span>
-      {accounts.map((a, i) => <span className="rc-acc" key={i}>{a.label} {a.number}</span>)}
+      <span className="rc-accs">
+        {accounts.map((a, i) => <span className="rc-acc" key={i}>{a.label} {a.number}</span>)}
+      </span>
     </div>
   );
 }

@@ -82,10 +82,11 @@ describe('POST /api/admin/day-close/:day', () => {
     expect(res.body.error).toMatch(/opening balances/i);
   });
 
-  it('the cash must be counted', async () => {
+  it('the cash is optional like every other account', async () => {
     const res = await close({ counted: [{ accountId: 2, amount: 100 }] });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/count the cash/i);
+    expect(res.status).toBe(201);
+    const none = await close({ counted: [] });
+    expect(none.status).toBe(201);
   });
 
   it('unpaid tabs block the close unless carried over', async () => {

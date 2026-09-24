@@ -8,6 +8,7 @@ import { activeAccounts } from '../../lib/money/cashBook.js';
 import { FY_START_KEY, readCalendar } from '../../lib/money/moneyReads.js';
 import { DAY_END_KEY, MAX_DAY_END_HOUR, setBusinessDayEnd } from '../../lib/time/businessTime.js';
 import { ORDER_PREFIX_KEY, ORDER_PREFIX_RE, DEFAULT_ORDER_PREFIX } from '../../lib/orders/orderCode.js';
+import { ONLINE_ORDERING_KEY, ONLINE_ORDERING_MESSAGE_KEY } from '../../lib/orders/onlineOrdering.js';
 
 // API field → settings-table key for the business identity printed on
 // receipts and invoices. None of it is secret, so the Register (any POS role)
@@ -20,6 +21,8 @@ const TEXT_KEYS = {
   receiptFooter: 'receipt_footer',
   invoiceTerms: 'invoice_terms',
   evcAccount: 'evc_account',
+  // What customers are told while online ordering is off ('' = the default).
+  onlineOrderingMessage: ONLINE_ORDERING_MESSAGE_KEY,
 };
 type TextField = keyof typeof TEXT_KEYS;
 // Money accounts (Cash, the wallets A/C · E/d · My Cash…, the Mastercard)
@@ -28,7 +31,7 @@ type TextField = keyof typeof TEXT_KEYS;
 // Tax already INCLUDED in menu prices (%). Only the receipt shows the included
 // portion — order totals never change (the "no VAT on top" rule stands).
 const TAX_KEY = 'tax_rate';
-const ALL_KEYS = ['delivery_fee', TAX_KEY, DAY_END_KEY, ORDER_PREFIX_KEY, ...Object.values(TEXT_KEYS)];
+const ALL_KEYS = ['delivery_fee', ONLINE_ORDERING_KEY, TAX_KEY, DAY_END_KEY, ORDER_PREFIX_KEY, ...Object.values(TEXT_KEYS)];
 
 async function readSettings() {
   const [rows, accounts, calendar] = await Promise.all([
@@ -39,6 +42,8 @@ async function readSettings() {
   const map: Record<string, string> = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const out: Record<string, unknown> = {
     deliveryFee: map.delivery_fee != null ? Number(map.delivery_fee) : 0,
+    // Missing row = on (see lib/orders/onlineOrdering.ts).
+    onlineOrdering: map[ONLINE_ORDERING_KEY] !== 'off',
     taxRate: map[TAX_KEY] != null ? Number(map[TAX_KEY]) : 0,
     // Active business accounts — the Register's payment choices.
     moneyAccounts: accounts.map((a) => ({ id: a.id, kind: a.kind, label: a.label, number: a.number })),
@@ -74,6 +79,8 @@ const settingsSchema = z.object({
   receiptFooter: text(300, 'Receipt message'),
   invoiceTerms: text(600, 'Payment terms'),
   evcAccount: text(40, 'EVC number'),
+  onlineOrdering: z.boolean(),
+  onlineOrderingMessage: text(300, 'Online ordering message'),
   taxRate: z.number().min(0, 'Tax cannot be negative').max(50, 'Tax rate looks too high (max 50%)'),
   // Business calendar: the month the financial year starts (1 = January).
   fiscalYearStartMonth: z.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),
@@ -96,6 +103,7 @@ export async function updateSettings(req: Request, res: Response) {
     const writes: Prisma.PrismaPromise<unknown>[] = [];
     const upsert = (key: string, value: string) => writes.push(prisma.setting.upsert({ where: { key }, create: { key, value }, update: { value } }));
     if (parsed.data.deliveryFee != null) upsert('delivery_fee', parsed.data.deliveryFee.toFixed(2));
+    if (parsed.data.onlineOrdering != null) upsert(ONLINE_ORDERING_KEY, parsed.data.onlineOrdering ? 'on' : 'off');
     if (parsed.data.taxRate != null) upsert(TAX_KEY, String(Math.round(parsed.data.taxRate * 100) / 100));
     if (parsed.data.fiscalYearStartMonth != null) {
       const current = (await readCalendar(prisma)).fiscalYearStartMonth;

@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import useStaffList from '@/hooks/useStaffList';
-import { ActiveFilters, FilterSelect, FiltersButton, PeriodPicker, useReportParams } from '@/components/admin/reports/ReportKit';
-import { Chip, EmptyRow, ErrorState, LoadMoreBar, RowSkeletons, SearchInput, Table, Th, Td, Tr, Toolbar } from '@/components/admin/ui';
+import { PRESETS, useReportParams } from '@/components/admin/reports/ReportKit';
+import { Chip, EmptyRow, ErrorState, LoadMoreBar, RowSkeletons, Table, Th, Td, Tr, inputCls, selectCls } from '@/components/admin/ui';
 import { SettingsCard } from '@/components/admin/settings/shared';
 
 // Plain-language names for the actions the API records (lib/db/audit.ts callers).
@@ -36,7 +36,12 @@ const ENTITIES = {
   Setting: 'Settings', StockCount: 'Stock count', Supplier: 'Supplier', payment_session: 'Online payment', StaffAccount: 'Staff wallet numbers',
 };
 const entityLabel = (e) => ENTITIES[e] || e.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
-const when = (d) => new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+// "22 Sep 13:12" — the year only when it isn't this year.
+const when = (d) => {
+  const t = new Date(d);
+  const day = t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(t.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) }).replace('Sept', 'Sep');
+  return `${day} ${t.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+};
 const itemHref = (r) => (r.entity === 'Order' && r.entityId ? `/admin/dashboard/orders/${r.entityId}` : null);
 
 // A value in plain words: lists read "504875 (A/C), …", an empty list "none".
@@ -109,44 +114,59 @@ export default function AuditLogPage() {
   const rows = q.data?.pages.flatMap((p) => p.rows) || [];
   const entities = (q.data?.pages[0]?.entities || []).map((e) => ({ value: e, label: entityLabel(e) }));
 
+  // The design puts the filters in the card header: compact selects + search
+  // (16px text — iOS zoom rule). The period keeps every preset, custom too.
   return (
     <>
-      <Toolbar>
-        <PeriodPicker preset={preset} range={range} set={set} />
-        <FiltersButton active={(filters.entity ? 1 : 0) + (filters.actorId ? 1 : 0)} onClear={() => set({ entity: '', actorId: '' })}>
-          <FilterSelect label="Item" value={filters.entity} options={entities} onChange={(v) => set({ entity: v })} all="Everything" />
-          <FilterSelect label="Who" value={filters.actorId} options={people} onChange={(v) => set({ actorId: v })} all="Everyone" />
-        </FiltersButton>
-        <SearchInput className="flex-[1_1_200px] h-[38px]" value={term} onChange={setTerm} placeholder="Search action or item #" aria-label="Search the audit log" maxLength={80} />
-      </Toolbar>
-      <ActiveFilters
-        onClear={() => set({ entity: '', actorId: '' })}
-        items={[
-          filters.entity && { key: 'entity', label: `Item: ${entities.find((e) => e.value === filters.entity)?.label || filters.entity}`, onRemove: () => set({ entity: '' }) },
-          filters.actorId && { key: 'actorId', label: `Who: ${people.find((p) => p.value === filters.actorId)?.label || '…'}`, onRemove: () => set({ actorId: '' }) },
-        ].filter(Boolean)}
-      />
       {q.isError && <ErrorState error={q.error} onRetry={() => q.refetch()} title="Couldn’t load the audit log" />}
 
-      <SettingsCard flush title="Audit log" sub="Who changed what, and when">
+      <SettingsCard
+        flush
+        title="Audit log"
+        sub="Who changed what, and when"
+        actionsClassName="flex-[3_1_580px] min-w-0"
+        actions={(
+          <div role="group" aria-label="Filter the audit log" className="flex items-center gap-2 flex-wrap w-full">
+            <select className={selectCls({ size: 'sm', className: 'flex-1 min-w-[130px]' })} value={preset} onChange={(e) => set(e.target.value === 'custom' ? { preset: 'custom', from: range.from, to: range.to } : { preset: e.target.value })} aria-label="Period">
+              {PRESETS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+            {preset === 'custom' && (
+              <span className="inline-flex items-center gap-1.5 flex-[1_1_100%]">
+                <input className={inputCls({ size: 'sm', className: 'w-auto' })} type="date" value={range.from} max={range.to} onChange={(e) => e.target.value && set({ preset: 'custom', from: e.target.value, to: range.to })} aria-label="From date" />
+                <span className="text-[12.5px] text-mq-on-tint">to</span>
+                <input className={inputCls({ size: 'sm', className: 'w-auto' })} type="date" value={range.to} min={range.from} onChange={(e) => e.target.value && set({ preset: 'custom', from: range.from, to: e.target.value })} aria-label="To date" />
+              </span>
+            )}
+            <select className={selectCls({ size: 'sm', className: 'flex-1 min-w-[120px]' })} value={filters.entity || ''} onChange={(e) => set({ entity: e.target.value })} aria-label="Item">
+              <option value="">Item: all</option>
+              {entities.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <select className={selectCls({ size: 'sm', className: 'flex-1 min-w-[150px]' })} value={filters.actorId || ''} onChange={(e) => set({ actorId: e.target.value })} aria-label="Who">
+              <option value="">Who: everyone</option>
+              {people.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <input className={inputCls({ size: 'sm', className: 'flex-1 min-w-[150px]' })} type="search" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search action or item #" aria-label="Search the audit log" maxLength={80} />
+          </div>
+        )}
+      >
         {q.isLoading ? <RowSkeletons rows={6} /> : (
-          <Table minW={760} maxH={620} label="Audit log">
+          <Table minW={720} maxH={420} label="Audit log">
             <thead><tr><Th>When</Th><Th>Who</Th><Th>What</Th><Th>Item</Th><Th>Details</Th></tr></thead>
             <tbody>
               {rows.length === 0 ? <EmptyRow cols={5}>Nothing was recorded for these filters.</EmptyRow> : rows.map((r) => {
                 const href = itemHref(r);
                 const item = `${entityLabel(r.entity)}${r.entityId ? ` #${r.entityId}` : ''}`;
                 return (
-                  <Tr key={r.id}>
-                    <Td mono className="whitespace-nowrap !align-top">{when(r.at)}</Td>
-                    <Td className="!align-top">
+                  <Tr key={r.id} className="hover:bg-mq-cream">
+                    <Td mono className="whitespace-nowrap text-mq-ink">{when(r.at)}</Td>
+                    <Td>
                       {r.actor
-                        ? <span className="flex flex-col gap-px"><span className="font-semibold text-mq-ink">{r.actor.name}</span><span className="text-[11.5px] text-mq-muted capitalize">{r.actor.role}</span></span>
-                        : <span className="text-mq-muted">System</span>}
+                        ? <span className="flex flex-col gap-px"><span className="font-semibold text-mq-ink">{r.actor.name}</span><span className="text-[11.5px] text-mq-muted">{r.actor.role}</span></span>
+                        : <span className="font-semibold text-mq-ink">System</span>}
                     </Td>
-                    <Td className="!align-top"><Chip small tone={actionTone(r.action)} dot={false}>{actionLabel(r.action)}</Chip></Td>
-                    <Td className="align-top whitespace-nowrap">{href ? <Link href={href} className="font-semibold text-mq-cta hover:text-mq-primary">{item}</Link> : <span className="text-mq-ink">{item}</span>}</Td>
-                    <Td className="align-top max-w-[360px] text-mq-on-tint"><Details meta={r.meta} /></Td>
+                    <Td><Chip small tone={actionTone(r.action)} dot={false}>{actionLabel(r.action)}</Chip></Td>
+                    <Td className="min-w-[140px]">{href ? <Link href={href} className="font-semibold text-mq-primary hover:text-mq-cta">{item}</Link> : <span className="font-semibold text-mq-ink">{item}</span>}</Td>
+                    <Td className="min-w-[200px] text-mq-on-tint break-words"><Details meta={r.meta} /></Td>
                   </Tr>
                 );
               })}

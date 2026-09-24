@@ -78,7 +78,9 @@ function SalesHistory() {
   const summary = list.data?.pages[0]?.summary;
   const back = sp.toString() ? `?back=${encodeURIComponent(`?${sp.toString()}`)}` : '';
   const saleHref = (id) => `/admin/dashboard/sales/${id}${back}`;
-  const exports = isManager && !itemsView ? [{ label: 'Every sale in view (CSV)', href: `${API}?${apiQuery}&format=csv` }] : [];
+  const exports = !isManager ? [] : itemsView
+    ? [{ label: 'Items sold (CSV)', href: `${API}/items?${apiQuery}&format=csv` }]
+    : [{ label: 'Every sale in view (CSV)', href: `${API}?${apiQuery}&format=csv` }];
 
   const labelIn = (list_, v) => list_.find((o) => o.value === v)?.label;
   const active = [

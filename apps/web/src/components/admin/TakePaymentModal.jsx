@@ -9,7 +9,7 @@ import { takePaymentSchema } from '@/lib/schemas/sales';
 import Field from '@/components/admin/Field';
 import CustomerPicker from '@/components/admin/CustomerPicker';
 import { Modal, ModalSpacer, Button } from '@/components/admin/ui';
-import PaymentFields, { usePayment, paymentBody, paymentProblem, collectorChoices } from './PaymentFields';
+import PaymentFields, { usePayment, paymentBody, paymentProblem } from './PaymentFields';
 import { DiscountRow, TotalsBlock } from './RegisterTotals';
 import { money } from '@/lib/money';
 
@@ -25,8 +25,6 @@ import { money } from '@/lib/money';
 export default function TakePaymentModal({ tab, onClose, onPaid }) {
   const formId = useId();
   const { data: settings } = useQuery({ queryKey: ['settings'], queryFn: () => fetchJson('/api/admin/settings'), staleTime: 5 * 60 * 1000 });
-  const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => fetchJson('/api/auth/me'), staleTime: 5 * 60 * 1000 });
-  const { data: waiters = [] } = useQuery({ queryKey: ['pos-waiters'], queryFn: () => fetchJson('/api/admin/waiters?active=1') });
   const pay = usePayment(settings?.moneyAccounts);
   const [discount, setDiscount] = useState({ type: 'fixed', value: '' });
   const [invoiceCustomer, setInvoiceCustomer] = useState({ customerId: null, customer: null });
@@ -39,8 +37,6 @@ export default function TakePaymentModal({ tab, onClose, onPaid }) {
   const discountAmount = dv > 0 ? Math.min(discount.type === 'percent' ? (subtotal * dv) / 100 : dv, subtotal) : 0;
   const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
   const problem = paymentProblem(pay, total);
-  const tableWaiter = waiters.find((w) => w.id === tab.waiterId);
-  const { collectors, defaultCollector } = collectorChoices(me, waiters, tableWaiter);
   const isInvoice = opt.method === 'invoice';
 
   const form = useFormValidation(takePaymentSchema, {
@@ -105,8 +101,6 @@ export default function TakePaymentModal({ tab, onClose, onPaid }) {
           pay={pay}
           total={total}
           label="Paid with"
-          collectors={collectors}
-          defaultCollector={defaultCollector}
           disabled={busy}
         />
         {isInvoice && (

@@ -1,0 +1,6 @@
+# Files that run on the Linux server stay LF even in a Windows checkout
+# (a CRLF shell script fails there with "$'\r': command not found").
+*.sh text eol=lf
+deploy/** text eol=lf
+docker-compose.yml text eol=lf
+.env.example text eol=lf

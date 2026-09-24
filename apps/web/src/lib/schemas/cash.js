@@ -24,14 +24,10 @@ export const ownerSchema = z.object({
   note,
 });
 
-/** Day close: the cash must be counted; other accounts are optional but 0 or more. */
+/** Day close: every account (cash too) is optional; a typed amount must be 0 or more. */
 export function dayCountSchema(lines) {
   const shape = {};
-  for (const l of lines) {
-    shape[`c_${l.accountId}`] = l.kind === 'cash'
-      ? z.string().trim().min(1, 'Count the cash').refine(zeroOrMore, 'Enter 0 or more')
-      : z.string().trim().refine(zeroOrMore, 'Enter 0 or more');
-  }
+  for (const l of lines) shape[`c_${l.accountId}`] = z.string().trim().refine(zeroOrMore, 'Enter 0 or more');
   return z.object(shape);
 }
 

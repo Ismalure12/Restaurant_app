@@ -20,6 +20,7 @@ export default function MenuApp() {
     <MenuProvider
       categories={menu.categories}
       socialLinks={menu.socialLinks}
+      onlineOrdering={menu.onlineOrdering}
       initialOrder={order}
       openConfirmed={!!order}
     >

@@ -122,6 +122,7 @@ export default function MoneySettingsPage() {
         onDiscard={discard}
         onSave={submit}
         saveLabel={openChanged && !openingSaved ? 'Save & set opening balances' : 'Save changes'}
+        hidden={readOnly}
       />
     </SettingsForm>
   );

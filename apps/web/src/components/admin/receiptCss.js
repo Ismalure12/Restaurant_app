@@ -25,10 +25,14 @@ export const RECEIPT_CSS = `
 .rc-kv > .k { white-space: nowrap; }
 .rc-kv > .v { text-align: right; overflow-wrap: anywhere; }
 /* Pay to: spans the whole width; each label+number never splits, so 2–3
-   accounts sit on a line and the rest wrap to the next. */
-.rc-payto { grid-column: 1 / -1; display: flex; flex-wrap: wrap; column-gap: 1.6ch; }
+   accounts sit on a line and the rest wrap — aligned under the first
+   account (a hanging column), not back under "Pay to:". */
+.rc-payto { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; column-gap: 1.6ch; align-items: start; }
 .rc-payto > .k { white-space: nowrap; }
+.rc-accs { display: flex; flex-wrap: wrap; column-gap: 1.6ch; min-width: 0; }
 .rc-acc { white-space: nowrap; }
+/* Two papers in one print job (e.g. kitchen ticket + bill): a new page each. */
+.rc-pagebreak { break-before: page; page-break-before: always; height: 0; }
 .rc-rule { border-top: 1px dashed #000; margin: 5px 0; }
 .rc-rule.solid { border-top-style: solid; }
 .rc-cols, .rc-item { display: grid; grid-template-columns: 3ch 1fr auto; column-gap: 6px; }

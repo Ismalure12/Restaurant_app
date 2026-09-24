@@ -133,7 +133,7 @@ function serializeLine(l: { accountId: number; opening: unknown; moneyIn: unknow
 
 export interface CloseInput {
   day: string;
-  /** What was counted / read per account; cash must be counted, the rest may be left out. */
+  /** What was counted / read per account. Every account is optional (owner decision) — one left out has no over/short row. */
   counted: { accountId: number; amount: number }[];
   /** Acknowledge unpaid tabs / pending online orders and close anyway (they carry over). */
   carryOver?: boolean;
@@ -164,8 +164,6 @@ export async function closeDay(db: Db, input: CloseInput) {
   for (const c of input.counted) {
     if (!lines.some((l) => l.accountId === c.accountId)) throw httpError('Counted amount for an unknown account', 400);
   }
-  const cash = lines.find((l) => l.kind === 'cash');
-  if (cash && !countedBy.has(cash.accountId)) throw httpError('Count the cash before closing the day', 400);
 
   const at = endOf(day);
   await db.$transaction(async (tx) => {

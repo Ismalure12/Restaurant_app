@@ -46,7 +46,10 @@
     min-height: 100vh;
     font-family: var(--font-inter), Inter, system-ui, -apple-system, sans-serif;
   }
-  button { font-family: inherit; border: none; background: none; cursor: pointer; color: inherit; font-size: inherit; }
+  /* `border: 0 solid`, not `none`: a `none` style here made every Tailwind
+     `border` utility on a button (width only) invisible — all the admin kit's
+     outlined buttons lost their border. */
+  button { font-family: inherit; border: 0 solid; background: none; cursor: pointer; color: inherit; font-size: inherit; }
   a { color: inherit; text-decoration: none; cursor: pointer; }
   img { display: block; max-width: 100%; }
   input, textarea, select { font-family: inherit; }
@@ -805,6 +808,13 @@
     font-size: 22px;
   }
   .summary-row.total .lbl { color: var(--ink); }
+  /* Online ordering switched off (Settings › General) — the manager's message. */
+  .cart-notice {
+    @apply bg-white rounded-[16px] text-[13px] leading-snug text-ink-2 mb-3;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--blue);
+  }
 
   .show-waiter {
     @apply w-full rounded-[18px] bg-green text-white font-medium flex items-center justify-center gap-2.5 shadow-fab-green transition-transform duration-300 relative overflow-hidden;

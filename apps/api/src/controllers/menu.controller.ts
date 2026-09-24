@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/db/prisma.js';
+import { readOnlineOrdering } from '../lib/orders/onlineOrdering.js';
 
 // GET /api/menu — everything the public menu needs, in one response.
 // Public (no auth): it is the customer-facing menu. Only ACTIVE categories
@@ -12,7 +13,7 @@ const num = (d: unknown) => (d == null ? null : Number(String(d)));
 
 export async function getMenu(_req: Request, res: Response) {
   try {
-    const [categories, socialLinks] = await Promise.all([
+    const [categories, socialLinks, onlineOrdering] = await Promise.all([
       prisma.category.findMany({
         where: { isActive: true },
         orderBy: { sortOrder: 'asc' },
@@ -32,6 +33,7 @@ export async function getMenu(_req: Request, res: Response) {
         },
       }),
       prisma.socialLink.findMany({ orderBy: { createdAt: 'asc' } }),
+      readOnlineOrdering(prisma),
     ]);
 
     // Menu data changes rarely; let browsers reuse it briefly on repeat scans.
@@ -64,6 +66,8 @@ export async function getMenu(_req: Request, res: Response) {
         })),
       })),
       socialLinks: socialLinks.map((l) => ({ platform: l.platform, value: l.value })),
+      // Off = the cart shows the manager's message instead of checkout.
+      onlineOrdering,
     });
   } catch (err) {
     console.error('GET /api/menu:', err);

@@ -19,7 +19,7 @@ export function DiscountRow({ a11y = {}, discount, setDiscount, disabled, compac
       <label htmlFor={a11y.id} className="flex-1 min-w-0 text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">Discount</label>
       <input
         {...a11y}
-        className={inputCls({ size: compact ? 'sm' : 'xl', mono: true, className: cx(compact ? 'w-[84px]' : 'w-[110px]', 'text-right') })}
+        className={inputCls({ size: compact ? 'sm' : 'xl', mono: true, className: cx(compact ? 'w-[72px] !h-8 !px-2' : 'w-[110px]', 'text-right') })}
         type="number" min="0" step="0.01" inputMode="decimal"
         value={discount.value}
         onChange={(e) => setDiscount((d) => ({ ...d, value: e.target.value }))}
@@ -43,11 +43,11 @@ export function TotalsBlock({ rows = [], total, compact = false }) {
   return (
     <div className="flex flex-col gap-[3px]">
       {rows.map(([k, v]) => (
-        <div key={k} className={cx('flex justify-between gap-3 text-mq-on-tint', compact ? 'text-[13px]' : 'text-[13.5px]')}>
+        <div key={k} className={cx('flex justify-between gap-3 text-mq-on-tint', compact ? 'text-[12.5px]' : 'text-[13.5px]')}>
           {k}<span className="font-mq-mono tabular-nums text-mq-ink">{v}</span>
         </div>
       ))}
-      <div className={cx('flex justify-between gap-3 font-bold text-mq-ink', compact ? 'text-[17px]' : 'text-[19px]', rows.length > 0 && (compact ? 'border-t border-mq-line mt-1 pt-1.5' : 'border-t border-mq-line mt-2 pt-2.5'))}>
+      <div className={cx('flex justify-between gap-3 font-bold text-mq-ink', compact ? 'text-base' : 'text-[19px]', rows.length > 0 && (compact ? 'border-t border-mq-line mt-1 pt-1' : 'border-t border-mq-line mt-2 pt-2.5'))}>
         Total<span className="font-mq-mono tabular-nums">{money(total)}</span>
       </div>
     </div>

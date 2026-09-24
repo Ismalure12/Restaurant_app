@@ -18,7 +18,11 @@ COPY apps/api/package.json apps/api/
 # being installed here.
 COPY apps/api/prisma.config.ts apps/api/
 COPY apps/api/prisma apps/api/prisma
-RUN npm ci --workspace apps/web --include-workspace-root
+# The npm cache survives between builds (a flaky network resumes instead of
+# starting over); retries ride out dropped connections to the registry.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --workspace apps/web --include-workspace-root --prefer-offline \
+      --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 FROM deps AS build
 # next.config.mjs bakes the /api rewrite destination at BUILD time and throws

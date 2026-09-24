@@ -13,7 +13,7 @@ export const BIZ_FIELDS = [
   ['taxId', 'Tax ID (optional)', 'Shown on invoices'],
   // First part of every order ID: KFG-260919-0101. Letters/digits, max 8.
   ['orderPrefix', 'Order ID prefix', 'KFG'],
-  ['receiptFooter', 'Receipt message', 'Thank you!', 'text', 'area'],
+  ['receiptFooter', 'Receipt footer', 'Thank you!', 'text', 'area'],
   ['invoiceTerms', 'Invoice payment terms', 'Payment is due by the due date shown above.', 'text', 'area'],
 ];
 export const BIZ_KEYS = BIZ_FIELDS.map(([k]) => k);
@@ -26,7 +26,7 @@ export const bizFromSettings = (s) => Object.fromEntries(BIZ_KEYS.map((k) => [k,
  */
 export default function BusinessSection({ values, onChange, form, disabled }) {
   return (
-    <SettingsCard title="Receipt & business details" sub="Printed at the top of every receipt and invoice. Keep the phone and address current so customers can reach you.">
+    <SettingsCard title="Receipt & business details" sub="Printed at the top of every receipt and invoice">
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' }}>
         {BIZ_FIELDS.map(([k, label, ph, type = 'text', layout]) => (
           <Field
@@ -38,7 +38,7 @@ export default function BusinessSection({ values, onChange, form, disabled }) {
             {...form.fieldProps(k)}
           >
             {layout === 'area' ? (
-              <textarea className={textareaCls('min-h-[68px]')} rows={2} value={values[k]} disabled={disabled} onChange={(e) => onChange(k, e.target.value)} placeholder={ph} />
+              <textarea className={textareaCls('!min-h-[64px]')} rows={2} value={values[k]} disabled={disabled} onChange={(e) => onChange(k, e.target.value)} placeholder={ph} />
             ) : (
               <input
                 className={inputCls({ size: 'lg', mono: k === 'orderPrefix', className: k === 'orderPrefix' ? 'uppercase' : '' })}

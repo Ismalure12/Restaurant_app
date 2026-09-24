@@ -1,8 +1,13 @@
-# Local / Lightsail Postgres for Maqaaxi Pos. Own compose project and port so it
-# never collides with other stacks on the machine (5432 is often taken).
-#   docker compose up -d postgres
-#   DATABASE_URL=postgresql://maqaaxi:<POSTGRES_PASSWORD>@localhost:5433/maqaaxi
-# Set POSTGRES_PASSWORD in a root `.env.docker` (not committed) or the shell.
+# Maqaaxi Pos — the whole stack: postgres + api + web. Config comes from the
+# ONE root `.env` (template: .env.example); compose reads it automatically.
+#
+#   Local:       docker compose up -d --build     (builds both images here)
+#   Production:  docker compose pull && docker compose up -d
+#                (deploy/pull-and-restart.sh — the 1 GB box never builds; it
+#                 pulls the images GitHub Actions pushed to GHCR)
+#
+# Every port is bound to 127.0.0.1: on the server nginx is the only public
+# listener. Own compose project + volume so it never collides with other stacks.
 name: maqaaxi
 
 services:
@@ -11,7 +16,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: maqaaxi
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: maqaaxi
     ports:
       - "127.0.0.1:5433:5432"
@@ -24,6 +29,46 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/ismalure12/maqaaxi-api:latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override the host-side values in .env (localhost:5433, dev port 4100):
+      # inside the compose network the database is postgres:5432.
+      DATABASE_URL: postgresql://maqaaxi:${POSTGRES_PASSWORD}@postgres:5432/maqaaxi
+      PORT: "4000"
+      NODE_ENV: production
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-4000}:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # index.ts drains SSE streams and in-flight requests on SIGTERM.
+    stop_grace_period: 130s
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/ismalure12/maqaaxi-web:latest}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      # Baked in at build time (next.config.mjs rewrites) — the compose
+      # service name, so the container proxies /api to the api container.
+      args:
+        API_ORIGIN: http://api:4000
+    restart: unless-stopped
+    # No env_file on purpose: the web app holds no secrets.
+    environment:
+      PORT: "3100"
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3100}:3100"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   maqaaxi_pgdata:

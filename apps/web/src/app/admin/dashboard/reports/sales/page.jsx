@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import useStaffList from '@/hooks/useStaffList';
-import { Columns, Donut, Sparkline, StackBar } from '@/components/admin/reports/Charts';
+import { Columns, Donut, Sparkline, StackBar, PALETTE } from '@/components/admin/reports/Charts';
 import {
   ActiveFilters, ChannelSelect, ErrorNote, ExportBar, FilterSelect, FiltersButton, HourBars, PeriodPicker, PrintHead, RangeNote,
-  compareLabel, comparisonRange, labelOf, money, num, useAccountOptions, useReportParams,
+  compactMoney, compareLabel, comparisonRange, labelOf, money, num, useAccountOptions, useReportParams,
 } from '@/components/admin/reports/ReportKit';
 import {
   Alert, Button, Card, CardHeader, Delta, Icon, Kpi, KpiGrid, KpiSkeletons, ProgressBar, RowSkeletons, SearchInput,
@@ -22,13 +22,11 @@ const HISTORY = '/admin/dashboard/sales';
 const SORTS = { revenue: 'Value', quantity: 'Quantity', name: 'Name' };
 const TOPS = ['10', '20'];
 const CHANNEL_COLOR = { dine_in: '#850D33', delivery: '#B06A00', online: '#1F6FB2' };
-const DONUT = ['#850D33', '#1F6FB2', '#0E7C5A', '#B06A00', '#6B5CA5'];
 const pct = (n) => `${Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
 const hh = (h) => `${String(h).padStart(2, '0')}:00`;
 const dayTick = (d) => `${Number(d.slice(8))}/${Number(d.slice(5, 7))}`;
 const dayName = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 const sales = (n) => `${num(n)} ${n === 1 ? 'sale' : 'sales'}`;
-const compact = (n) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}k` : money(n));
 // The dishes-table header selects: 36 high, as wide as their label (design).
 const selectSm = selectCls({ size: 'sm', className: 'w-auto max-w-full text-[13px]' });
 
@@ -145,7 +143,7 @@ function SummaryView({ r, isLoading, preset, range, query, filters }) {
   const accountSegs = useMemo(() => {
     const list = r?.byAccount || [];
     const cut = list.length <= 6 ? list.length : 5;
-    const segs = list.slice(0, cut).map((a, i) => ({ label: a.label, value: a.total, color: DONUT[i] }));
+    const segs = list.slice(0, cut).map((a, i) => ({ label: a.label, value: a.total, color: PALETTE[i] }));
     const rest = list.slice(cut);
     if (rest.length) segs.push({ label: `Other (${rest.length})`, value: rest.reduce((n, a) => n + a.total, 0), color: '#9A9A93' });
     return segs;
@@ -208,7 +206,7 @@ function SummaryView({ r, isLoading, preset, range, query, filters }) {
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))' }}>
         <ChartCard title="How customers paid" sub="Takings by account">
           {isLoading ? <RowSkeletons rows={4} className="!p-0" /> : (
-            <Donut segments={accountSegs} fmt={money} centre={compact(s?.netSales || 0)} centreLabel="TAKINGS" size={132} />
+            <Donut segments={accountSegs} fmt={money} centre={compactMoney(s?.netSales || 0)} centreLabel="TAKINGS" size={132} />
           )}
         </ChartCard>
         {!oneDay && (

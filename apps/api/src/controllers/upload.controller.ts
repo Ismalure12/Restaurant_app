@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import multer from 'multer';
-import { put } from '@vercel/blob';
+import { uploadPublicImage } from '../lib/storage/s3.js';
 import sharp from 'sharp';
 import prisma from '../lib/db/prisma.js';
 import { requirePage } from '../lib/auth/auth.js';
@@ -91,9 +91,9 @@ export async function uploadImage(req: Request, res: Response) {
     }
 
     const name = `menu/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
-    const blob = await put(name, optimized, { access: 'public', contentType: 'image/webp' });
+    const url = await uploadPublicImage(name, optimized, 'image/webp');
 
-    return res.json({ url: blob.url });
+    return res.json({ url });
   } catch (error) {
     console.error('Upload error:', error);
     return res.status(500).json({ error: 'Internal server error' });

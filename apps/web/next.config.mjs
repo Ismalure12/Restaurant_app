@@ -25,6 +25,9 @@ const nextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   images: {
     remotePatterns: [
+      // Uploads (apps/api/src/lib/storage/s3.ts).
+      { protocol: 'https', hostname: '*.s3.*.amazonaws.com' },
+      // Older uploads still point at Vercel Blob.
       {
         protocol: 'https',
         hostname: '*.public.blob.vercel-storage.com',

@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { readJson } from '../utils/body.js';
 import { finalizePayment, setCustomerCookie } from '../lib/payments/payments.js';
 import { searchParams } from '../utils/query.js';
+import { orderingOffBody, readOnlineOrdering } from '../lib/orders/onlineOrdering.js';
 
 // POST /api/payment/initiate { reference } → { checkoutUrl }
 // Opens a Sifalo hosted-checkout session for a checkout created by
@@ -27,6 +28,11 @@ export async function initiatePayment(req: Request, res: Response) {
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
     }
+
+    // Switched off after this checkout was created: no new payment starts.
+    // (return/status stay open — someone who already paid must still finish.)
+    const ordering = await readOnlineOrdering(prisma);
+    if (!ordering.enabled) return res.status(409).json(orderingOffBody(ordering.message));
 
     const returnUrl = new URL('/api/payment/return', env.PUBLIC_APP_URL);
     returnUrl.searchParams.set('order_id', reference);

@@ -6,7 +6,7 @@ import { FMT } from '@/lib/menu/format';
 
 // Basket sheet: line items with qty controls, totals, and proceed-to-checkout.
 export default function CartOverlay() {
-  const { cartOpen, tableFromQr, cart, cartCount, cartTotal, goBack, lineInc, lineDec, lineRemove, goCheckout } = useMenu();
+  const { cartOpen, tableFromQr, cart, cartCount, cartTotal, goBack, lineInc, lineDec, lineRemove, goCheckout, orderingOffMsg } = useMenu();
 
   return (
     <div className={`page ${cartOpen ? 'open' : ''}`}>
@@ -63,7 +63,8 @@ export default function CartOverlay() {
           <div className="summary-row"><span>Subtotal</span><span>{FMT(cartTotal)}</span></div>
           <div className="summary-row total"><span className="lbl">Total</span><span>{FMT(cartTotal)}</span></div>
         </div>
-        <button className="show-waiter" onClick={goCheckout} disabled={!cart.length}>
+        {orderingOffMsg && <p className="cart-notice" role="status">{orderingOffMsg}</p>}
+        <button className="show-waiter" onClick={goCheckout} disabled={!cart.length || !!orderingOffMsg}>
           <span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
             Proceed to checkout

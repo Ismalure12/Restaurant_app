@@ -10,9 +10,9 @@ import useOrderCounts from '@/hooks/useOrderCounts';
 import SaleDrawer from '@/components/admin/orders/SaleDrawer';
 import {
   ActiveFilters, ChannelSelect, FilterSelect, FiltersButton, PeriodPicker, RangeNote, CHANNEL_OPTIONS,
-  compareLabel, comparisonRange, money, num, periodParams, rangeLabel, useAccountOptions, useReportParams,
+  compactMoney, compareLabel, comparisonRange, money, num, periodParams, rangeLabel, useAccountOptions, useReportParams,
 } from '@/components/admin/reports/ReportKit';
-import { Columns, HBars, LineArea, Sparkline, StackBar, PALETTE } from '@/components/admin/reports/Charts';
+import { Columns, Donut, HBars, LineArea, Sparkline, StackBar, PALETTE } from '@/components/admin/reports/Charts';
 import {
   Page, Toolbar, SectionLabel, Card, CardHeader, Button, Chip, Icon, Kpi, KpiGrid, Delta, ProgressBar, MiniBars,
   Table, Th, Td, Tr, TotalRow, EmptyRow, ErrorState, KpiSkeletons, Skeleton, cx,
@@ -107,6 +107,15 @@ function Overview() {
       return d.hours.map((h) => ({ key: h.hour, tick: hh(h.hour), name: `${hh(h.hour)}–${hh(h.hour + 1)}`, value: h.sales, prev: h.previous, prevName: `${cmpDay} ${hh(h.hour)}` }));
     }
     return d.trend.map((t, i) => ({ key: t.day, tick: dayTick(t.day), name: dayName(t.day), value: t.sales, sub: `${num(t.orders)} ${t.orders === 1 ? 'sale' : 'sales'}`, prev: t.previous, prevName: dayName(addDay(d.previous.from, i)) }));
+  }, [d]);
+
+  // Top dishes donut: the top 5 + "Other dishes" (itemsValue = every dish sold).
+  const dishSegs = useMemo(() => {
+    if (!d) return [];
+    // PALETTE order = Sales report › How customers paid.
+    const top = d.topDishes.map((t, i) => ({ label: t.name, value: t.revenue, color: PALETTE[i] }));
+    const rest = Math.round(((d.itemsValue || 0) - top.reduce((n, t) => n + t.value, 0)) * 100) / 100;
+    return rest > 0 ? [...top, { label: 'Other dishes', value: rest, color: '#9A9A93' }] : top;
   }, [d]);
 
   // "Needs you" — oldest first; each chip opens the page that settles it.
@@ -276,16 +285,13 @@ function Overview() {
               <CardHeader
                 chart
                 title="Top dishes"
-                sub="Click a dish for the sales behind it"
+                sub="Share of dish sales in the period"
                 actions={<Button href={dishesHref} size="xs" iconRight="arrowRight">All dishes</Button>}
               />
-              <div className="px-4 py-3.5">
-                <HBars
-                  rows={d.topDishes.map((t) => ({ label: t.name, value: t.revenue, sub: `${num(t.quantity)} sold${t.category ? ` · ${t.category}` : ''}` }))}
-                  fmt={money}
-                  onSelect={() => router.push(dishesHref)}
-                  empty="No dishes sold in this period."
-                />
+              <div className="px-4 py-[18px]">
+                {/* Same donut as Sales report › How customers paid: the top 5 plus
+                    everything else, so each share is of ALL dish sales. */}
+                <Donut segments={dishSegs} fmt={money} centre={compactMoney(d.itemsValue || 0)} centreLabel="DISHES" size={132} />
               </div>
             </Card>
 

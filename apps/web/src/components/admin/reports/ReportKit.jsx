@@ -24,6 +24,8 @@ import cx from '@/components/admin/ui/cx';
 import { Columns } from './Charts';
 
 export { money };
+/** $1.2k above a thousand, else full money — for tight spots like a donut centre. */
+export const compactMoney = (n) => (Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}k` : money(n));
 export const num = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 const pad = (n) => String(n).padStart(2, '0');

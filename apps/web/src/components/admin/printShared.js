@@ -83,14 +83,22 @@ export function printHtml(html, css) {
  * Which print document is mounted ('customer' receipt, 'bill', 'kitchen'
  * ticket, 'invoice') and a print(kind) that swaps to it synchronously, then
  * prints the rendered markup through printHtml.
+ * print(['kitchen', 'bill']) = ONE print job with each document on its own
+ * page (two papers): the first is the one that matters now, the cashier can
+ * print just page 1 from the dialog or both.
  */
 export function usePrintDoc(initial = 'customer') {
   const [kind, setKind] = useState(initial);
   const print = useCallback((next) => {
-    flushSync(() => setKind(next));
-    const node = document.querySelector('[data-print-doc]');
-    if (!node) return;
-    printHtml(node.innerHTML, RECEIPT_CSS);
+    const kinds = Array.isArray(next) ? next : [next];
+    const pages = [];
+    for (const k of kinds) {
+      flushSync(() => setKind(k));
+      const node = document.querySelector('[data-print-doc]');
+      if (node) pages.push(node.innerHTML);
+    }
+    if (!pages.length) return;
+    printHtml(pages.join('<div class="rc-pagebreak"></div>'), RECEIPT_CSS);
   }, []);
   return [kind, print];
 }

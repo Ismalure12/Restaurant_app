@@ -46,37 +46,49 @@ test.describe('Responsive admin', () => {
     });
   }
 
-  test('Register ticket: payment area resizes (keyboard), button stays in view, no Split tender', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+  // Laptop (1366×657 inside the browser): two lines and the whole payment
+  // (pay later, discount, method, total, button) visible without scrolling.
+  test('Register ticket fits a laptop: 2 lines + full payment, method is a dropdown, no Collected by / Split', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 657 });
     await signIn(page, 'manager');
     await page.goto(`${D}/pos`);
     const cards = page.locator('section[aria-label="Menu"] button[title^="Add "]');
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       await cards.nth(i).click();
       await page.getByRole('dialog').getByRole('button', { name: /^Add · / }).click();
     }
     const ticket = page.locator('[aria-label="Ticket"]');
-    // Pay now shows the method tiles: one method per sale, no Split.
     const payLater = ticket.getByRole('switch', { name: 'Pay later' });
     if (await payLater.isChecked()) await payLater.click();
-    await expect(ticket.getByRole('button', { name: 'Cash', exact: true })).toBeVisible();
-    await expect(ticket.getByRole('button', { name: 'Split', exact: true })).toHaveCount(0);
 
-    const handle = ticket.getByRole('separator', { name: /Resize the payment area/ });
-    await handle.dblclick(); // back to the default
-    const start = Number(await handle.getAttribute('aria-valuenow'));
-    await handle.focus();
-    await page.keyboard.press('ArrowUp');
-    expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(start + 16);
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowDown');
-    expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(start - 16);
-    await handle.dblclick();
+    const method = ticket.getByLabel('Paid with');
+    await expect(method).toBeVisible();
+    const labels = await method.locator('option').allTextContents();
+    expect(labels.some((l) => l.startsWith('Cash'))).toBe(true);
+    expect(labels.some((l) => /split/i.test(l))).toBe(false);
+    await expect(ticket.getByText('Collected by')).toHaveCount(0);
 
-    // The primary button is always inside the viewport.
     const take = ticket.getByRole('button', { name: /^Take \$/ });
     const box = await take.boundingBox();
-    expect(box.y + box.height).toBeLessThanOrEqual(900);
+    expect(box.y + box.height).toBeLessThanOrEqual(657);
+    const fits = await ticket.evaluate((tk) => {
+      const pay = [...tk.children].find((e) => e.className.includes('border-t') && e.className.includes('bg-mq-cream'));
+      const top = pay.getBoundingClientRect().top;
+      const lines = [...tk.querySelectorAll('button[aria-label^="Increase"]')].filter((b) => b.getBoundingClientRect().bottom <= top).length;
+      return { scrolls: pay.scrollHeight > pay.clientHeight + 1, lines };
+    });
+    expect(fits).toEqual({ scrolls: false, lines: 2 });
+
+    // The handle gives the lines more room (keyboard: down = smaller payment).
+    const handle = ticket.getByRole('separator', { name: /Resize the payment area/ });
+    await handle.focus();
+    await page.keyboard.press('ArrowDown');
+    const shrunk = Number(await handle.getAttribute('aria-valuenow'));
+    expect(shrunk).toBeGreaterThan(0);
+    await page.keyboard.press('ArrowUp');
+    expect(Number(await handle.getAttribute('aria-valuenow'))).toBe(shrunk + 16);
+    await handle.dblclick(); // back to auto
+    await expect(handle).not.toHaveAttribute('aria-valuenow', /.*/);
   });
 
   test('phone: sidebar is a drawer behind the Menu button', async ({ page }) => {

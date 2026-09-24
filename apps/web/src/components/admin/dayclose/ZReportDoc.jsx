@@ -19,6 +19,7 @@ function Row({ k, v, strong }) {
   return <div className="rc-sum" style={strong ? { fontWeight: 800 } : undefined}><span>{k}</span><span>{v}</span></div>;
 }
 
+// `closedAt` null = a preview of a day that isn't closed yet (stamped so on paper).
 const ZReportDoc = forwardRef(function ZReportDoc({ business, day, report, closedAt, closedBy, variant = '80mm' }, ref) {
   if (!report) return null;
   const s = report.sales || {};
@@ -30,7 +31,7 @@ const ZReportDoc = forwardRef(function ZReportDoc({ business, day, report, close
     <div ref={ref} data-zreport style={{ display: 'none' }}>
       <div className={`rcpt zr ${variant === 'a4' ? 'zr-a4' : ''}`}>
         <div className="rc-name">{business}</div>
-        <div className="rc-status">Z-REPORT · DAY CLOSE</div>
+        <div className="rc-status">{closedAt ? 'Z-REPORT · DAY CLOSE' : 'Z-REPORT · NOT CLOSED YET'}</div>
         <div className="rc-rule solid" />
         <Row k="Day" v={day} strong />
         {closedAt && <Row k="Closed" v={`${printDate(closedAt)} ${printTime(closedAt)}`} />}

@@ -36,3 +36,5 @@ export const socialLinkSchema = z.object({
   platform: z.string().min(1, 'Choose a platform'),
   value: z.string().trim().min(1, 'Enter the handle or link'),
 });
+
+export const onlineOrderingSchema = z.object({ message: maxText(300, 'Message') });

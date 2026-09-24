@@ -12,7 +12,7 @@ const CHECKOUT_DETAILS_KEY = 'menu_checkout_details';
 
 // Owns all customer-menu state, navigation, and the checkout flow. Returns a single
 // object consumed via MenuContext so the presentational screens stay thin.
-export default function useMenuController({ rawCategories, socialLinks = [], initialOrder = null, openConfirmed = false }) {
+export default function useMenuController({ rawCategories, socialLinks = [], onlineOrdering, initialOrder = null, openConfirmed = false }) {
   const searchParams = useSearchParams();
 
   // ?table=N from the QR code, persisted so checkout can use it after navigation.
@@ -466,9 +466,20 @@ export default function useMenuController({ rawCategories, socialLinks = [], ini
     bumpBadge();
   };
 
+  // ===== Online ordering switch (Settings › General) =====
+  // Off = the basket shows the manager's message instead of checkout. The API
+  // refuses checkout too; if it was switched off after the menu loaded, that
+  // refusal (code ONLINE_ORDERING_OFF) flips this so the basket says so.
+  const [orderingOffMsg, setOrderingOffMsg] = useState(onlineOrdering && !onlineOrdering.enabled ? onlineOrdering.message : null);
+  const refusedOff = (data) => {
+    if (data?.code !== 'ONLINE_ORDERING_OFF') return false;
+    setOrderingOffMsg(data.error);
+    return true;
+  };
+
   // ===== Proceed to checkout (in-shell overlay) =====
   const goCheckout = () => {
-    if (!cart.length) return;
+    if (!cart.length || orderingOffMsg) return;
     arm();
     try { localStorage.setItem('menu_cart', JSON.stringify(cart)); } catch {}
     if (tableFromQr) {
@@ -548,6 +559,7 @@ export default function useMenuController({ rawCategories, socialLinks = [], ini
         }),
       });
       const checkoutData = await checkoutRes.json();
+      refusedOff(checkoutData);
       if (!checkoutRes.ok || !checkoutData.reference) {
         throw new Error(checkoutData.error || 'Could not start checkout.');
       }
@@ -564,6 +576,7 @@ export default function useMenuController({ rawCategories, socialLinks = [], ini
         window.location.assign(`/?ref=${encodeURIComponent(payData.reference)}`);
         return;
       }
+      if (refusedOff(payData)) throw new Error(payData.error);
       if (!payRes.ok || !payData.checkoutUrl) {
         throw new Error('Payment could not be started. Please try again.');
       }
@@ -626,7 +639,7 @@ export default function useMenuController({ rawCategories, socialLinks = [], ini
     // screen
     screen, currentCatSlug, screenBack,
     // cart
-    cart, cartCount, cartTotal, lineInc, lineDec, lineRemove, cartOpen,
+    cart, cartCount, cartTotal, lineInc, lineDec, lineRemove, cartOpen, orderingOffMsg,
     // navigation + actions
     arm, goBack, goHome, openCategory, openDetail, closeDetail,
     openCart, closeCart, quickAdd, addDetailToCart,

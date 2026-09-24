@@ -1,9 +1,12 @@
 // Single-tenant seed: admin/manager/cashier/waiter accounts (from .env) plus
 // the full demo catalog (categories, tags, items).
 // Run (from apps/api): npm run db:seed
-// .cjs because the API package is ESM ("type": "module"). Loads apps/api/.env;
+// .cjs because the API package is ESM ("type": "module"). Loads the root .env;
 // variables already set in the environment win.
-if (require('node:fs').existsSync('.env')) process.loadEnvFile('.env');
+{
+  const rootEnv = require('node:path').join(__dirname, '../../../.env');
+  if (require('node:fs').existsSync(rootEnv)) process.loadEnvFile(rootEnv);
+}
 const { PrismaClient } = require('@prisma/client');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const bcrypt = require('bcryptjs');

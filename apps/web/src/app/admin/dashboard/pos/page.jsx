@@ -15,7 +15,7 @@ import ItemCustomizer, { buildLine, needsChoices } from '@/components/admin/Item
 import TablePicker from '@/components/admin/TablePicker';
 import useTables, { tableKey } from '@/hooks/useTables';
 import useAccess from '@/hooks/useAccess';
-import PaymentFields, { usePayment, paymentBody, paymentProblem, collectorChoices } from '@/components/admin/PaymentFields';
+import PaymentFields, { usePayment, paymentBody, paymentProblem } from '@/components/admin/PaymentFields';
 import { DiscountRow, TotalsBlock } from '@/components/admin/RegisterTotals';
 import {
   Alert, Button, ChoiceChip, EmptyState, Icon, SearchInput, Skeleton, Toggle,
@@ -28,10 +28,11 @@ import { money } from '@/lib/money';
 // Module-level so usePanelWidth's clamp stays stable between renders.
 const TICKET_MIN = 320;
 const ticketMax = () => Math.max(TICKET_MIN, Math.min(720, Math.round(window.innerWidth * 0.6)));
-// Ticket: the payment area under the lines is drag-resizable (up = taller).
-// The default leaves room for several lines; the primary button sits below it,
-// always in view.
+// Ticket: by default the payment area shows in full and the lines take the
+// rest; the handle between them lets staff give the lines more room (the
+// payment then scrolls). The primary button sits below, always in view.
 const PAY_AREA_MIN = 110;
+const LINES_MIN = 104; // ≈ two ticket lines
 
 const LABEL = 'text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted';
 
@@ -85,19 +86,19 @@ const DELIVERY = <><path d="M14 18V6a2 2 0 0 0-2-2H3v12M14 9h4l3 3v6M3 18h11" />
 function ServiceSwitch({ value, onChange }) {
   const opts = [['dine_in', 'Dine-in', DINE_IN], ['delivery', 'Delivery', DELIVERY]];
   return (
-    <div role="group" aria-label="Service" className="flex gap-1.5 p-[3px] bg-mq-chip border border-mq-line rounded-[10px]">
+    <div role="group" aria-label="Service" className="flex gap-1 p-[2px] bg-mq-chip border border-mq-line rounded-[9px]">
       {opts.map(([v, label, glyph]) => {
         const on = value === v;
         return (
           <button
             key={v} type="button" aria-pressed={on} onClick={() => onChange(v)}
             className={cx(
-              'flex-1 inline-flex items-center justify-center gap-2 min-h-11 rounded-lg text-[13.5px] font-semibold transition-colors',
+              'flex-1 inline-flex items-center justify-center gap-1.5 min-h-8 rounded-[7px] text-[13px] font-semibold transition-colors',
               'focus-visible:outline-none focus-visible:shadow-mq-focus',
               on ? 'bg-white text-mq-ink shadow-mq-seg' : 'text-mq-on-tint hover:text-mq-ink',
             )}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyph}</svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{glyph}</svg>
             {label}
           </button>
         );
@@ -109,27 +110,25 @@ function ServiceSwitch({ value, onChange }) {
 function TicketLine({ line, onQty }) {
   const detail = [line.optionName, line.extras.map((e) => e.name).join(', '), line.notes && `“${line.notes}”`].filter(Boolean).join(' · ');
   const last = line.quantity <= 1;
-  const stepBtn = 'grid place-items-center w-12 h-12 text-mq-body hover:bg-mq-chip hover:text-mq-ink focus-visible:outline-none focus-visible:bg-mq-chip';
+  const stepBtn = 'grid place-items-center w-9 h-8 text-mq-body hover:bg-mq-chip hover:text-mq-ink focus-visible:outline-none focus-visible:bg-mq-chip';
+  // One compact row (name · stepper · price) so several lines fit above the payment.
   return (
-    <div className="flex gap-[11px] py-3 border-b border-mq-chip last:border-b-0">
-      <span className="font-mq-mono tabular-nums font-bold text-sm text-mq-primary min-w-[22px] pt-px">{line.quantity}×</span>
-      <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-        <span className="text-sm font-semibold break-words">{line.name}</span>
-        {detail && <span className="text-[11.5px] text-mq-on-tint leading-[1.4] break-words">{detail}</span>}
+    <div className="flex items-center gap-2.5 py-2 border-b border-mq-chip last:border-b-0">
+      <span className="flex-1 min-w-0 flex flex-col">
+        <span className="text-[13.5px] font-semibold leading-snug break-words">{line.name}</span>
+        {detail && <span className="text-[11.5px] text-mq-on-tint leading-[1.35] break-words">{detail}</span>}
       </span>
-      <span className="flex flex-col items-end gap-1.5 flex-none">
-        <span className="font-mq-mono tabular-nums font-semibold text-sm">{money(line.unitPrice * line.quantity)}</span>
-        <span className="inline-flex items-center border border-mq-line rounded-lg overflow-hidden bg-white">
-          {/* Minus on the last one removes the line (trash glyph says so). */}
-          <button type="button" className={cx(stepBtn, last && 'hover:!bg-mq-danger-bg hover:!text-mq-danger-ink')} onClick={() => onQty(-1)} aria-label={last ? `Remove ${line.name}` : `Decrease ${line.name}`}>
-            <Icon name={last ? 'trash' : 'minus'} size={last ? 16 : 18} stroke={last ? 2 : 2.4} />
-          </button>
-          <span className="min-w-[30px] text-center font-mq-mono tabular-nums text-[15px] font-semibold">{line.quantity}</span>
-          <button type="button" className={stepBtn} onClick={() => onQty(1)} aria-label={`Increase ${line.name}`} disabled={line.quantity >= 99}>
-            <Icon name="plus" size={18} stroke={2.4} />
-          </button>
-        </span>
+      <span className="inline-flex items-center flex-none border border-mq-line rounded-lg overflow-hidden bg-white">
+        {/* Minus on the last one removes the line (trash glyph says so). */}
+        <button type="button" className={cx(stepBtn, last && 'hover:!bg-mq-danger-bg hover:!text-mq-danger-ink')} onClick={() => onQty(-1)} aria-label={last ? `Remove ${line.name}` : `Decrease ${line.name}`}>
+          <Icon name={last ? 'trash' : 'minus'} size={last ? 14 : 16} stroke={last ? 2 : 2.4} />
+        </button>
+        <span className="min-w-[24px] text-center font-mq-mono tabular-nums text-sm font-semibold">{line.quantity}</span>
+        <button type="button" className={stepBtn} onClick={() => onQty(1)} aria-label={`Increase ${line.name}`} disabled={line.quantity >= 99}>
+          <Icon name="plus" size={16} stroke={2.4} />
+        </button>
       </span>
+      <span className="w-[62px] flex-none text-right font-mq-mono tabular-nums font-semibold text-[13.5px]">{money(line.unitPrice * line.quantity)}</span>
     </div>
   );
 }
@@ -180,8 +179,14 @@ export default function PosPage() {
   const [customizing, setCustomizing] = useState(null);
   const ticket = usePanelWidth('reg', { initial: 400, min: TICKET_MIN, max: ticketMax, edge: 'left' });
   // Keep ≥ ~2 ticket lines visible however tall the payment area is dragged.
-  const payAreaMax = useCallback(() => Math.max(PAY_AREA_MIN, (ticketRef.current?.clientHeight || 800) - 420), []);
-  const payArea = usePanelWidth('reg-pay', { initial: 180, min: PAY_AREA_MIN, max: payAreaMax, edge: 'top' });
+  const topRef = useRef(null);
+  const payRef = useRef(null);
+  const footRef = useRef(null);
+  const payAreaMax = useCallback(() => Math.max(PAY_AREA_MIN, (ticketRef.current?.clientHeight || 800)
+    - (topRef.current?.offsetHeight || 0) - (footRef.current?.offsetHeight || 0) - LINES_MIN), []);
+  const payArea = usePanelWidth('reg-pay-h', {
+    initial: null, min: PAY_AREA_MIN, max: payAreaMax, edge: 'top', measure: () => payRef.current?.offsetHeight,
+  });
 
   // placed = { kind: 'paid' | 'invoice' | 'later', order, dueDate } after a submit.
   const [placed, setPlaced] = useState(null);
@@ -278,11 +283,6 @@ export default function PosPage() {
     discountValue: discount.value,
   });
   const firstIssue = Object.values(form.errors)[0];
-  const { collectors, defaultCollector } = collectorChoices(
-    me,
-    waiters,
-    orderType === 'dine_in' && waiterId ? waiters.find((w) => String(w.id) === String(waiterId)) : null,
-  );
 
   const openItem = (item) => {
     if (placed) return;
@@ -333,9 +333,11 @@ export default function PosPage() {
           } : {}),
         }),
       });
-      // Print first — the receipt is built from this response (server receipt #,
-      // order code), so it prints the moment the sale is saved; the rest follows.
-      printNow(order, flow === 'later' ? 'kitchen' : 'customer');
+      // Print first — built from this response (server receipt #, order code),
+      // so it prints the moment the sale is saved. Two papers in one job: the
+      // one that matters now first (kitchen ticket / the customer's receipt),
+      // the other second (bill / kitchen ticket) — print page 1 or both.
+      printNow(order, flow === 'later' ? ['kitchen', 'bill'] : ['customer', 'kitchen']);
       qc.invalidateQueries({ queryKey: ['orders-all'] });
       if (flow === 'later') {
         setPlaced({ kind: 'later', order });
@@ -432,19 +434,21 @@ export default function PosPage() {
           />
         ) : (
           <>
-            <div className="flex flex-col gap-2.5 px-4 py-3.5 border-b border-mq-line">
+            <div ref={topRef} className="flex flex-col gap-2 px-3.5 py-2.5 border-b border-mq-line flex-none">
               <ServiceSwitch value={service} onChange={(v) => { setService(v); if (v === 'delivery') setTableNumber(''); }} />
               {!deliveryOn ? (
-                <div className="flex flex-col gap-2">
-                  <Field label="Table" required={hasTables} {...form.fieldProps('table')}>
-                    <TablePicker size="xl" value={tableNumber} onChange={(v) => { setTableNumber(v); form.touch('table'); }} required={hasTables} />
+                <div className={cx('grid gap-2', !isWaiterSelf && waiters.length > 0 && 'grid-cols-2')}>
+                  {/* No grey "what's needed" hint up here: the same line shows under the
+                      primary button, and red errors still appear once touched. */}
+                  <Field label="Table" required={hasTables} {...form.fieldProps('table')} requirement={undefined}>
+                    <TablePicker size="sm" placeholder="Table no." value={tableNumber} onChange={(v) => { setTableNumber(v); form.touch('table'); }} required={hasTables} />
                   </Field>
                   {/* A waiter's own sale is always attributed to them — no picker needed. */}
                   {!isWaiterSelf && (
                     waiters.length > 0 ? (
-                      <Field label="Served by" required {...form.fieldProps('waiter')}>
-                        <select className={selectCls({ size: 'xl' })} value={waiterId} onChange={(e) => { setWaiterId(e.target.value); form.touch('waiter'); }}>
-                          <option value="">Waiter — required</option>
+                      <Field label="Served by" required {...form.fieldProps('waiter')} requirement={undefined}>
+                        <select className={selectCls({ size: 'sm' })} value={waiterId} onChange={(e) => { setWaiterId(e.target.value); form.touch('waiter'); }}>
+                          <option value="">Choose…</option>
                           {waiters.map((w) => <option key={w.id} value={w.id}>{w.label || w.name}</option>)}
                         </select>
                       </Field>
@@ -452,28 +456,36 @@ export default function PosPage() {
                   )}
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <input className={inputCls({ size: 'xl' })} value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Customer name (optional)" aria-label="Customer name" />
-                  <Field {...form.fieldProps('contactPhone')}>
-                    <input className={inputCls({ size: 'xl' })} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone — required" aria-label="Customer phone" />
-                  </Field>
-                  <Field {...form.fieldProps('address')}>
-                    <input className={inputCls({ size: 'xl' })} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address — required" aria-label="Delivery address" />
-                  </Field>
-                  <Field {...form.fieldProps('deliveryFee')}>
-                    {(a) => (
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <label htmlFor={a.id} className={LABEL}>Delivery fee</label>
-                        <input {...a} className={inputCls({ size: 'xl', mono: true, className: 'w-[110px] text-right' })} type="number" min="0" step="0.5" inputMode="decimal" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)} />
-                        <span className="text-[11.5px] text-mq-muted">default from Settings</span>
-                      </div>
-                    )}
-                  </Field>
+                <div className="flex flex-col gap-1.5">
+                  {/* Two compact rows; the "what's needed" line shows under the button. */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input className={inputCls({ size: 'sm' })} value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="Name (optional)" aria-label="Customer name" />
+                    <Field {...form.fieldProps('contactPhone')} requirement={undefined}>
+                      <input className={inputCls({ size: 'sm' })} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder="Phone *" aria-label="Customer phone" />
+                    </Field>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <Field className="flex-1 min-w-0" {...form.fieldProps('address')} requirement={undefined}>
+                      <input className={inputCls({ size: 'sm' })} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Delivery address *" aria-label="Delivery address" />
+                    </Field>
+                    <Field {...form.fieldProps('deliveryFee')}>
+                      {(a) => (
+                        <div className="flex items-center gap-1.5" title="Delivery fee — default from Settings">
+                          <label htmlFor={a.id} className={LABEL}>Fee</label>
+                          <input
+                            {...a}
+                            className={inputCls({ size: 'sm', mono: true, className: 'w-[72px] !px-2 text-right' })}
+                            type="number" min="0" step="0.5" inputMode="decimal" value={effFee} onChange={(e) => setDeliveryFee(e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </Field>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="tab:flex-1 tab:min-h-[120px] tab:overflow-y-auto min-h-24 px-4 py-1.5">
+            <div className="tab:flex-1 tab:min-h-[104px] tab:overflow-y-auto min-h-24 px-3.5 py-0.5">
               {cart.length === 0
                 ? <EmptyState icon="pos" title="Ticket is empty">Tap a menu item to start the order.</EmptyState>
                 : cart.map((l) => <TicketLine key={l.uid} line={l} onQty={(d) => changeQty(l.uid, d)} />)}
@@ -493,37 +505,35 @@ export default function PosPage() {
             {cart.length > 0 && (
               <>
               <div
-                className="flex flex-col gap-2.5 px-4 pt-3.5 pb-2.5 border-t border-mq-line bg-mq-cream tab:overflow-y-auto tab:flex-none"
-                style={phone ? undefined : { maxHeight: payArea.width }}
+                ref={payRef}
+                className="flex flex-col gap-2 px-3.5 pt-2.5 pb-2 border-t border-mq-line bg-mq-cream tab:overflow-y-auto tab:flex-[0_1_auto] tab:min-h-0"
+                style={phone || payArea.width == null ? undefined : { maxHeight: payArea.width }}
               >
-                {flow === 'pay' && (
-                  <Field {...form.fieldProps('discountValue')}>
-                    {(a) => <DiscountRow a11y={a} discount={discount} setDiscount={setDiscount} disabled={placing} />}
-                  </Field>
+                {/* Pay later decides everything below it, so it comes first. */}
+                {orderType === 'dine_in' && (
+                  <label
+                    className="flex items-center gap-2 px-2.5 py-1 bg-white border border-mq-line rounded-lg cursor-pointer"
+                    title="The kitchen gets it now; the guests settle the tab in Orders at the end."
+                  >
+                    <Toggle checked={flow === 'later'} onChange={setPayLaterMode} label="Pay later" disabled={placing} />
+                    <span className="text-[12.5px] font-semibold flex-none">Pay later</span>
+                    <span className="text-[11.5px] text-mq-on-tint truncate min-w-0">kitchen now · pay in Orders</span>
+                  </label>
                 )}
-                <TotalsBlock
-                  total={shownTotal}
-                  rows={flow === 'pay' && (discountAmount > 0 || delivery > 0) ? [
-                    ['Subtotal', money(subtotal)],
-                    discountAmount > 0 && ['Discount', `−${money(discountAmount)}`],
-                    delivery > 0 && ['Delivery fee', money(delivery)],
-                  ].filter(Boolean) : []}
-                />
 
                 {flow === 'pay' && (
-                  <PaymentFields
-                    pay={pay}
-                    total={total}
-                    collectors={collectors}
-                    defaultCollector={defaultCollector}
-                    disabled={placing}
-                  />
+                  <Field {...form.fieldProps('discountValue')}>
+                    {(a) => <DiscountRow compact a11y={a} discount={discount} setDiscount={setDiscount} disabled={placing} />}
+                  </Field>
+                )}
+
+                {flow === 'pay' && (
+                  <PaymentFields compact pay={pay} total={total} disabled={placing} />
                 )}
 
                 {flow === 'pay' && isInvoice && (
-                  <div className="flex flex-col gap-2">
-                    <p className="m-0 text-[12.5px] text-mq-on-tint">Bill this customer instead of collecting payment now.</p>
-                    <Field label="Customer" required {...form.fieldProps('invoiceCustomer')}>
+                  <div className="flex flex-col gap-1.5">
+                    <Field label="Customer" required {...form.fieldProps('invoiceCustomer')} requirement={undefined}>
                       <CustomerPicker
                         customerId={invoiceCustomer.customerId}
                         customer={invoiceCustomer.customer}
@@ -531,34 +541,39 @@ export default function PosPage() {
                         disabled={placing}
                       />
                     </Field>
-                    <Field label="Due date (optional)">
-                      <input className={inputCls({ size: 'xl' })} type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} />
+                    <Field htmlFor="reg-due">
+                      {(a) => (
+                        <div className="flex items-center gap-2">
+                          <label htmlFor={a.id} className={cx(LABEL, 'flex-none')}>Due (optional)</label>
+                          <input {...a} className={inputCls({ size: 'sm', className: 'flex-1 min-w-0 w-auto' })} type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} />
+                        </div>
+                      )}
                     </Field>
                   </div>
                 )}
-
-                {orderType === 'dine_in' && (
-                  <label className="flex items-start gap-2.5 px-3 py-2.5 bg-white border border-mq-line rounded-lg cursor-pointer">
-                    <Toggle checked={flow === 'later'} onChange={setPayLaterMode} label="Pay later" disabled={placing} className="mt-px" />
-                    <span className="flex flex-col gap-0.5 flex-1 min-w-0">
-                      <span className="text-[13.5px] font-semibold">Pay later</span>
-                      <span className="text-xs text-mq-on-tint leading-[1.45]">The kitchen gets it now; the guests settle the tab in Orders at the end.</span>
-                    </span>
-                  </label>
-                )}
               </div>
 
-              <div className="flex flex-col gap-2 px-4 pt-1 pb-3.5 bg-mq-cream flex-none">
+              {/* Always in view: the total and the one action. */}
+              <div ref={footRef} className="flex flex-col gap-1.5 px-3.5 pt-2 pb-2.5 border-t border-mq-line bg-mq-cream flex-none">
+                <TotalsBlock
+                  compact
+                  total={shownTotal}
+                  rows={flow === 'pay' && (discountAmount > 0 || delivery > 0) ? [
+                    ['Subtotal', money(subtotal)],
+                    discountAmount > 0 && ['Discount', `−${money(discountAmount)}`],
+                    delivery > 0 && ['Delivery fee', money(delivery)],
+                  ].filter(Boolean) : []}
+                />
                 <Button
-                  variant="primary" size="xl" block
+                  variant="primary" block
                   icon={flow === 'later' ? 'arrowRight' : undefined}
-                  className="!h-auto min-h-[52px] !rounded-[10px] !text-base"
+                  className="!h-9 !rounded-lg !text-[13.5px]"
                   disabled={placing || !form.valid}
                   onClick={placeOrder}
                 >
                   {primaryLabel}
                 </Button>
-                {!form.valid && !placing && firstIssue && <div className="text-xs text-mq-muted text-center" role="status">{firstIssue}</div>}
+                {!form.valid && !placing && firstIssue && <div className="text-[11.5px] text-mq-muted text-center" role="status">{firstIssue}</div>}
               </div>
               </>
             )}

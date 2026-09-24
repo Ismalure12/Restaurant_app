@@ -166,6 +166,7 @@ export async function listSales(req: Request, res: Response) {
 // per item across exactly the sales the Sales history list shows for the same
 // query (range, filters, q, status). Everyone on the Register; a waiter only
 // counts the sales they served or rang up (see historyQuery).
+// ?format=csv = the same rows as a file (managers only, like the sales CSV).
 export async function listSoldItems(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'sales', 'view');
   if (auth.error) return res.status(auth.status).json({ error: auth.error });
@@ -173,9 +174,16 @@ export async function listSoldItems(req: Request, res: Response) {
 
   const hq = historyQuery(req, auth.session);
   if (!hq.ok) return res.status(400).json({ error: hq.error });
+  const csv = searchParams(req).get('format') === 'csv';
+  if (csv && !MANAGER_ROLES.includes(auth.session.role as string)) {
+    return res.status(403).json({ error: 'Only a manager can export sales' });
+  }
 
   try {
     const items = await itemsSoldIn(prisma, hq.where);
+    if (csv) {
+      return sendCsv(res, `items_sold_${hq.range.fromKey}_${hq.range.toKey}.csv`, ['Item', 'Qty', 'Sales'], items.map((i) => [i.name, i.qty, i.total]));
+    }
     return res.json({
       items,
       units: items.reduce((n, i) => n + i.qty, 0),

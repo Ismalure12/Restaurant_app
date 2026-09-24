@@ -1,11 +1,16 @@
 # Maqaaxi Pos API. Build from the REPO ROOT — it is an npm workspace, and the
 # single lockfile lives there:
 #   docker build -f apps/api/Dockerfile -t maqaaxi-api .
-#   docker run --env-file apps/api/.env.docker -p 4000:4000 maqaaxi-api
+#   (or `docker compose up -d --build` — docker-compose.yml wires it to the root .env)
 # Migrations run from this package too (`npm run db:deploy`), never on boot.
 
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
+# The Prisma CLI (`npm run db:deploy` inside this image on the server) looks
+# for libssl; the slim image has none and Prisma falls back with a warning.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 FROM base AS deps
 COPY package.json package-lock.json ./
@@ -14,7 +19,11 @@ COPY apps/web/package.json apps/web/
 # postinstall runs `prisma generate`, which needs the schema and config.
 COPY apps/api/prisma.config.ts apps/api/
 COPY apps/api/prisma apps/api/prisma
-RUN npm ci --workspace apps/api --include-workspace-root
+# The npm cache survives between builds (a flaky network resumes instead of
+# starting over); retries ride out dropped connections to the registry.
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --workspace apps/api --include-workspace-root --prefer-offline \
+      --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000
 
 FROM deps AS build
 COPY apps/api/tsconfig.json apps/api/tsconfig.build.json apps/api/

@@ -1,31 +1,54 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import cx from './cx';
 import { useDismiss } from './layoutHooks';
 
 /**
  * Anchored popover. `trigger` is a render fn ({open, toggle, ref}) → node.
- * Controlled via `open`/`onOpenChange`, or uncontrolled.
+ * Controlled via `open`/`onOpenChange`, or uncontrolled. `align` is the
+ * preferred side; if the panel would run off the screen it is nudged back
+ * inside (12px margin) — a trigger near the right edge with align="left"
+ * used to push a filter panel off the page.
  */
+const EDGE = 12;
 export default function Popover({ trigger, children, align = 'left', width = 220, open: openProp, onOpenChange, className, panelClassName }) {
   const [own, setOwn] = useState(false);
   const open = openProp ?? own;
   const setOpen = (v) => { if (openProp === undefined) setOwn(v); onOpenChange?.(v); };
   const wrap = useRef(null);
+  const panel = useRef(null);
+  const [shift, setShift] = useState(0);
   useDismiss(open, () => setOpen(false), [wrap]);
+
+  // Measure after the panel is laid out (before paint) and keep it on screen.
+  useLayoutEffect(() => {
+    if (!open || !panel.current) { setShift(0); return; }
+    const r = panel.current.getBoundingClientRect();
+    const base = r.left - shift; // position without our own nudge
+    const vw = document.documentElement.clientWidth;
+    let dx = 0;
+    if (base + r.width > vw - EDGE) dx = vw - EDGE - (base + r.width);
+    if (base + dx < EDGE) dx = EDGE - base;
+    if (dx !== shift) setShift(dx);
+    // shift is read, not a trigger: re-measure only when opening/resizing width.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, width]);
 
   return (
     <div ref={wrap} className={cx('relative inline-flex', className)}>
       {trigger({ open, toggle: () => setOpen(!open), close: () => setOpen(false) })}
       {open && (
         <div
+          ref={panel}
           className={cx(
             'absolute top-[calc(100%+6px)] z-40 bg-white border border-mq-line rounded-xl shadow-mq-lg p-1.5 animate-mq-in motion-reduce:animate-none max-w-[calc(100vw-24px)]',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}
-          style={{ width }}
+          // `translate`, not `transform`: the open animation animates transform and
+          // would cancel the nudge.
+          style={{ width, translate: shift ? `${Math.round(shift)}px 0` : undefined }}
         >
           {typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}
         </div>

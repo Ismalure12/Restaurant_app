@@ -2,7 +2,7 @@
 # One-off: copy the whole Neon database into the local Docker Postgres.
 # Neon is only READ (pg_dump). Run from the repo root with Docker running:
 #   bash scripts/copy-neon-to-docker.sh
-# Needs: apps/api/.env with the Neon DATABASE_URL, .env.docker with POSTGRES_PASSWORD.
+# Needs: NEON_DATABASE_URL and POSTGRES_PASSWORD in the root .env.
 set -euo pipefail
 export MSYS_NO_PATHCONV=1   # Git Bash on Windows: don't rewrite /paths
 
@@ -11,10 +11,10 @@ DUMP_DIR="$(pwd)/.db-dumps"
 mkdir -p "$DUMP_DIR"
 
 # Direct (non-pooled) Neon URL: pg_dump needs a session, not PgBouncer.
-NEON_URL=$(grep '^DATABASE_URL' apps/api/.env | sed -E 's/^DATABASE_URL=//; s/^"//; s/"$//; s/-pooler//; s/&channel_binding=require//')
-case "$NEON_URL" in *neon.tech*) ;; *) echo "apps/api/.env DATABASE_URL is not the Neon URL — aborting" >&2; exit 1 ;; esac
+NEON_URL=$(grep '^NEON_DATABASE_URL' .env | sed -E 's/^NEON_DATABASE_URL=//; s/^"//; s/"$//; s/-pooler//; s/&channel_binding=require//')
+case "$NEON_URL" in *neon.tech*) ;; *) echo ".env NEON_DATABASE_URL is not the Neon URL — aborting" >&2; exit 1 ;; esac
 
-docker compose --env-file .env.docker up -d postgres
+docker compose up -d postgres
 until docker exec "$CONTAINER" pg_isready -U maqaaxi -d maqaaxi >/dev/null 2>&1; do sleep 1; done
 
 existing=$(docker exec "$CONTAINER" psql -U maqaaxi -d maqaaxi -Atc "select count(*) from pg_tables where schemaname='public'")

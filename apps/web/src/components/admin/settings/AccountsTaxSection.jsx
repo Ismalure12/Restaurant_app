@@ -9,11 +9,13 @@ import Field from '@/components/admin/Field';
 import { useFormValidation } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
 import { accountSchema } from '@/lib/schemas/settings';
-import { money } from '@/lib/money';
 import {
-  Alert, Button, Chip, Modal, ModalSpacer, Table, Th, Td, Tr, EmptyRow, ToggleRow, inputCls, selectCls,
+  Alert, Button, Chip, ChoiceChip, Modal, ModalSpacer, Overline, Table, Th, Td, Tr, EmptyRow, ToggleRow, inputCls,
 } from '@/components/admin/ui';
 import { ACCOUNTS_KEY, JSON_H, KIND_LABEL, SETTINGS_KEY, SettingsCard } from './shared';
+
+// The design's accounts table writes amounts without the $ ("1,000.00").
+const amount = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** The accounts query every Money settings card shares (same key + URL as Cash & accounts). */
 export function useAccountsData() {
@@ -64,55 +66,55 @@ export default function AccountsSection({ disabled }) {
       <SettingsCard
         flush
         title="Business accounts"
-        sub="Where money lands — these are the payment choices at the till."
-        actions={<Button size="xs" icon="plus" onClick={() => openAcct(null)} disabled={disabled || !acctData}>Add account</Button>}
+        sub="Where money lands · these are the till’s payment chips"
+        actions={<Button size="xs" onClick={() => openAcct(null)} disabled={disabled || !acctData}>Add account</Button>}
       >
         {isError ? <div className="p-4"><Alert tone="danger" title="Couldn’t load the accounts" action={<Button size="xs" icon="refresh" onClick={() => refetch()}>Retry</Button>}>{error?.message}</Alert></div> : (
-          <Table minW={560} label="Business accounts">
-            <thead><tr><Th>Account</Th><Th>Kind</Th><Th>Number</Th><Th align="right">Opening</Th><Th align="right"><span className="sr-only">Actions</span></Th></tr></thead>
+          <Table minW={440} label="Business accounts" className="max-desk:[&_td]:!px-3 max-desk:[&_th]:!px-3">
+            <thead><tr><Th>Account</Th><Th>Kind</Th><Th>Number</Th><Th align="right">Opening balance</Th><Th><span className="sr-only">Actions</span></Th></tr></thead>
             <tbody>
               {!acctData ? <EmptyRow cols={5}>Loading…</EmptyRow> : accounts.length === 0 ? <EmptyRow cols={5}>No accounts yet — add Cash and your wallets.</EmptyRow> : accounts.map((a) => (
-                <Tr key={a.id} dim={!a.isActive}>
-                  <Td strong>
+                <Tr key={a.id} dim={!a.isActive} className="hover:bg-mq-cream">
+                  <Td className="font-medium text-mq-ink">
                     <span className="inline-flex items-center gap-2 flex-wrap">{accountName(a)}{!a.isActive && <Chip small tone="off" dot={false}>Inactive</Chip>}</span>
                   </Td>
                   <Td className="text-mq-on-tint">{KIND_LABEL[a.kind] || a.kind}</Td>
-                  <Td mono className="text-mq-on-tint">{a.number || '—'}</Td>
-                  <Td money>{a.openingBalance != null ? money(a.openingBalance) : '—'}</Td>
+                  <Td className="text-mq-on-tint">{a.number || '—'}</Td>
+                  <Td align="right" className="font-mq-mono tabular-nums whitespace-nowrap text-mq-ink">{a.openingBalance != null ? amount(a.openingBalance) : '—'}</Td>
                   <Td align="right">
                     {a.kind === 'gateway'
                       ? <span className="text-xs text-mq-muted">Automatic</span>
-                      : <Button size="xs" className="!text-mq-cta" onClick={() => openAcct(a)} disabled={disabled}>Edit</Button>}
+                      : <Button size="xs" className="!text-mq-cta hover:!bg-mq-soft" onClick={() => openAcct(a)} disabled={disabled}>Edit</Button>}
                   </Td>
                 </Tr>
               ))}
             </tbody>
           </Table>
         )}
-        <p className="m-0 px-4 py-3 text-xs text-mq-muted border-t border-mq-chip">Balances are on Cash &amp; accounts. Each waiter’s and cashier’s own wallet numbers are set in Staff › Team.</p>
       </SettingsCard>
 
       {acctModal && (
         <Modal
-          title={acctModal.id ? 'Edit account' : 'Add account'}
+          eyebrow={acctModal.id ? 'Edit account' : 'New account'}
+          title={acctModal.id ? accountName(acctModal) : 'Add a business account'}
           icon="cash"
           width={460}
           onClose={() => setAcctModal(null)}
           busy={saveAcct.isPending}
-          footer={<><ModalSpacer /><Button onClick={() => setAcctModal(null)} disabled={saveAcct.isPending}>Cancel</Button><Button variant="primary" onClick={submitAcct} disabled={saveAcct.isPending || !acctV.valid}>{saveAcct.isPending ? 'Saving…' : 'Save'}</Button></>}
+          footer={<><ModalSpacer /><Button onClick={() => setAcctModal(null)} disabled={saveAcct.isPending}>Cancel</Button><Button variant="primary" onClick={submitAcct} disabled={saveAcct.isPending || !acctV.valid}>{saveAcct.isPending ? 'Saving…' : acctModal.id ? 'Save changes' : 'Add account'}</Button></>}
         >
           <form className="flex flex-col gap-3.5" onSubmit={submitAcct} noValidate>
-            <Field label="Type">
-              {acctModal.id
-                ? <input className={inputCls({ size: 'lg' })} value={KIND_LABEL[acctForm.kind] || acctForm.kind} readOnly disabled />
-                : (
-                  <select className={selectCls({ size: 'lg' })} value={acctForm.kind} onChange={(e) => setAcctForm({ ...acctForm, kind: e.target.value })}>
-                    {['wallet', 'cash', 'card', 'bank'].map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-                  </select>
-                )}
-            </Field>
             <Field label="Name" required {...acctV.fieldProps('label')}><input className={inputCls({ size: 'lg' })} value={acctForm.label} maxLength={30} onChange={(e) => setAcctForm({ ...acctForm, label: e.target.value })} placeholder="e.g. EVC Plus" /></Field>
-            <Field label="Number (optional)" {...acctV.fieldProps('number')}><input className={inputCls({ size: 'lg', mono: true })} type="tel" value={acctForm.number} maxLength={40} onChange={(e) => setAcctForm({ ...acctForm, number: e.target.value })} placeholder="Business wallet or account number" /></Field>
+            <Field label="Number (optional)" {...acctV.fieldProps('number')}><input className={inputCls({ size: 'lg', mono: true })} type="tel" value={acctForm.number} maxLength={40} onChange={(e) => setAcctForm({ ...acctForm, number: e.target.value })} placeholder="Wallet or account number" /></Field>
+            <div className="flex flex-col gap-1.5">
+              <Overline id="acct-kind-label">Kind</Overline>
+              <div role="group" aria-labelledby="acct-kind-label" className="flex flex-wrap gap-2">
+                {(acctModal.id ? [acctForm.kind] : ['cash', 'wallet', 'card', 'bank']).map((k) => (
+                  <ChoiceChip key={k} size="sm" active={acctForm.kind === k} disabled={!!acctModal.id} onClick={() => setAcctForm({ ...acctForm, kind: k })}>{KIND_LABEL[k] || k}</ChoiceChip>
+                ))}
+              </div>
+              {acctModal.id && <span className="text-xs text-mq-muted">The kind is fixed once an account exists.</span>}
+            </div>
             {acctModal.id && <ToggleRow title="Active" desc="Shown when taking payment" checked={acctForm.isActive} onChange={(v) => setAcctForm({ ...acctForm, isActive: v })} />}
             {acctBanner && <Alert tone="danger">{acctBanner}</Alert>}
             <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
@@ -126,8 +128,8 @@ export default function AccountsSection({ disabled }) {
 /** Settings › Money: tax already included in menu prices. Controlled. */
 export function TaxSection({ value, onChange, form, disabled }) {
   return (
-    <SettingsCard title="Tax" sub="Already included in menu prices — never added on top of a total.">
-      <Field className="max-w-[220px]" label="Tax included in prices (%)" required {...form.fieldProps('tax')}>
+    <SettingsCard title="Tax" sub="Included in menu prices, shown on receipts — never added on top of a total">
+      <Field label="Tax included in prices (%)" required {...form.fieldProps('tax')}>
         <input className={inputCls({ size: 'lg', mono: true })} type="number" min="0" max="50" step="0.5" inputMode="decimal" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
       </Field>
     </SettingsCard>

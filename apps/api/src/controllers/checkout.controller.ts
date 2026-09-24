@@ -4,6 +4,7 @@ import { z } from 'zod';
 import prisma from '../lib/db/prisma.js';
 import { priceCart, toCents, type CartLineInput } from '../lib/orders/cartPricing.js';
 import { readJson } from '../utils/body.js';
+import { orderingOffBody, readOnlineOrdering } from '../lib/orders/onlineOrdering.js';
 
 const cartLineSchema = z.object({
   itemId: z.number().int().positive().optional(),
@@ -49,6 +50,10 @@ export async function createCheckout(req: Request, res: Response) {
   const reference = 'ord-' + crypto.randomUUID();
 
   try {
+    // The manager switched online ordering off — nothing is created.
+    const ordering = await readOnlineOrdering(prisma);
+    if (!ordering.enabled) return res.status(409).json(orderingOffBody(ordering.message));
+
     // Never trust the client's cart prices or total — recompute both from
     // the database before persisting anything.
     // (Type-only cast: itemId is optional here; priceCart rejects a missing one at runtime.)

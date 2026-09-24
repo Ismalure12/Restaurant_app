@@ -11,7 +11,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 // Payments: in production a missing credential must stop the deploy, not
 // surface as a broken checkout for the first customer.
 if (isProduction) {
-  for (const name of ['SIFALO_API_USER', 'SIFALO_API_KEY', 'PUBLIC_APP_URL'] as const) {
+  // …and the S3 bucket, or every menu image upload fails.
+  for (const name of ['SIFALO_API_USER', 'SIFALO_API_KEY', 'PUBLIC_APP_URL', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION', 'S3_BUCKET_NAME'] as const) {
     if (!process.env[name]) throw new Error(`${name} environment variable is required in production`);
   }
 }

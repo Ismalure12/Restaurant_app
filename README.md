@@ -9,8 +9,8 @@ register from a protected admin dashboard.
 | | `apps/web` | `apps/api` |
 |---|---|---|
 | What | Next.js 16 frontend (customer menu + admin dashboard) | Express 5 + TypeScript API |
-| Talks to | the API only, over `/api/*` | Neon Postgres (Prisma 7), Sifalo, Vercel Blob, email |
-| Env | `apps/web/.env` — just `API_ORIGIN`, **no secrets** | `apps/api/.env` — database, JWT, Sifalo, Blob, email |
+| Talks to | the API only, over `/api/*` | Postgres (Prisma 7), Sifalo, AWS S3 (images), email |
+| Env (one root `.env`) | only `API_ORIGIN`, **no secrets** | database, JWT, Sifalo, S3, email |
 | Port (dev) | 3100 | 4100 |
 
 The web app never touches the database. It calls relative `/api/...` URLs; in development
@@ -19,9 +19,9 @@ Next proxies them to `API_ORIGIN`, and in production nginx routes `/api` to the 
 ## Getting started
 ```bash
 npm install                                  # installs both workspaces + generates the Prisma client
-cp apps/api/.env.example apps/api/.env       # fill in the real values
-cp apps/web/.env.example apps/web/.env
+cp .env.example .env                         # ONE env file for both apps — fill in the real values
 npm run dev                                  # API :4100 + web http://localhost:3100
+docker compose up -d --build                 # or the whole stack in Docker (postgres + api + web)
 ```
 
 ## Scripts (run from the root)
@@ -43,4 +43,4 @@ npm run dev                                  # API :4100 + web http://localhost:
 - `apps/api/src/lib/` — auth, Zod validations, pricing, Sifalo payments, email
 - `apps/api/prisma/` — schema, migrations, seed
 
-**Never commit a `.env`.** Only `apps/api/.env` holds secrets.
+**Never commit a `.env`.** The root `.env` holds every secret; the web app is only ever given `API_ORIGIN`.
