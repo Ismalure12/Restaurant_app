@@ -1,6 +1,7 @@
 // Single-tenant seed: admin/manager/cashier/waiter accounts (from .env) plus
 // the full demo catalog (categories, tags, items).
-// Run (from apps/api): npm run db:seed
+// Run (from apps/api): npm run db:seed        — demo menu too, NEVER on the live DB
+//                      npm run db:seed:staff  — logins only, safe anywhere
 // .cjs because the API package is ESM ("type": "module"). Loads the root .env;
 // variables already set in the environment win.
 {
@@ -399,8 +400,14 @@ async function seedCatalog() {
   console.log(`Seeded ${ITEMS.length} menu items`);
 }
 
+// --staff-only (npm run db:seed:staff): only the logins, never the menu — the
+// one mode that is safe on the live database (first admin on a fresh install).
+// Upserts: re-running never resets a password or touches other accounts.
+const STAFF_ONLY = process.argv.includes('--staff-only');
+
 async function main() {
   await seedStaff();
+  if (STAFF_ONLY) return console.log('\n✓ Staff accounts ready (menu untouched).');
   await seedCatalog();
   console.log('\n✓ Maqaaxi Pos seed complete.');
 }

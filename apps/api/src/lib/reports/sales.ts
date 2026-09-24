@@ -193,6 +193,8 @@ export function ledgerRow(o: LedgerRow, prefix: string) {
     total: round2(num(o.total)),
     status: o.status,
     paymentStatus: o.paymentStatus,
+    // 'invoice' tells an On-account sale from a paid one (Sales history status chip).
+    paymentMethod: o.paymentMethod,
   };
 }
 

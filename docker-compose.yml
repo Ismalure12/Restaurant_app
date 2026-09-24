@@ -10,6 +10,16 @@
 # listener. Own compose project + volume so it never collides with other stacks.
 name: maqaaxi
 
+# Sized for a 1 GB Lightsail box (+2 GB swap, DEPLOYMENT.md). mem_limit is a
+# runaway catch, not a reservation: one leaking service is killed and restarted
+# instead of taking the box down. The limits add up to more than the RAM on
+# purpose — they are ceilings that should never all be hit at once. The Node
+# heap caps (NODE_OPTIONS) sit well inside them, so V8 collects harder and slows
+# down before the kernel kills anything.
+x-logging: &logging
+  driver: json-file
+  options: { max-size: 10m, max-file: "3" }   # else container logs fill the disk silently
+
 services:
   postgres:
     image: postgres:18-alpine
@@ -18,17 +28,25 @@ services:
       POSTGRES_USER: maqaaxi
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: maqaaxi
+    # Nothing here needs to gain privileges through a setuid binary.
+    security_opt: [no-new-privileges:true]
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
       - maqaaxi_pgdata:/var/lib/postgresql
     # Sized for a 1 GB Lightsail box that also runs the API, web and nginx.
-    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "effective_cache_size=384MB"]
+    # random_page_cost=1.1: Lightsail disks are SSD, so the spinning-disk default
+    # (4.0) wrongly steers the planner away from indexes. No parallel workers:
+    # every query here is small, and forking one costs more than it saves.
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "effective_cache_size=384MB",
+              "-c", "random_page_cost=1.1", "-c", "max_parallel_workers_per_gather=0", "-c", "wal_compression=on"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U maqaaxi -d maqaaxi"]
       interval: 5s
       timeout: 3s
       retries: 10
+    mem_limit: 384m
+    logging: *logging
 
   api:
     image: ${API_IMAGE:-ghcr.io/ismalure12/maqaaxi-api:latest}
@@ -43,6 +61,8 @@ services:
       DATABASE_URL: postgresql://maqaaxi:${POSTGRES_PASSWORD}@postgres:5432/maqaaxi
       PORT: "4000"
       NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=256
+    security_opt: [no-new-privileges:true]
     ports:
       - "127.0.0.1:${API_HOST_PORT:-4000}:4000"
     depends_on:
@@ -50,6 +70,10 @@ services:
         condition: service_healthy
     # index.ts drains SSE streams and in-flight requests on SIGTERM.
     stop_grace_period: 130s
+    # Above the heap cap by more than web's: sharp (menu image uploads) decodes
+    # into native memory that --max-old-space-size does not bound.
+    mem_limit: 448m
+    logging: *logging
 
   web:
     image: ${WEB_IMAGE:-ghcr.io/ismalure12/maqaaxi-web:latest}
@@ -64,11 +88,16 @@ services:
     # No env_file on purpose: the web app holds no secrets.
     environment:
       PORT: "3100"
+      NODE_OPTIONS: --max-old-space-size=192
+    security_opt: [no-new-privileges:true]
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-3100}:3100"
     depends_on:
       api:
         condition: service_healthy
+    stop_grace_period: 30s
+    mem_limit: 320m
+    logging: *logging
 
 volumes:
   maqaaxi_pgdata:

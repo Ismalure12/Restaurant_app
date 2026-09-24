@@ -6,6 +6,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
 import useStaffList from '@/hooks/useStaffList';
 import SaleDrawer from '@/components/admin/orders/SaleDrawer';
+import { payPill } from '@/components/admin/orders/orderUi';
 import {
   Page, Toolbar, Card, CardHeader, CountPill, Chip, Kpi, KpiGrid, KpiSkeletons, Segmented, SearchInput,
   Table, Th, Td, Tr, TotalRow, EmptyRow, LoadMoreBar, RowSkeletons, ErrorState,
@@ -179,12 +180,14 @@ function SalesHistory() {
             <Table maxH={480} minW={900} label="Sales">
               <thead>
                 <tr>
-                  <Th>Order ID</Th><Th>Receipt</Th><Th>Closed</Th><Th>Customer / table</Th><Th>Cashier</Th><Th>Served by</Th><Th>Account</Th><Th align="right">Total</Th>
+                  <Th>Order ID</Th><Th>Receipt</Th><Th>Closed</Th><Th>Customer / table</Th><Th>Status</Th><Th>Served by</Th><Th>Account</Th><Th align="right">Total</Th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? <EmptyRow cols={COLS}>{emptyText}</EmptyRow> : rows.map((o) => {
                   const off = o.status === 'voided' || o.status === 'declined';
+                  // Same chip as Orders (Paid · On account · Refunded); a voided/declined sale says so instead.
+                  const pay = off ? { tone: 'off', label: o.status === 'declined' ? 'Declined' : 'Voided' } : payPill(o);
                   return (
                     <Tr
                       key={o.id}
@@ -193,16 +196,11 @@ function SalesHistory() {
                       onClick={isWaiter ? undefined : () => setOpenId(o.id)}
                       label={isWaiter ? undefined : `Open sale ${o.code}`}
                     >
-                      <Td mono className="text-mq-ink font-medium whitespace-nowrap">
-                        <span className="inline-flex items-center gap-2">
-                          {o.code}
-                          {off && <Chip tone="off" small strike>{o.status === 'declined' ? 'Declined' : 'Voided'}</Chip>}
-                        </span>
-                      </Td>
+                      <Td mono className="text-mq-ink font-medium whitespace-nowrap">{o.code}</Td>
                       <Td mono>{o.receiptNo ?? '—'}</Td>
                       <Td className="whitespace-nowrap">{when(o.closedAt)}</Td>
                       <Td>{whereOf(o)}</Td>
-                      <Td>{o.cashier || (o.source === 'online' ? 'Online' : '—')}</Td>
+                      <Td><Chip tone={pay.tone} small strike={off}>{pay.label}</Chip></Td>
                       <Td>{o.waiter || '—'}</Td>
                       <Td>{o.accountLabel}</Td>
                       <Td money className={off ? 'line-through !text-mq-muted' : undefined}>{money(o.total)}</Td>

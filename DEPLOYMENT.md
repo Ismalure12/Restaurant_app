@@ -1,6 +1,7 @@
 # Deploying Maqaaxi Pos
 
 **Target:** `https://menu.kfggalkacyo.com` on a 1 GB AWS Lightsail box (Ubuntu, amd64).
+`www.kfggalkacyo.com` forwards there (301, path kept). The production database starts **empty**.
 
 **How it works:** every push to `main` makes GitHub Actions (`.github/workflows/build-images.yml`)
 typecheck + test, then build both images and push them to GHCR. The server holds **no source
@@ -32,8 +33,7 @@ Browser ─► nginx (host, TLS) ─► web :3100 ─┐
 │   ├── pull-and-restart.sh          # the deploy command
 │   └── nginx/menu.kfggalkacyo.com.conf
 ├── scripts/
-│   ├── backup-db.sh                 # nightly cron
-│   └── copy-neon-to-docker.sh       # one-off, first install only
+│   └── backup-db.sh                 # nightly cron
 └── backups/                         # created by backup-db.sh
 ```
 
@@ -45,12 +45,13 @@ These files change rarely. When a commit touches one of them, copy it up again (
 
 ### 1. DNS and firewall
 
-- Point an **A record** for `menu.kfggalkacyo.com` at the Lightsail **static IP**
-  (attach a static IP first, or the address changes on reboot).
+- Point **A records** for `menu.kfggalkacyo.com` **and** `www.kfggalkacyo.com` at the Lightsail
+  **static IP** (attach a static IP first, or the address changes on reboot). Both names go on
+  the certificate, so both must resolve before certbot runs.
 - In the Lightsail networking tab allow **22, 80, 443** only. Postgres, the API and the web
   app are bound to `127.0.0.1` and must never be reachable from outside.
 - Wait for DNS to resolve before step 7 — certbot fails otherwise:
-  `dig +short menu.kfggalkacyo.com`
+  `dig +short menu.kfggalkacyo.com` and `dig +short www.kfggalkacyo.com`
 
 ### 2. Prepare the server and copy the files up
 
@@ -78,7 +79,7 @@ From your machine, in the repo root (`KEY` = the Lightsail SSH key, `HOST` = `ub
 scp -i KEY docker-compose.yml .env.example               HOST:/srv/maqaaxi/
 scp -i KEY deploy/pull-and-restart.sh                    HOST:/srv/maqaaxi/deploy/
 scp -i KEY deploy/nginx/menu.kfggalkacyo.com.conf        HOST:/srv/maqaaxi/deploy/nginx/
-scp -i KEY scripts/backup-db.sh scripts/copy-neon-to-docker.sh HOST:/srv/maqaaxi/scripts/
+scp -i KEY scripts/backup-db.sh                          HOST:/srv/maqaaxi/scripts/
 ```
 
 `.gitattributes` keeps these LF even on a Windows checkout — a CRLF shell script fails on
@@ -117,29 +118,33 @@ One `.env` for the whole stack. Set every `CHANGE_ME`, and:
 | `AWS_*` / `S3_BUCKET_NAME` | the S3 bucket for menu images (bucket policy: public `s3:GetObject`) |
 | `EMAIL_USER` / `EMAIL_APP_PASSWORD` | Gmail app password |
 | `API_HOST_PORT` / `WEB_HOST_PORT` | `4000` / `3100` (what nginx proxies to) |
-| `NEON_DATABASE_URL` | the Neon URL — only for step 5, delete it afterwards |
-| Seed accounts, `API_ORIGIN` | leave empty / as is — not used on the server |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | the owner's real login — step 5 creates it. Use a strong password, not the local demo one. |
+| `MANAGER_*` / `CASHIER_*` / `WAITER_*` | leave **empty** — add real staff in the admin (Staff) instead |
+| `API_ORIGIN` | leave as is — not used on the server |
 
 The API refuses to boot in production if a Sifalo, `PUBLIC_APP_URL` or S3 variable is
 missing. The web container gets nothing from this file — its only setting
 (`API_ORIGIN=http://api:4000`) is baked into the image.
 
-### 5. Database
+### 5. Database (starts empty)
 
 ```bash
 cd /srv/maqaaxi
 docker compose up -d postgres
-
-# One-off copy from Neon. Reads Neon only, refuses to restore over a non-empty DB,
-# and compares row counts table by table at the end.
-bash scripts/copy-neon-to-docker.sh
-
-# Pull the images and apply any migrations newer than the copy
 docker compose pull api web
+
+# Create every table
 docker compose run --rm api npm run db:deploy
+
+# First login: the admin from ADMIN_EMAIL / ADMIN_PASSWORD (+ any other *_EMAIL set).
+# Logins only — it never touches the menu, and re-running never resets a password.
+docker compose run --rm api npm run db:seed:staff
 ```
 
-> **Never run `npm run db:seed` against this database** — it deletes and recreates the menu.
+Then take `ADMIN_PASSWORD` back out of `.env` — the account exists, and the password
+should not sit on disk. Build the real menu, tables and staff from the admin.
+
+> **Never run `npm run db:seed` (without `:staff`) here** — it deletes the menu and loads the demo one.
 
 ### 6. Start the app
 
@@ -155,9 +160,9 @@ sudo ln -sf /etc/nginx/sites-available/menu.kfggalkacyo.com.conf /etc/nginx/site
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 
-# Install over plain HTTP first (above), THEN issue the cert. certbot edits the
-# file in place: it adds the TLS listener and the port-80 redirect itself.
-sudo certbot --nginx -d menu.kfggalkacyo.com
+# Install over plain HTTP first (above), THEN issue ONE cert for both names.
+# certbot edits the file in place: TLS listeners + the port-80 → 443 redirects.
+sudo certbot --nginx -d menu.kfggalkacyo.com -d www.kfggalkacyo.com
 ```
 
 Renewal is automatic (`certbot.timer`). Check with `sudo certbot renew --dry-run`.
@@ -241,6 +246,8 @@ pushed build — run `up -d --build` again afterwards to get your own code back.
 
 ```bash
 curl -sI https://menu.kfggalkacyo.com                    # 200
+curl -sI https://www.kfggalkacyo.com/admin/login         # 301 → https://menu.kfggalkacyo.com/admin/login
+curl -sI http://www.kfggalkacyo.com                      # 301 (http → https)
 curl -s  https://menu.kfggalkacyo.com/api/health         # {"ok":true,...}
 curl -N  https://menu.kfggalkacyo.com/api/admin/events   # 401 unless signed in
 ```
@@ -248,7 +255,7 @@ curl -N  https://menu.kfggalkacyo.com/api/admin/events   # 401 unless signed in
 In a browser:
 
 - [ ] `/` — the menu loads, categories and dish images render
-- [ ] `/admin/login` — sign in
+- [ ] `/admin/login` — sign in with the `ADMIN_EMAIL` account from step 5
 - [ ] **Orders badge updates without a refresh** — this is the SSE path. If it only updates
       on a manual reload, nginx is buffering: check the `location = /api/admin/events` block.
 - [ ] Ring up one test sale on the Register and print a receipt
@@ -273,13 +280,18 @@ free -h && df -h /
       `Sifalo TEST CHARGE active` at boot for as long as it is set — check the logs.
 - [ ] Confirm Sifalo accepts `https://menu.kfggalkacyo.com` as the return URL.
 - [ ] Settings → General: turn **online ordering** on when checkout should open.
+- [ ] Settings → General: business name, receipt details, order prefix.
+- [ ] Menu: categories, dishes and images (the database starts empty).
+- [ ] Staff: create the manager, cashiers and waiters; Tables: add the dining tables.
 - [ ] Settings → Money: opening balances and the opening date.
 - [ ] Inventory: an opening stock count.
 - [ ] Settings: staff wallet numbers (they print on receipts).
-- [ ] **Only after this deploy is live and stable**, apply the held migration
-      `apps/api/prisma/held/01_drop_banners_period_shifts.sql` (move it into
+- [ ] Optional cleanup: the held migration `apps/api/prisma/held/01_drop_banners_period_shifts.sql`
+      drops three tables/columns this code no longer uses. It was held back only because an
+      older build still read them; the new server starts empty and never ran that build, so it
+      can go in once this deploy is stable (move it into
       `prisma/migrations/<timestamp>_drop_banners_period_shifts/migration.sql`, push, deploy,
-      then `db:deploy`). Applying it earlier breaks the currently deployed build.
+      then `db:deploy`). Leaving the empty tables is harmless.
 
 ---
 
@@ -294,5 +306,9 @@ free -h && df -h /
 - **Migrations never run on container boot** — deliberately. You run them.
 - **The API drains on SIGTERM** (open SSE streams, in-flight requests). `stop_grace_period`
   is 130s in the compose file; do not shorten it.
+- **Memory limits and log rotation live in `docker-compose.yml`** (postgres 384m, api 448m,
+  web 320m, Node heaps capped inside them; container logs capped at 3 × 10 MB). A leaking
+  service is killed and restarted by Docker instead of freezing the box. `docker stats` shows
+  usage against each limit.
 - **GHCR packages are private.** Keep the `read:packages` token on the server only; the
   workflow pushes with the repo's own `GITHUB_TOKEN`.
