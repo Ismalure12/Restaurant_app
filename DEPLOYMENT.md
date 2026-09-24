@@ -1,7 +1,7 @@
 # Deploying Maqaaxi Pos
 
 **Target:** `https://menu.kfggalkacyo.com` on a 1 GB AWS Lightsail box (Ubuntu, amd64).
-`www.kfggalkacyo.com` forwards there (301, path kept). The production database starts **empty**.
+One name only — no `www.` (not needed on a subdomain). The production database starts **empty**.
 
 **How it works:** every push to `main` makes GitHub Actions (`.github/workflows/build-images.yml`)
 typecheck + test, then build both images and push them to GHCR. The server holds **no source
@@ -45,13 +45,12 @@ These files change rarely. When a commit touches one of them, copy it up again (
 
 ### 1. DNS and firewall
 
-- Point **A records** for `menu.kfggalkacyo.com` **and** `www.kfggalkacyo.com` at the Lightsail
-  **static IP** (attach a static IP first, or the address changes on reboot). Both names go on
-  the certificate, so both must resolve before certbot runs.
+- Point an **A record** for `menu.kfggalkacyo.com` at the Lightsail **static IP** (attach a
+  static IP first, or the address changes on reboot).
 - In the Lightsail networking tab allow **22, 80, 443** only. Postgres, the API and the web
   app are bound to `127.0.0.1` and must never be reachable from outside.
 - Wait for DNS to resolve before step 7 — certbot fails otherwise:
-  `dig +short menu.kfggalkacyo.com` and `dig +short www.kfggalkacyo.com`
+  `dig +short menu.kfggalkacyo.com`
 
 ### 2. Prepare the server and copy the files up
 
@@ -186,9 +185,9 @@ sudo ln -sf /etc/nginx/sites-available/menu.kfggalkacyo.com.conf /etc/nginx/site
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 
-# Install over plain HTTP first (above), THEN issue ONE cert for both names.
-# certbot edits the file in place: TLS listeners + the port-80 → 443 redirects.
-sudo certbot --nginx -d menu.kfggalkacyo.com -d www.kfggalkacyo.com
+# Install over plain HTTP first (above), THEN issue the cert. certbot edits the
+# file in place: it adds the TLS listener and the port-80 → 443 redirect itself.
+sudo certbot --nginx -d menu.kfggalkacyo.com
 ```
 
 Renewal is automatic (`certbot.timer`). Check with `sudo certbot renew --dry-run`.
@@ -299,8 +298,7 @@ pushed build — run `up -d --build` again afterwards to get your own code back.
 
 ```bash
 curl -sI https://menu.kfggalkacyo.com                    # 200
-curl -sI https://www.kfggalkacyo.com/admin/login         # 301 → https://menu.kfggalkacyo.com/admin/login
-curl -sI http://www.kfggalkacyo.com                      # 301 (http → https)
+curl -sI http://menu.kfggalkacyo.com                     # 301 (http → https)
 curl -s  https://menu.kfggalkacyo.com/api/health         # {"ok":true,...}
 curl -N  https://menu.kfggalkacyo.com/api/admin/events   # 401 unless signed in
 ```
