@@ -1,7 +1,7 @@
 // Shared building blocks for the Reports hub (sales, inventory, financial,
 // employees): the date range, the filters, what counts as a "sale", the
 // money-account keys, staff names and CSV output.
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import type { Prisma } from '@prisma/client';
 import type { Db } from '../db/prisma.js';
 import { rangeFromQuery, type DayRange } from '../time/businessTime.js';
@@ -159,14 +159,6 @@ export function csvCell(v: unknown): string {
 
 export function toCsv(header: string[], rows: unknown[][]): string {
   return '﻿' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
-}
-
-export function sendCsv(res: Response, filename: string, header: string[], rows: unknown[][]) {
-  const safe = filename.replace(/[^a-z0-9_.-]/gi, '_');
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
-  res.setHeader('Cache-Control', 'no-store');
-  return res.send(toCsv(header, rows));
 }
 
 /** Local date + time of an instant in the business timezone, for CSV cells. */

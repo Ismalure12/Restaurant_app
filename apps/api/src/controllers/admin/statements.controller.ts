@@ -8,11 +8,12 @@ import { MONTH_RE, monthRange } from '../../lib/closing/statements.js';
 import { readJson } from '../../utils/body.js';
 import { yearList, FY_RE, closeYear, yearPreview, reopenYear, fyMonths } from '../../lib/closing/yearClose.js';
 import { searchParams } from '../../utils/query.js';
-import { env } from '../../config/env.js';
 import { readCalendar } from '../../lib/money/moneyReads.js';
 import { getOrderPrefix, formatOrderCode } from '../../lib/orders/orderCode.js';
-import { LEDGER_CSV_HEADER, LEDGER_ORDER, LEDGER_SELECT, ledgerCsvRow, ledgerRow } from '../../lib/reports/sales.js';
-import { localStamp, num, round2, salesWhere, sendCsv } from '../../lib/reports/common.js';
+import { LEDGER_ORDER, LEDGER_SELECT, ledgerRow } from '../../lib/reports/sales.js';
+import { num, round2, salesWhere } from '../../lib/reports/common.js';
+import { exportFormat, FORMAT_ERROR, sendReport, type Table } from '../../lib/reports/export.js';
+import { ledgerTable, yearCashBookTable, yearExpensesTable, yearPayrollTable, yearStatementExport, yearStockCountsTable } from '../../lib/reports/exportSpecs.js';
 
 // GET /api/admin/statements/months — the months from the opening month to now
 // and whether each is closed / open (ended, not closed) / running. Manager.
@@ -175,26 +176,30 @@ export async function exportYearStatement(req: Request<{ fy: string }>, res: Res
     const first = monthRange(months[0]);
     const last = monthRange(months[months.length - 1]);
     const range = { fromKey: first.first, toKey: last.last, from: first.from, to: last.to, days: 0 };
-    const tag = `${req.params.fy}_${dataset}`;
+    const format = exportFormat(req) ?? 'xlsx';
+    if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
+    const period = { from: first.first, to: last.last };
 
+    let table: Table;
     switch (dataset) {
       case 'sales': {
         const prefix = await getOrderPrefix(prisma);
-        const rows: unknown[][] = [];
+        const rows: ReturnType<typeof ledgerRow>[] = [];
         let cursor: number | undefined;
         for (;;) {
           const batch = await prisma.order.findMany({
             where: salesWhere(range), select: LEDGER_SELECT, orderBy: LEDGER_ORDER, take: BATCH, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
           });
-          rows.push(...batch.map((o) => ledgerCsvRow(ledgerRow(o, prefix))));
+          rows.push(...batch.map((o) => ledgerRow(o, prefix)));
           if (batch.length < BATCH) break;
           cursor = batch[batch.length - 1].id;
         }
-        return sendCsv(res, `${tag}.csv`, LEDGER_CSV_HEADER, rows);
+        table = ledgerTable(rows);
+        break;
       }
       case 'cashbook': {
         const prefix = await getOrderPrefix(prisma);
-        const rows: unknown[][] = [];
+        const rows: Parameters<typeof yearCashBookTable>[0] = [];
         let cursor: number | undefined;
         for (;;) {
           const batch = await prisma.accountEntry.findMany({
@@ -202,35 +207,40 @@ export async function exportYearStatement(req: Request<{ fy: string }>, res: Res
             orderBy: { id: 'asc' }, take: BATCH, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             select: { id: true, businessDay: true, occurredAt: true, kind: true, amount: true, note: true, account: { select: { label: true } }, order: { select: { id: true, createdAt: true } }, collectedBy: { select: { name: true, email: true } } },
           });
-          rows.push(...batch.map((e) => [e.businessDay, localStamp(e.occurredAt, env.BUSINESS_TZ), e.account.label, e.kind, money(e.amount), e.order ? formatOrderCode(e.order, prefix) : '', e.collectedBy ? e.collectedBy.name?.trim() || e.collectedBy.email : '', e.note ?? '']));
+          rows.push(...batch.map((e) => ({
+            day: e.businessDay, at: e.occurredAt, account: e.account.label, kind: e.kind, amount: round2(num(e.amount)),
+            orderCode: e.order ? formatOrderCode(e.order, prefix) : '', collectedBy: e.collectedBy ? e.collectedBy.name?.trim() || e.collectedBy.email : '', note: e.note,
+          })));
           if (batch.length < BATCH) break;
           cursor = batch[batch.length - 1].id;
         }
-        return sendCsv(res, `${tag}.csv`, ['Day', 'Time (local)', 'Account', 'Kind', 'Amount', 'Order ID', 'Collected by', 'Note'], rows);
+        table = yearCashBookTable(rows);
+        break;
       }
       case 'expenses': {
-        const rows: unknown[][] = [];
+        const rows: Parameters<typeof yearExpensesTable>[0] = [];
         let cursor: number | undefined;
         for (;;) {
           const batch = await prisma.expense.findMany({
             where: { incurredAt: { gte: first.from, lt: last.to } }, orderBy: { id: 'asc' }, take: BATCH, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             select: { id: true, incurredAt: true, category: true, amount: true, note: true, paidFrom: { select: { label: true } } },
           });
-          rows.push(...batch.map((e) => [localStamp(e.incurredAt, env.BUSINESS_TZ), e.category, money(e.amount), e.paidFrom?.label ?? '', e.note ?? '']));
+          rows.push(...batch.map((e) => ({ at: e.incurredAt, category: e.category, amount: round2(num(e.amount)), paidFrom: e.paidFrom?.label ?? '', note: e.note })));
           if (batch.length < BATCH) break;
           cursor = batch[batch.length - 1].id;
         }
-        return sendCsv(res, `${tag}.csv`, ['Date (local)', 'Category', 'Amount', 'Paid from', 'Note'], rows);
+        table = yearExpensesTable(rows);
+        break;
       }
       case 'payroll': {
         const rows = await prisma.salaryPayment.findMany({
           where: { month: { in: months } }, orderBy: [{ month: 'asc' }, { id: 'asc' }], take: 5000,
           select: { month: true, amount: true, paidAt: true, note: true, staff: { select: { name: true, email: true } } },
         });
-        return sendCsv(res, `${tag}.csv`, ['Month', 'Staff', 'Amount', 'Paid on (local)', 'Note'],
-          rows.map((p) => [p.month, p.staff.name?.trim() || p.staff.email, money(p.amount), localStamp(p.paidAt, env.BUSINESS_TZ), p.note ?? '']));
+        table = yearPayrollTable(rows.map((p) => ({ month: p.month, staff: p.staff.name?.trim() || p.staff.email, amount: round2(num(p.amount)), paidAt: p.paidAt, note: p.note })));
+        break;
       }
-      case 'stockcounts': {
+      default: {
         const counts = await prisma.stockCount.findMany({
           where: { status: 'posted', countedOn: { gte: first.first, lte: last.last } }, orderBy: [{ countedOn: 'asc' }, { id: 'asc' }], take: 400,
           select: { countedOn: true, lines: { select: { itemId: true, systemQty: true, countedQty: true, unitCost: true } } },
@@ -238,14 +248,13 @@ export async function exportYearStatement(req: Request<{ fy: string }>, res: Res
         const ids = [...new Set(counts.flatMap((c) => c.lines.map((l) => l.itemId)))];
         const items = ids.length ? await prisma.inventoryItem.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, unit: true } }) : [];
         const byId = new Map(items.map((i) => [i.id, i]));
-        const rows = counts.flatMap((c) => c.lines.map((l) => {
-          const counted = num(l.countedQty);
-          const cost = l.unitCost == null ? null : num(l.unitCost);
-          return [c.countedOn, byId.get(l.itemId)?.name ?? `Item ${l.itemId}`, byId.get(l.itemId)?.unit ?? '', num(l.systemQty), counted, cost == null ? '' : cost.toFixed(4), cost == null ? '' : money(counted * cost)];
-        }));
-        return sendCsv(res, `${tag}.csv`, ['Count date', 'Item', 'Unit', 'System qty', 'Counted qty', 'Unit cost', 'Value'], rows);
+        table = yearStockCountsTable(counts.flatMap((c) => c.lines.map((l) => ({
+          day: c.countedOn, item: byId.get(l.itemId)?.name ?? `Item ${l.itemId}`, unit: byId.get(l.itemId)?.unit ?? '',
+          system: num(l.systemQty), counted: num(l.countedQty), unitCost: l.unitCost == null ? null : num(l.unitCost),
+        }))));
       }
     }
+    return await sendReport(req, res, format, yearStatementExport(req.params.fy, dataset, table, period));
   } catch (err) {
     console.error(`GET /api/admin/statements/year/${req.params.fy}/export:`, err);
     return res.status(500).json({ error: 'Internal server error' });

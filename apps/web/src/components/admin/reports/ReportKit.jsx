@@ -7,7 +7,7 @@
 // Print = window.print() with the A4 rules in ReportPrintCss.
 // Styled per docs/admin-design-system.md.
 
-import { useCallback, useMemo } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
@@ -218,6 +218,21 @@ export function RangeNote({ preset, range, compare = true }) {
  * never lay filters out as their own rows; the active ones show as chips
  * (ActiveFilters) under the toolbar.
  */
+// Set inside an open Filters panel. Each FilterSelect registers itself, so the
+// panel knows how many filters it holds: with ONE, choosing it applies and
+// closes the panel; with several (they combine — Served by + Channel +
+// Account), it stays open until Done so the person can set them all.
+const FiltersPanelContext = createContext(null);
+
+function FiltersPanelProvider({ close, children }) {
+  const count = useRef(0);
+  const value = useMemo(() => ({
+    register: () => { count.current += 1; return () => { count.current -= 1; }; },
+    chosen: () => { if (count.current === 1) close(); },
+  }), [close]);
+  return <FiltersPanelContext.Provider value={value}>{children}</FiltersPanelContext.Provider>;
+}
+
 export function FiltersButton({ active = 0, onClear, children, align = 'left' }) {
   return (
     <Popover
@@ -247,9 +262,11 @@ export function FiltersButton({ active = 0, onClear, children, align = 'left' })
     >
       {({ close }) => (
         <div role="group" aria-label="Filters">
-          <div className="flex flex-col gap-3 p-3.5">{children}</div>
+          <FiltersPanelProvider close={close}>
+            <div className="flex flex-col gap-3 p-3.5">{children}</div>
+          </FiltersPanelProvider>
           <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-t border-mq-chip">
-            {onClear ? <Button variant="ghost" size="md" className="!px-3 text-mq-on-tint" onClick={onClear}>Clear all</Button> : <span />}
+            {onClear ? <Button variant="ghost" size="md" className="!px-3 text-mq-on-tint" onClick={() => { onClear(); close(); }}>Clear all</Button> : <span />}
             <Button variant="primary" size="md" onClick={close}>Done</Button>
           </div>
         </div>
@@ -324,10 +341,12 @@ export function Delta({ now, before, fmt = money, invert = false, vs = 'vs previ
 
 /** A labelled <select> filter bound to one URL key (inside FiltersButton). `all` names the empty choice. */
 export function FilterSelect({ label, value, options, onChange, all = 'All' }) {
+  const panel = useContext(FiltersPanelContext);
+  useEffect(() => panel?.register(), [panel]);
   return (
     <label className="flex flex-col gap-[5px] min-w-0">
       <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">{label}</span>
-      <select className={selectCls()} value={value || ''} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+      <select className={selectCls()} value={value || ''} onChange={(e) => { onChange(e.target.value); panel?.chosen(); }} aria-label={label}>
         <option value="">{all}</option>
         {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -335,42 +354,50 @@ export function FilterSelect({ label, value, options, onChange, all = 'All' }) {
   );
 }
 
-/** Export CSV ▾ (downloads) + Print. */
-export function ExportBar({ exports = [], print = true }) {
-  if (!exports.length && !print) return null;
+/**
+ * Export Excel (the whole report as one formatted workbook) + a small menu with
+ * any other Excel files (`extra`) and the plain CSV tables (`csv`) + Print.
+ * excel: href · extra/csv: [{ label, href }] · size: the Button size of the toolbar it sits in.
+ */
+export function ExportBar({ excel, extra = [], csv = [], print = true, size = 'sm' }) {
+  const more = extra.length + csv.length;
+  if (!excel && !more && !print) return null;
+  const item = 'flex items-center min-h-9 px-2.5 rounded-lg text-[13.5px] text-mq-ink hover:bg-mq-canvas';
+  const head = 'px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted';
   return (
     <div className="inline-flex items-center gap-2 rpt-noprint">
-      {exports.length === 1 && (
-        <Button href={exports[0].href} variant="secondary" size="sm" icon="download" download>Export CSV</Button>
-      )}
-      {exports.length > 1 && (
+      {excel && <Button href={excel} variant="secondary" size={size} icon="download" download>Export Excel</Button>}
+      {more > 0 && (
         <Popover
           align="right"
-          width={240}
+          width={250}
           trigger={({ open, toggle }) => (
-            <Button variant="secondary" size="sm" icon="download" iconRight="chevDown" onClick={toggle} aria-expanded={open} aria-haspopup="menu">Export CSV</Button>
+            <Button variant="secondary" size={size} iconRight="chevDown" onClick={toggle} aria-expanded={open} aria-haspopup="menu">
+              {extra.length ? 'More' : 'CSV'}
+            </Button>
           )}
         >
           {({ close }) => (
             <div role="menu">
-              {exports.map((x) => (
-                <a key={x.href} role="menuitem" href={x.href} download onClick={close} className="flex items-center min-h-9 px-2.5 rounded-lg text-[13.5px] text-mq-ink hover:bg-mq-canvas">{x.label}</a>
-              ))}
+              {extra.length > 0 && <div className={head}>Excel</div>}
+              {extra.map((x) => <a key={x.href} role="menuitem" href={x.href} download onClick={close} className={item}>{x.label}</a>)}
+              {csv.length > 0 && <div className={head}>CSV (plain table)</div>}
+              {csv.map((x) => <a key={x.href} role="menuitem" href={x.href} download onClick={close} className={item}>{x.label}</a>)}
             </div>
           )}
         </Popover>
       )}
-      {print && <Button variant="secondary" size="sm" icon="print" onClick={() => window.print()}>Print</Button>}
+      {print && <Button variant="secondary" size={size} icon="print" onClick={() => window.print()}>Print</Button>}
     </div>
   );
 }
 
-export function Toolbar({ children, exports, print = true }) {
+export function Toolbar({ children, print = true, ...exportsProps }) {
   return (
     <div className="flex items-center gap-2.5 flex-wrap rpt-noprint">
       {children}
       <span className="flex-1" />
-      <ExportBar exports={exports} print={print} />
+      <ExportBar {...exportsProps} print={print} />
     </div>
   );
 }

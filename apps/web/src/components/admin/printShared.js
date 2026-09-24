@@ -46,46 +46,55 @@ export const includedTax = (total, ratePct) =>
  * whole page. The browser's print preview then holds only the 80mm receipt:
  * no page layout to redo, no menu photos to fetch first, no app fonts — which
  * is what made printing from the Register slow.
+ * Resolves once that print dialog has closed (printed or cancelled), so a
+ * caller can open the next paper's dialog after it.
  */
 export function printHtml(html, css) {
-  const frame = document.createElement('iframe');
-  frame.setAttribute('aria-hidden', 'true');
-  frame.tabIndex = -1;
-  Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0', visibility: 'hidden' });
-  document.body.appendChild(frame);
-  const doc = frame.contentDocument;
-  doc.open();
-  // <base> so the receipt font's root-relative URL resolves inside the blank frame.
-  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print</title><base href="${window.location.origin}/"><style>
-    @page { size: 80mm auto; margin: 0; }
-    html, body { margin: 0; padding: 0; background: #fff; }
-    ${css}
-  </style></head><body>${html}</body></html>`);
-  doc.close();
-  const win = frame.contentWindow;
-  // Remove the frame once the dialog closes (afterprint), with a fallback.
-  const cleanup = () => setTimeout(() => frame.remove(), 500);
-  win.addEventListener('afterprint', cleanup, { once: true });
-  setTimeout(() => { if (frame.isConnected) frame.remove(); }, 60_000);
-  // Wait for the receipt font (cached after the first print) so the first
-  // receipt isn't printed in the fallback face; never wait more than 1.5 s.
-  let printed = false;
-  const go = () => { if (printed || !frame.isConnected) return; printed = true; win.focus(); win.print(); };
-  const fonts = doc.fonts;
-  if (fonts?.load) {
-    Promise.race([fonts.load('12px "Receipt Mono"'), new Promise((r) => setTimeout(r, 1500))]).then(go, go);
-  } else {
-    go();
-  }
+  return new Promise((resolve) => {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.tabIndex = -1;
+    Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0', visibility: 'hidden' });
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    doc.open();
+    // <base> so the receipt font's root-relative URL resolves inside the blank frame.
+    doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print</title><base href="${window.location.origin}/"><style>
+      @page { size: 80mm auto; margin: 0; }
+      html, body { margin: 0; padding: 0; background: #fff; }
+      ${css}
+    </style></head><body>${html}</body></html>`);
+    doc.close();
+    const win = frame.contentWindow;
+    // Remove the frame once the dialog closes (afterprint), with a fallback.
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; setTimeout(() => frame.remove(), 500); resolve(); };
+    win.addEventListener('afterprint', finish, { once: true });
+    // Safety net only: a browser that never fires afterprint must not hold the
+    // next paper forever (nor keep the frame).
+    setTimeout(finish, 5 * 60_000);
+    // Wait for the receipt font (cached after the first print) so the first
+    // receipt isn't printed in the fallback face; never wait more than 1.5 s.
+    let printed = false;
+    const go = () => { if (printed || !frame.isConnected) return; printed = true; win.focus(); win.print(); };
+    const fonts = doc.fonts;
+    if (fonts?.load) {
+      Promise.race([fonts.load('12px "Receipt Mono"'), new Promise((r) => setTimeout(r, 1500))]).then(go, go);
+    } else {
+      go();
+    }
+  });
 }
 
 /**
  * Which print document is mounted ('customer' receipt, 'bill', 'kitchen'
  * ticket, 'invoice') and a print(kind) that swaps to it synchronously, then
  * prints the rendered markup through printHtml.
- * print(['kitchen', 'bill']) = ONE print job with each document on its own
- * page (two papers): the first is the one that matters now, the cashier can
- * print just page 1 from the dialog or both.
+ * print(['customer', 'kitchen']) prepares BOTH papers at once, then prints
+ * them as separate jobs, one after the other: the first paper's dialog opens,
+ * and when it closes (printed or cancelled) the second one's opens by itself.
+ * The cashier prints both, or cancels the second to keep just the first.
+ * Never one job with both pages — that forced both papers out together.
  */
 export function usePrintDoc(initial = 'customer') {
   const [kind, setKind] = useState(initial);
@@ -98,7 +107,8 @@ export function usePrintDoc(initial = 'customer') {
       if (node) pages.push(node.innerHTML);
     }
     if (!pages.length) return;
-    printHtml(pages.join('<div class="rc-pagebreak"></div>'), RECEIPT_CSS);
+    // One after another, each only once the previous dialog has closed.
+    pages.reduce((prev, html) => prev.then(() => printHtml(html, RECEIPT_CSS)), Promise.resolve());
   }, []);
   return [kind, print];
 }

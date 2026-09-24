@@ -334,9 +334,10 @@ export default function PosPage() {
         }),
       });
       // Print first — built from this response (server receipt #, order code),
-      // so it prints the moment the sale is saved. Two papers in one job: the
-      // one that matters now first (kitchen ticket / the customer's receipt),
-      // the other second (bill / kitchen ticket) — print page 1 or both.
+      // so it prints the moment the sale is saved. Both papers are prepared
+      // now and print as two jobs: the one that matters now first (kitchen
+      // ticket / the customer's receipt); when its dialog closes, the second
+      // (bill / kitchen ticket) opens by itself — print it or cancel it.
       printNow(order, flow === 'later' ? ['kitchen', 'bill'] : ['customer', 'kitchen']);
       qc.invalidateQueries({ queryKey: ['orders-all'] });
       if (flow === 'later') {
@@ -639,11 +640,6 @@ function PlacedPanel({ placed, canOpenOrders, canOpenCustomer, onPrint, onNew })
   const title = kind === 'later'
     ? `Sent to kitchen · ${order.tableNumber ? `Table ${order.tableNumber}` : order.code}`
     : kind === 'invoice' ? `Invoice #${order.invoiceId} created` : `Paid · receipt ${order.receiptNo}`;
-  const sub = kind === 'later'
-    ? `The kitchen ticket went to the printer. ${order.code} stays unpaid until the guests ask for the bill in Orders.`
-    : kind === 'invoice'
-      ? 'Balance due from the customer. The receipt went to the printer.'
-      : `${order.code} · the receipt went to the printer.`;
 
   const facts = [
     ['Order', <span key="c" className="font-mq-mono tabular-nums text-[12.5px]">{order.code}</span>],
@@ -661,10 +657,7 @@ function PlacedPanel({ placed, canOpenOrders, canOpenCustomer, onPrint, onNew })
       <span className={cx('grid place-items-center w-[60px] h-[60px] rounded-full flex-none', PLACED_TONE[kind])}>
         <Icon name="check" size={28} stroke={2.8} />
       </span>
-      <span className="flex flex-col items-center gap-[5px]">
-        <span className="text-[19px] font-semibold tracking-[-.01em]">{title}</span>
-        <span className="text-[13px] text-mq-on-tint leading-normal max-w-[330px]">{sub}</span>
-      </span>
+      <span className="text-[19px] font-semibold tracking-[-.01em]">{title}</span>
 
       <div className="w-full border border-mq-line rounded-xl overflow-hidden text-left">
         {facts.map(([k, v]) => (

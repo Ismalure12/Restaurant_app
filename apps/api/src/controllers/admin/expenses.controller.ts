@@ -11,8 +11,9 @@ import { assertOpenAt, sendHttpError } from '../../lib/closing/dayClose.js';
 import { ensureCategory, CATEGORY_KINDS } from '../../lib/money/expenseCategories.js';
 import { searchParams as getSearchParams } from '../../utils/query.js';
 import { audit } from '../../lib/db/audit.js';
-import { localStamp, num, round2, sendCsv } from '../../lib/reports/common.js';
-import { env } from '../../config/env.js';
+import { num, round2 } from '../../lib/reports/common.js';
+import { sendReport } from '../../lib/reports/export.js';
+import { expensesExport } from '../../lib/reports/exportSpecs.js';
 
 const DAY = 86400000;
 
@@ -22,13 +23,13 @@ const DAY = 86400000;
  * header needs — computed with aggregate/groupBy, never by loading every row:
  * this month, the last 30 days and the 30 before them (prev30Total), the top
  * categories, every entry's count and the first entry's date (firstAt).
- * ?format=csv exports every matching row (newest first, capped at CSV_CAP).
+ * ?format=xlsx|csv exports every matching row (newest first, capped at CSV_CAP).
  */
 const CSV_CAP = 10_000;
 const listQuery = z.object({
   q: z.string().trim().max(80, 'Search is too long').optional(),
   category: z.string().trim().max(80, 'Category is too long').optional(),
-  format: z.enum(['csv'], { error: 'format must be csv' }).optional(),
+  format: z.enum(['xlsx', 'csv'], { error: 'format must be xlsx or csv' }).optional(),
 });
 export async function listExpenses(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'expenses', 'view');
@@ -41,7 +42,7 @@ export async function listExpenses(req: Request, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message || 'Invalid query' });
   const q = parsed.data.q || '';
   const category = parsed.data.category || '';
-  const csv = parsed.data.format === 'csv';
+  const format = parsed.data.format;
   // A date-only "from" means the start of that day. (parseExpenseDate anchors
   // form dates at noon, which would drop that morning's expenses from the range.)
   const fromRaw = searchParams.get('from');
@@ -62,12 +63,13 @@ export async function listExpenses(req: Request, res: Response) {
   const where: Prisma.ExpenseWhereInput = and.length ? { AND: and } : {};
 
   try {
-    if (csv) {
+    if (format) {
       const all = await prisma.expense.findMany({ where, orderBy: [{ incurredAt: 'desc' }, { id: 'desc' }], take: CSV_CAP, include: EXPENSE_INCLUDE });
-      return sendCsv(res, 'expenses.csv', ['Date', 'Category', 'Note', 'Paid from', 'Recorded by', 'Amount'],
-        all.map(serializeExpense).map((e) => [
-          localStamp(e.incurredAt, env.BUSINESS_TZ).slice(0, 10), e.category, e.note ?? '', e.paidFrom ?? '', e.recordedBy ?? '', e.amount,
-        ]));
+      const period = { from: fromRaw && /^\d{4}-\d{2}-\d{2}$/.test(fromRaw) ? fromRaw : undefined, to: to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : undefined };
+      const words: [string, string][] = [...(category ? [['Category', category] as [string, string]] : []), ...(q ? [['Search', `“${q}”`] as [string, string]] : [])];
+      return await sendReport(req, res, format, expensesExport(
+        all.map(serializeExpense).map((e) => ({ ...e, amount: Number(e.amount) })), period, words,
+      ));
     }
     const rows = await prisma.expense.findMany({
       where,

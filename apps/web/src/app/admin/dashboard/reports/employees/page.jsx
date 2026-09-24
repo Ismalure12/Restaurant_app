@@ -53,7 +53,7 @@ export default function EmployeesReportPage() {
         </FiltersButton>
         <span className="flex-1" />
         <RangeNote preset={preset} range={range} compare={false} />
-        <ExportBar exports={[{ label: 'Staff table', href: `${API}?${query}&format=csv` }]} />
+        <ExportBar excel={`${API}?${query}&format=xlsx`} csv={[{ label: 'Staff table', href: `${API}?${query}&format=csv` }]} />
       </div>
       <ActiveFilters items={chips} onClear={clearRole} />
       <PrintHead title="Employee report" range={range} preset={preset} filters={{ Role: labelOf('role', filters.role) }} />

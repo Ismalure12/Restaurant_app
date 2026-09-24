@@ -6,8 +6,10 @@ import { MANAGER_ROLES, requirePage } from '../../lib/auth/auth.js';
 import type { AdminSession } from '../../lib/auth/auth.js';
 import { searchParams } from '../../utils/query.js';
 import { getOrderPrefix, parseOrderCode } from '../../lib/orders/orderCode.js';
-import { filtersWhere, num, parseRange, parseSalesFilters, round2, salesWhere, sendCsv } from '../../lib/reports/common.js';
-import { LEDGER_CSV_HEADER, LEDGER_ORDER, LEDGER_SELECT, allLedgerRows, ledgerCsvRow, ledgerRow, itemsSoldIn } from '../../lib/reports/sales.js';
+import { filtersWhere, num, parseRange, parseSalesFilters, round2, salesWhere, type SalesFilters } from '../../lib/reports/common.js';
+import { LEDGER_ORDER, LEDGER_SELECT, allLedgerRows, ledgerRow, itemsSoldIn } from '../../lib/reports/sales.js';
+import { exportFormat, FORMAT_ERROR, sendReport } from '../../lib/reports/export.js';
+import { describeSalesFilters, itemsSoldExport, salesHistoryExport } from '../../lib/reports/exportSpecs.js';
 import type { DayRange } from '../../lib/time/businessTime.js';
 
 // GET /api/admin/sales — POS › Sales history: every closed sale, searchable.
@@ -60,6 +62,8 @@ type HistoryQuery =
     range: DayRange;
     /** The same view split by status (for the manager summary): completed sales, and voided ones. */
     parts: { sales: Prisma.OrderWhereInput; voided: Prisma.OrderWhereInput };
+    /** What the view was asked for, for an export's "Filters" line. */
+    asked: { filters: SalesFilters; q?: string; status: string };
   }
   | { ok: false; error: string };
 
@@ -90,6 +94,7 @@ export function historyQuery(req: Request, session: AdminSession): HistoryQuery 
     range: range.value,
     where: { AND: [statusWhere, ...rest] },
     parts: { sales: { AND: [sale, ...rest] }, voided: { AND: [voided, ...rest] } },
+    asked: { filters: filters.value, q, status },
   };
 }
 
@@ -119,6 +124,16 @@ async function historySummary(where: Prisma.OrderWhereInput, parts: { sales: Pri
   };
 }
 
+const STATUS_WORD: Record<string, string> = { completed: 'Completed sales', voided: 'Voided sales', all: 'Completed and voided' };
+
+/** The view's filters, search and status in words, for an export's heading. */
+async function historyWords(asked: { filters: SalesFilters; q?: string; status: string }): Promise<[string, string][]> {
+  const words = await describeSalesFilters(prisma, asked.filters);
+  if (asked.q) words.push(['Search', `“${asked.q}”`]);
+  if (asked.status !== 'completed') words.push(['Showing', STATUS_WORD[asked.status] ?? asked.status]);
+  return words;
+}
+
 export async function listSales(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'sales', 'view');
   if (auth.error) return res.status(auth.status).json({ error: auth.error });
@@ -129,17 +144,22 @@ export async function listSales(req: Request, res: Response) {
   if (!hq.ok) return res.status(400).json({ error: hq.error });
   const { where, range } = hq;
   const sp = searchParams(req);
-  const csv = sp.get('format') === 'csv';
-  if (csv && !isManager) return res.status(403).json({ error: 'Only a manager can export sales' });
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
+  if (format && !isManager) return res.status(403).json({ error: 'Only a manager can export sales' });
   const limit = Math.min(Math.max(parseInt(sp.get('limit') ?? '50', 10) || 50, 1), 200);
   const cursor = parseInt(sp.get('cursor') ?? '', 10);
   const hasCursor = Number.isFinite(cursor) && cursor > 0;
 
   try {
     const prefix = await getOrderPrefix(prisma);
-    if (csv) {
-      const rows = await allLedgerRows(prisma, where, prefix);
-      return sendCsv(res, `sales_${range.fromKey}_${range.toKey}.csv`, LEDGER_CSV_HEADER, rows.map(ledgerCsvRow));
+    if (format) {
+      const [rows, summary, words] = await Promise.all([
+        allLedgerRows(prisma, where, prefix),
+        historySummary(where, hq.parts),
+        historyWords(hq.asked),
+      ]);
+      return await sendReport(req, res, format, salesHistoryExport(rows, { from: range.fromKey, to: range.toKey }, words, summary));
     }
     const wantSummary = isManager && !hasCursor && sp.get('summary') !== '0';
     const [page, summary] = await Promise.all([
@@ -174,15 +194,17 @@ export async function listSoldItems(req: Request, res: Response) {
 
   const hq = historyQuery(req, auth.session);
   if (!hq.ok) return res.status(400).json({ error: hq.error });
-  const csv = searchParams(req).get('format') === 'csv';
-  if (csv && !MANAGER_ROLES.includes(auth.session.role as string)) {
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
+  if (format && !MANAGER_ROLES.includes(auth.session.role as string)) {
     return res.status(403).json({ error: 'Only a manager can export sales' });
   }
 
   try {
     const items = await itemsSoldIn(prisma, hq.where);
-    if (csv) {
-      return sendCsv(res, `items_sold_${hq.range.fromKey}_${hq.range.toKey}.csv`, ['Item', 'Qty', 'Sales'], items.map((i) => [i.name, i.qty, i.total]));
+    if (format) {
+      return await sendReport(req, res, format,
+        itemsSoldExport(items, { from: hq.range.fromKey, to: hq.range.toKey }, await historyWords(hq.asked)));
     }
     return res.json({
       items,

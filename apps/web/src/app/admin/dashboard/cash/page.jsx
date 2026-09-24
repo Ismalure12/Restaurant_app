@@ -10,6 +10,7 @@ import { reportSaveError } from '@/lib/saveError';
 import { useFormValidation } from '@/lib/formValidation';
 import { transferSchema, ownerSchema } from '@/lib/schemas/cash';
 import Field from '@/components/admin/Field';
+import { ExportBar } from '@/components/admin/reports/ReportKit';
 import DateRange from '@/components/admin/DateRange';
 import DayCloseTab from '@/components/admin/dayclose/DayCloseTab';
 import IfCan from '@/components/admin/IfCan';
@@ -196,7 +197,7 @@ function CashBookTab({ accountParam, onAccount }) {
       if (openingDate && r.day >= openingDate) { acc = Math.round((acc + r.amount) * 100) / 100; run.push(acc); } else run.push(null);
     }
   }
-  const csvHref = accountId && range ? `/api/admin/accounts/${accountId}/entries?${new URLSearchParams({ from: range.from, to: range.to, format: 'csv' })}` : undefined;
+  const exportHref = (format) => (accountId && range ? `/api/admin/accounts/${accountId}/entries?${new URLSearchParams({ from: range.from, to: range.to, format })}` : undefined);
   const loading = bal.isLoading || (accountId && (!range || list.isLoading));
 
   return (
@@ -229,7 +230,7 @@ function CashBookTab({ accountParam, onAccount }) {
               >
                 {accounts.map((a) => <option key={a.id} value={a.id}>{acctName(a)}{a.isActive ? '' : ' (inactive)'}</option>)}
               </Select>
-              {csvHref && <Button href={csvHref} variant="secondary" size="xs" icon="download" download>Export CSV</Button>}
+              {exportHref('xlsx') && <ExportBar size="xs" print={false} excel={exportHref('xlsx')} csv={[{ label: 'Cash book', href: exportHref('csv') }]} />}
             </>
           )}
         />

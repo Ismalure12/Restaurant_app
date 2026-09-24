@@ -57,7 +57,7 @@ export default function EmployeeReportPage() {
         <PeriodPicker preset={preset} range={range} set={set} />
         <span className="flex-1" />
         <RangeNote preset={preset} range={range} compare={false} />
-        <ExportBar exports={[{ label: 'Their orders', href: `/api/admin/sales?${query}&personId=${id}&format=csv` }]} />
+        <ExportBar excel={`/api/admin/sales?${query}&personId=${id}&format=xlsx`} csv={[{ label: 'Their orders', href: `/api/admin/sales?${query}&personId=${id}&format=csv` }]} />
       </div>
       <PrintHead title={`Employee report · ${e?.name || ''}`} range={range} preset={preset} />
       {isError && <ErrorNote error={error} />}

@@ -18,11 +18,11 @@ import SuppliersTab from '@/components/admin/suppliers/SuppliersTab';
 import ExpenseCategoriesDialog from '@/components/admin/suppliers/ExpenseCategoriesDialog';
 import { money } from '@/lib/money';
 import IfCan from '@/components/admin/IfCan';
-import { ActiveFilters, FilterSelect, FiltersButton } from '@/components/admin/reports/ReportKit';
+import { ActiveFilters, ExportBar, FilterSelect, FiltersButton } from '@/components/admin/reports/ReportKit';
 import {
   Page, Toolbar, Button, Card, CardHeader, Chip, Kpi, KpiGrid, KpiSkeletons, Delta, SearchInput, Segmented,
   Table, Th, Td, Tr, EmptyRow, LoadMoreBar, RowSkeletons, ErrorState, NoAccess, Modal, ModalSpacer, Alert,
-  inputCls, textareaCls, buttonCls,
+  inputCls, textareaCls,
 } from '@/components/admin/ui';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -110,13 +110,12 @@ function ExpensesPage({ initialSearch = '' }) {
   const top = summary?.topCategories?.[0];
 
   // Same filters as the list, every matching row (the API caps it).
-  const csvHref = useMemo(() => {
+  const exportHref = useMemo(() => {
     const p = new URLSearchParams();
     if (q) p.set('q', q);
     if (category) p.set('category', category);
     if (from) p.set('from', from);
-    p.set('format', 'csv');
-    return `/api/admin/expenses?${p}`;
+    return (format) => `/api/admin/expenses?${p}${p.size ? '&' : ''}format=${format}`;
   }, [q, category, from]);
 
   const refresh = () => {
@@ -213,7 +212,7 @@ function ExpensesPage({ initialSearch = '' }) {
           <FilterSelect label="Category" value={category} options={categories.map((c) => ({ value: c, label: c }))} onChange={setCategory} all="All categories" />
         </FiltersButton>
         <SearchInput className="flex-[1_1_220px] h-[38px]" value={search} onChange={setSearch} placeholder="Search category or note" aria-label="Search expenses" />
-        <a href={csvHref} download className={buttonCls({ variant: 'secondary' })}>Export CSV</a>
+        <ExportBar size="md" print={false} excel={exportHref('xlsx')} csv={[{ label: 'Expenses', href: exportHref('csv') }]} />
         <IfCan page="expenses">
           <Button variant="secondary" onClick={() => setCatsOpen(true)}>Categories</Button>
           <Button variant="primary" icon="plus" onClick={openNew}>Add expense</Button>

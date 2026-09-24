@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
+import ExcelJS from 'exceljs';
 import { createPrismaMock, tokenFor, type PrismaMock } from './helpers.js';
 import { csvCell, toCsv, accountKey, accountLabel, accountWhere } from '../src/lib/reports/common.js';
 
@@ -105,8 +106,31 @@ describe('reports — manager tier only', () => {
     const res = await request(app).get('/api/admin/reports/sales?format=csv&table=days&from=2026-09-01&to=2026-09-02').set('Cookie', await tokenFor('manager'));
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/csv/);
-    expect(res.headers['content-disposition']).toMatch(/attachment; filename="sales-days_2026-09-01_2026-09-02.csv"/);
+    expect(res.headers['content-disposition']).toBe('attachment; filename="Sales report - By day 2026-09-01 to 2026-09-02.csv"');
     expect(res.text.startsWith('﻿"Date","Orders","Sales"')).toBe(true);
+  });
+
+  it('Excel export: one workbook — Summary + a sheet per table, titled', async () => {
+    db.setting.findUnique.mockResolvedValue({ value: 'KFG' });
+    const res = await request(app).get('/api/admin/reports/sales?format=xlsx&from=2026-09-01&to=2026-09-02')
+      .set('Cookie', await tokenFor('manager'))
+      .buffer(true).parse((r, cb) => { const c: Buffer[] = []; r.on('data', (d: Buffer) => c.push(d)); r.on('end', () => cb(null, Buffer.concat(c))); });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/spreadsheetml\.sheet/);
+    expect(res.headers['content-disposition']).toBe('attachment; filename="Sales report 2026-09-01 to 2026-09-02.xlsx"');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(res.body as never);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['Summary', 'By day', 'By account', 'By channel', 'Categories', 'Dishes', 'Never sold']);
+    expect(wb.getWorksheet('Summary')!.getCell('A1').value).toBe('KFG — Sales report');
+    const days = wb.getWorksheet('By day')!;
+    expect(days.getCell('A4').value).toBe('Date');
+    expect(days.getCell('A5').value).toEqual(new Date(Date.UTC(2026, 8, 1)));
+  });
+
+  it('export: unknown format → 400; a waiter or cashier cannot export', async () => {
+    expect((await request(app).get('/api/admin/reports/sales?format=pdf').set('Cookie', await tokenFor('manager'))).status).toBe(400);
+    expect((await request(app).get('/api/admin/reports/sales?format=xlsx').set('Cookie', await tokenFor('waiter'))).status).toBe(403);
+    expect((await request(app).get('/api/admin/sales?format=xlsx').set('Cookie', await tokenFor('cashier'))).status).toBe(403);
   });
 
   it('employee detail of an unknown id → 404', async () => {

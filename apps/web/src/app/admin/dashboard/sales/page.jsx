@@ -79,9 +79,11 @@ function SalesHistory() {
   const summary = list.data?.pages[0]?.summary;
   const back = sp.toString() ? `?back=${encodeURIComponent(`?${sp.toString()}`)}` : '';
   const saleHref = (id) => `/admin/dashboard/sales/${id}${back}`;
-  const exports = !isManager ? [] : itemsView
-    ? [{ label: 'Items sold (CSV)', href: `${API}/items?${apiQuery}&format=csv` }]
-    : [{ label: 'Every sale in view (CSV)', href: `${API}?${apiQuery}&format=csv` }];
+  const exportBase = itemsView ? `${API}/items?${apiQuery}` : `${API}?${apiQuery}`;
+  const exportLinks = !isManager ? {} : {
+    excel: `${exportBase}&format=xlsx`,
+    csv: [{ label: itemsView ? 'Items sold' : 'Every sale in view', href: `${exportBase}&format=csv` }],
+  };
 
   const labelIn = (list_, v) => list_.find((o) => o.value === v)?.label;
   const active = [
@@ -132,7 +134,7 @@ function SalesHistory() {
           <FilterSelect label="Account" value={filters.account} options={accounts} onChange={(v) => set({ account: v })} />
           <ChannelSelect value={filters.channel} onChange={(v) => set({ channel: v })} />
         </FiltersButton>
-        <ExportBar exports={exports} />
+        <ExportBar {...exportLinks} />
       </Toolbar>
       <ActiveFilters items={active} onClear={clearFilters} />
 

@@ -10,9 +10,10 @@ import { activeAccounts } from '../../lib/money/cashBook.js';
 import { accountBalances, readCalendar, OPENING_DATE_KEY, statementRow, statementRows, statementTotals } from '../../lib/money/moneyReads.js';
 import { audit } from '../../lib/db/audit.js';
 import { assertOpenDay, sendHttpError } from '../../lib/closing/dayClose.js';
-import { localStamp, num, parseRange, round2, sendCsv } from '../../lib/reports/common.js';
+import { num, parseRange, round2 } from '../../lib/reports/common.js';
+import { exportFormat, FORMAT_ERROR, sendReport } from '../../lib/reports/export.js';
+import { cashBookExport, ENTRY_KIND_LABEL } from '../../lib/reports/exportSpecs.js';
 import { formatOrderCode, getOrderPrefix } from '../../lib/orders/orderCode.js';
-import { env } from '../../config/env.js';
 
 // GET  /api/admin/accounts — the business money accounts (Cash, the mobile
 //      wallets A/C · E/d · My Cash…, the Mastercard, the bank, Sifalo online).
@@ -263,12 +264,9 @@ export async function updateAccount(req: Request<{ id: string }>, res: Response)
 // GET /api/admin/accounts/:id/entries?from&to — one business account's
 // statement (the cash book for that account): opening balance on `from`,
 // every movement in the range (oldest first, cursor-paged), money in/out and
-// the closing balance. `?format=csv` exports every row. Manager tier.
+// the closing balance. `?format=xlsx|csv` exports every row. Manager tier.
 const CSV_BATCH = 1000;
-const KIND_LABEL: Record<string, string> = {
-  sale: 'Sale', invoice_payment: 'Account payment', refund: 'Refund', adjustment: 'Sale correction', expense: 'Expense',
-  salary: 'Salary', transfer: 'Transfer', owner_in: 'Owner put in', owner_out: 'Owner took out', over_short: 'Count difference',
-};
+const KIND_LABEL = ENTRY_KIND_LABEL;
 
 export async function listAccountEntries(req: Request<{ id: string }>, res: Response) {
   const auth = await requirePage(prisma, req, 'cash', 'view');
@@ -281,6 +279,8 @@ export async function listAccountEntries(req: Request<{ id: string }>, res: Resp
   const limit = Math.min(Math.max(parseInt(sp.get('limit') ?? '100', 10) || 100, 1), 200);
   const cursor = parseInt(sp.get('cursor') ?? '', 10);
   const { fromKey, toKey } = range.value;
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
 
   try {
     const account = await prisma.moneyAccount.findUnique({ where: { id } });
@@ -288,7 +288,7 @@ export async function listAccountEntries(req: Request<{ id: string }>, res: Resp
     const [{ openingDate }, prefix] = await Promise.all([readCalendar(prisma), getOrderPrefix(prisma)]);
     const codeOf = (o: { id: number; createdAt: Date }) => formatOrderCode(o, prefix);
 
-    if (sp.get('format') === 'csv') {
+    if (format) {
       const all = [];
       let after: number | undefined;
       for (;;) {
@@ -297,12 +297,9 @@ export async function listAccountEntries(req: Request<{ id: string }>, res: Resp
         if (batch.length < CSV_BATCH) break;
         after = batch[batch.length - 1].id;
       }
-      return sendCsv(res, `${account.label}_${fromKey}_${toKey}.csv`,
-        ['Day', 'Time (local)', 'What', 'Amount', 'Order ID', 'Collected by', 'Recorded by', 'Note'],
-        all.map((e) => statementRow(e, codeOf)).map((r) => [
-          r.day, localStamp(r.at, env.BUSINESS_TZ), KIND_LABEL[r.kind] || r.kind, r.amount.toFixed(2),
-          r.order?.code ?? '', r.collectedBy ?? '', r.by ?? '', r.note ?? '',
-        ]));
+      const totals = openingDate ? await statementTotals(prisma, account, openingDate, fromKey, toKey) : null;
+      return await sendReport(req, res, format,
+        cashBookExport(account, all.map((e) => statementRow(e, codeOf)), { from: fromKey, to: toKey }, totals));
     }
 
     const hasCursor = Number.isFinite(cursor) && cursor > 0;

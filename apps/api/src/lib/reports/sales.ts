@@ -13,7 +13,7 @@ import { formatOrderCode } from '../orders/orderCode.js';
 import { formatReceiptNo } from '../orders/receiptNo.js';
 import { outstandingReceivables } from '../money/receivables.js';
 import {
-  accountKey, accountLabel, CHANNEL_LABEL, channelOf, filtersWhere, localHour, localStamp, num, round2, salesWhere, type SalesFilters,
+  accountKey, accountLabel, CHANNEL_LABEL, channelOf, filtersWhere, localHour, num, round2, salesWhere, type SalesFilters,
 } from './common.js';
 
 const BATCH = 1000;
@@ -196,18 +196,6 @@ export function ledgerRow(o: LedgerRow, prefix: string) {
     // 'invoice' tells an On-account sale from a paid one (Sales history status chip).
     paymentMethod: o.paymentMethod,
   };
-}
-
-export const LEDGER_CSV_HEADER = [
-  'Order ID', 'Receipt #', 'Closed (local)', 'Source', 'Service', 'Table', 'Customer', 'Cashier', 'Waiter', 'Account', 'Discount', 'Total', 'Status',
-];
-
-export function ledgerCsvRow(r: ReturnType<typeof ledgerRow>) {
-  return [
-    r.code, r.receiptNo ?? '', localStamp(r.closedAt, env.BUSINESS_TZ), r.source === 'online' ? 'Online' : 'Counter',
-    r.orderType === 'delivery' ? 'Delivery' : 'Dine-in', r.tableNumber ?? '', r.customer ?? '', r.cashier ?? '', r.waiter ?? '',
-    r.accountLabel, r.discount.toFixed(2), r.total.toFixed(2), r.status,
-  ];
 }
 
 /**

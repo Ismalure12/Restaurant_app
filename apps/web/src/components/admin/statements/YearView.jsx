@@ -381,10 +381,13 @@ function YearPack({ fy }) {
   return (
     <StmCard title="Year pack" sub="Records for the accountant or tax office">
       <div className="p-4 flex flex-col gap-3">
-        <p className="m-0 text-[13px] text-mq-on-tint">One CSV per record over the whole financial year. The statements themselves print from the button at the top (PDF).</p>
+        <p className="m-0 text-[13px] text-mq-on-tint">One Excel file per record over the whole financial year (CSV beside each, for other software). The statements themselves print from the button at the top (PDF).</p>
         <div className="flex flex-wrap gap-2 rpt-noprint">
           {PACK.map(([k, label]) => (
-            <Button key={k} href={`/api/admin/statements/year/${fy}/export?dataset=${k}`} variant="secondary" size="sm" icon="download" download>{label} CSV</Button>
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <Button href={`/api/admin/statements/year/${fy}/export?dataset=${k}&format=xlsx`} variant="secondary" size="sm" icon="download" download>{label}</Button>
+              <a href={`/api/admin/statements/year/${fy}/export?dataset=${k}&format=csv`} download className="text-xs font-semibold text-mq-cta hover:text-mq-primary">CSV</a>
+            </span>
           ))}
         </div>
       </div>

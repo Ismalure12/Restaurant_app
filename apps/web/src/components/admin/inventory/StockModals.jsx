@@ -172,6 +172,7 @@ export function MovementModal({ item: initialItem, items, initialType = 'purchas
       qc.invalidateQueries({ queryKey: ['inventory'] });
       // Purchases feed the ledger, supplier balances, cash book and account balances.
       ['inv-movements', 'suppliers', 'supplier', 'account-balances', 'account-entries', 'expenses'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      onClose();
     },
     onError: (err) => reportSaveError(err, { title: 'Could not record the movement', form: v, setBanner }),
   });

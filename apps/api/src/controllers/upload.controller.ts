@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import multer from 'multer';
-import { uploadPublicImage } from '../lib/storage/s3.js';
+import { checkPublicRead, isStorageUnreachable, uploadPublicImage } from '../lib/storage/s3.js';
 import sharp from 'sharp';
 import prisma from '../lib/db/prisma.js';
 import { requirePage } from '../lib/auth/auth.js';
@@ -91,7 +91,27 @@ export async function uploadImage(req: Request, res: Response) {
     }
 
     const name = `menu/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
-    const url = await uploadPublicImage(name, optimized, 'image/webp');
+    let url;
+    try {
+      url = await uploadPublicImage(name, optimized, 'image/webp');
+    } catch (err) {
+      if (!isStorageUnreachable(err)) throw err;
+      console.error('Upload: image storage unreachable:', err);
+      return res.status(502).json({
+        error: 'Could not reach the image storage. Check the internet connection and try again.',
+        code: 'STORAGE_UNREACHABLE',
+      });
+    }
+
+    // Never hand back a URL the menu can't show: a bucket without public read
+    // stores the file fine and then answers every customer 403 (no picture).
+    if ((await checkPublicRead(url)) === 'denied') {
+      console.error(`Upload: ${url} was stored but is not publicly readable — the S3 bucket policy must allow public s3:GetObject`);
+      return res.status(502).json({
+        error: 'The image was stored, but the image storage does not let the public view it, so it would not show on the menu. The S3 bucket must allow public reading (see DEPLOYMENT.md).',
+        code: 'STORAGE_NOT_PUBLIC',
+      });
+    }
 
     return res.json({ url });
   } catch (error) {

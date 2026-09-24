@@ -126,6 +126,32 @@ The API refuses to boot in production if a Sifalo, `PUBLIC_APP_URL` or S3 variab
 missing. The web container gets nothing from this file — its only setting
 (`API_ORIGIN=http://api:4000`) is baked into the image.
 
+#### S3: let browsers view the menu images (once)
+
+Customers' browsers load dish photos straight from S3, anonymously — the AWS keys stay on
+the server and are only used to *store* images. So the `menu/` folder must be publicly
+readable (nothing else in the bucket is). In the AWS console → S3 → the bucket → **Permissions**:
+
+1. **Block public access** → Edit → untick the two **bucket policy** settings (keep the two
+   **ACL** settings ticked) → Save.
+2. **Bucket policy** → Edit → paste (replace `maqaaxi-pos` if the bucket name differs):
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [{
+       "Sid": "PublicReadMenuImages",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:GetObject",
+       "Resource": "arn:aws:s3:::maqaaxi-pos/menu/*"
+     }]
+   }
+   ```
+
+Until this is done every upload fails with *"the image storage does not let the public view
+it"* — the API checks each new image is viewable before it accepts it.
+
 ### 5. Database (starts empty)
 
 ```bash
@@ -178,7 +204,34 @@ crontab -e
 15 3 * * * cd /srv/maqaaxi && bash scripts/backup-db.sh >> backups/backup.log 2>&1
 ```
 
-Copy `backups/*.dump` off the box — a backup on the same disk is not a backup.
+Every night at 03:15 the script:
+1. dumps the database to `backups/maqaaxi-YYYY-MM-DD-HHMM.dump` on the server (keeps the newest 14);
+2. copies that file to **S3**, `backups/<same name>` — **private** (the bucket policy only opens
+   `menu/*`) and encrypted. It runs inside the api image with the `.env` AWS keys, so nothing
+   is installed on the server. If the copy fails it logs `S3 copy FAILED` and keeps the local file.
+
+**Once, in AWS:**
+- The AWS key in `.env` must be allowed to write backups: its IAM policy needs `s3:PutObject` on
+  `arn:aws:s3:::maqaaxi-pos/backups/*` (next to `menu/*`).
+- S3 → the bucket → **Management → Create lifecycle rule**: prefix `backups/`, *Expire current
+  versions* after **30 days**. Otherwise S3 keeps every night's copy forever.
+- Optional: set `BACKUP_S3_BUCKET` in `.env` to keep backups in a separate bucket.
+
+**Check it works** (after the first night, or run it by hand once):
+```bash
+bash scripts/backup-db.sh && tail -3 backups/backup.log   # "S3 copy ok: backups/…"
+```
+
+**Restore from S3** (the server died, or a bad day to undo):
+1. AWS console → S3 → `backups/` → download the newest `.dump`, copy it to the (new) server's
+   `/srv/maqaaxi/backups/`.
+2. Into an empty database (a fresh install after step 5's `docker compose up -d postgres`, before
+   `db:deploy`):
+   ```bash
+   docker exec -i maqaaxi-postgres-1 pg_restore -U maqaaxi -d maqaaxi --no-owner --no-acl < backups/<file>.dump
+   bash deploy/pull-and-restart.sh
+   ```
+   Test a restore now and then into a scratch database (commands at the top of `scripts/backup-db.sh`).
 
 ---
 

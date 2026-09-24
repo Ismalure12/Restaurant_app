@@ -46,11 +46,15 @@ export default function InventoryReportPage() {
     filters.type && { key: 'type', label: `Movement: ${TYPES.find((t) => t.value === filters.type)?.label || filters.type}`, onRemove: () => set({ type: '' }) },
   ].filter(Boolean);
 
-  const exports = [
-    { label: 'Movement totals by item', href: `${API}?${query}&format=csv&table=stock` },
-    { label: 'Movement ledger', href: `${API}/movements?${query}&format=csv` },
-    { label: 'Purchases by supplier', href: `${API}?${query}&format=csv&table=suppliers` },
-  ];
+  const exportLinks = {
+    excel: `${API}?${query}&format=xlsx`,
+    extra: [{ label: 'Movement ledger', href: `${API}/movements?${query}&format=xlsx` }],
+    csv: [
+      { label: 'Movement totals by item', href: `${API}?${query}&format=csv&table=stock` },
+      { label: 'Purchases by supplier', href: `${API}?${query}&format=csv&table=suppliers` },
+      { label: 'Movement ledger', href: `${API}/movements?${query}&format=csv` },
+    ],
+  };
 
   return (
     <>
@@ -62,7 +66,7 @@ export default function InventoryReportPage() {
         </FiltersButton>
         <span className="flex-1" />
         <RangeNote preset={preset} range={range} compare={false} />
-        <ExportBar exports={exports} />
+        <ExportBar {...exportLinks} />
       </div>
       <ActiveFilters items={chips} onClear={clearFilters} />
       <PrintHead title="Inventory report" range={range} preset={preset} filters={{ Item: itemName, Movement: labelOf('movement', filters.type) }} />

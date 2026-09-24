@@ -62,14 +62,21 @@ export default function SalesReportPage() {
     filters.channel && { key: 'channel', label: `Channel: ${labelOf('channel', filters.channel)}`, onRemove: () => set({ channel: '' }) },
   ].filter(Boolean);
 
+  // Excel: the whole report as one workbook (Summary + a sheet per table); CSV: one plain table each.
   const csv = (table) => `${API}?${apiQuery}&format=csv&table=${table}`;
-  const exports = [
-    { label: 'Every sale (ledger)', href: `/api/admin/sales?${query}&format=csv` },
-    ...(range.from === range.to ? [] : [{ label: 'Sales by day', href: csv('days') }]),
-    { label: 'Sales by account', href: csv('accounts') },
-    { label: 'Dishes', href: csv('items') },
-    { label: 'Never sold', href: csv('never') },
-  ];
+  const exportLinks = {
+    excel: `${API}?${apiQuery}&format=xlsx`,
+    extra: [{ label: 'Every sale (ledger)', href: `/api/admin/sales?${query}&format=xlsx` }],
+    csv: [
+      { label: range.from === range.to ? 'Sales by hour' : 'Sales by day', href: csv('days') },
+      { label: 'Sales by account', href: csv('accounts') },
+      { label: 'Sales by channel', href: csv('channels') },
+      { label: 'Categories', href: csv('categories') },
+      { label: 'Dishes', href: csv('items') },
+      { label: 'Never sold', href: csv('never') },
+      { label: 'Every sale (ledger)', href: `/api/admin/sales?${query}&format=csv` },
+    ],
+  };
   const categoryOptions = useMemo(() => {
     const names = new Set(r?.items?.categoryOptions || []);
     if (category) names.add(category);
@@ -89,7 +96,7 @@ export default function SalesReportPage() {
         </FiltersButton>
         <span className="flex-1" />
         <RangeNote preset={preset} range={range} />
-        <ExportBar exports={exports} />
+        <ExportBar {...exportLinks} />
       </div>
       <ActiveFilters items={chips} onClear={clearFilters} />
       <PrintHead title="Sales report" range={range} preset={preset} filters={{

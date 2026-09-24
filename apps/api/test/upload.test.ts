@@ -21,6 +21,8 @@ beforeEach(() => {
   vi.stubEnv('S3_BUCKET_NAME', 'test-bucket');
   vi.stubEnv('AWS_REGION', 'ap-south-1');
   vi.stubEnv('S3_PUBLIC_URL', '');
+  // The public-read check (anonymous HEAD on the new URL): readable by default.
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 });
 
 const png = () => sharp({ create: { width: 4, height: 4, channels: 3, background: '#850D33' } }).png().toBuffer();
@@ -90,5 +92,35 @@ describe('POST /api/upload', () => {
       .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
     expect(res.status).toBe(500);
     expect(res.body).toEqual({ error: 'Internal server error' });
+  });
+
+  it('S3 unreachable (DNS / network) → 502 STORAGE_UNREACHABLE', async () => {
+    s3.send.mockRejectedValue(Object.assign(new Error('getaddrinfo ENOTFOUND test-bucket.s3.ap-south-1.amazonaws.com'), { code: 'ENOTFOUND' }));
+    const res = await request(app).post('/api/upload').set('Cookie', await tokenFor('cashier'))
+      .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('STORAGE_UNREACHABLE');
+    expect(res.body.error).not.toMatch(/ENOTFOUND|amazonaws/);
+  });
+
+  it('stored but the bucket blocks public reads → 502 STORAGE_NOT_PUBLIC, never a dead URL', async () => {
+    s3.send.mockResolvedValue({});
+    const head = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    vi.stubGlobal('fetch', head);
+    const res = await request(app).post('/api/upload').set('Cookie', await tokenFor('cashier'))
+      .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('STORAGE_NOT_PUBLIC');
+    expect(res.body.url).toBeUndefined();
+    expect(head).toHaveBeenCalledWith(expect.stringMatching(/^https:\/\/test-bucket\.s3\.ap-south-1\.amazonaws\.com\/menu\//), expect.objectContaining({ method: 'HEAD' }));
+  });
+
+  it('the public-read check itself failing (network) does not block the upload', async () => {
+    s3.send.mockResolvedValue({});
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')));
+    const res = await request(app).post('/api/upload').set('Cookie', await tokenFor('cashier'))
+      .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
+    expect(res.status).toBe(200);
+    expect(res.body.url).toMatch(/\.webp$/);
   });
 });

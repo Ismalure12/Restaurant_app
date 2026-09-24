@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import useConfirm from '@/hooks/useConfirm';
 import TagsCard from '@/components/admin/TagsCard';
 import Field from '@/components/admin/Field';
+import ImageUploadField from '@/components/admin/ImageUploadField';
 import { useFormValidation } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
 import { categorySchema } from '@/lib/schemas/menu';
@@ -216,7 +217,6 @@ function CategoryModal({ category, onClose }) {
     name: category.name, isActive: category.isActive,
     kicker: category.kicker || '', headline: category.headline || '', sub: category.sub || '', coverUrl: category.coverUrl || '',
   } : EMPTY_FORM));
-  const [imagePreview, setImagePreview] = useState(category?.coverUrl || null);
   const [uploading, setUploading] = useState(false);
   const [banner, setBanner] = useState('');
   const [blocked, setBlocked] = useState('');
@@ -242,21 +242,6 @@ function CategoryModal({ category, onClose }) {
     // 409: it still has dishes (someone added one since the list loaded) — say so here.
     onError: (err) => { if (err?.status === 409) setBlocked(err.message); else notify.error(err, { title: 'Could not delete the category' }); qc.invalidateQueries({ queryKey: ['categories'] }); },
   });
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    setImagePreview(URL.createObjectURL(file));
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const data = await fetchJson('/api/upload', { method: 'POST', body: formData });
-      if (data.url) { set({ coverUrl: data.url }); notify.success('Image uploaded'); }
-      else throw new Error('The upload did not return an image. Please try again.');
-    } catch (err) { notify.error(err, { title: 'Could not upload the image' }); setImagePreview(form.coverUrl || null); }
-    finally { setUploading(false); }
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -318,17 +303,8 @@ function CategoryModal({ category, onClose }) {
           <input className={inputCls({ size: 'lg' })} type="text" value={form.headline} onChange={(e) => set({ headline: e.target.value })} placeholder="Morning, <em>slowly.</em>" />
         </Field>
 
-        <label className={cx('sm:col-span-2 flex items-center gap-3 rounded-[10px] border border-dashed border-mq-line-2 bg-mq-cream px-3.5 py-3 transition-colors', uploading ? 'cursor-wait' : 'cursor-pointer hover:border-mq-focus hover:bg-mq-soft')}>
-          {imagePreview
-            // eslint-disable-next-line @next/next/no-img-element -- local preview / uploaded blob URL
-            ? <img src={imagePreview} alt="" className="w-10 h-10 rounded-[10px] object-cover border border-mq-line flex-none" />
-            : <span className="grid place-items-center w-10 h-10 rounded-[10px] bg-white border border-mq-line text-mq-cta flex-none"><Icon name="upload" size={18} stroke={1.9} /></span>}
-          <span className="flex flex-col gap-0.5 min-w-0">
-            <span className="text-[13.5px] font-semibold text-mq-ink">{uploading ? 'Uploading…' : imagePreview ? 'Change cover image' : 'Upload cover image'}</span>
-            <span className="text-xs text-mq-on-tint">Shown at the top of the section on the menu</span>
-          </span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleImageUpload} disabled={uploading} />
-        </label>
+        <ImageUploadField className="sm:col-span-2" value={form.coverUrl} onChange={(url) => set({ coverUrl: url })} onBusyChange={setUploading}
+          title="Upload cover image" changeTitle="Change cover image" hint="Shown at the top of the section on the menu · JPG, PNG or WebP, up to 5 MB" />
 
         <div className="sm:col-span-2 flex items-center gap-3 rounded-[10px] border border-mq-line bg-mq-cream px-3.5 py-3">
           <div className="flex-1 min-w-0">

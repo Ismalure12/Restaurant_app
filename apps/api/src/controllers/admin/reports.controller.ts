@@ -3,10 +3,13 @@ import type { Prisma } from '@prisma/client';
 import prisma from '../../lib/db/prisma.js';
 import { requirePage } from '../../lib/auth/auth.js';
 import { searchParams } from '../../utils/query.js';
-import { parseRange, parseSalesFilters, sendCsv, localStamp } from '../../lib/reports/common.js';
+import { parseRange, parseSalesFilters } from '../../lib/reports/common.js';
+import { exportFormat, FORMAT_ERROR, sendReport } from '../../lib/reports/export.js';
+import {
+  describeSalesFilters, employeesExport, financialExport, inventoryReportExport, menuReportExport, movementsExport, salesReportExport, MOVEMENT_LABEL,
+} from '../../lib/reports/exportSpecs.js';
 import { salesReport } from '../../lib/reports/sales.js';
 import { inventoryReport, MOVEMENT_TYPES, type InventoryFilters, type MovementType, MOVEMENT_SELECT, movementRow } from '../../lib/reports/inventory.js';
-import { env } from '../../config/env.js';
 import { financialReport } from '../../lib/reports/financial.js';
 import { employeesReport, STAFF_REPORT_ROLES, employeeDetail } from '../../lib/reports/employees.js';
 import { menuReport } from '../../lib/reports/menu.js';
@@ -14,11 +17,10 @@ import { menuReport } from '../../lib/reports/menu.js';
 // GET /api/admin/reports/sales?from&to&waiterId&staffId&account&source&orderType
 //   JSON: summary, by day/hour/weekday×hour/account/source/service, and `items`
 //   (dishes, categories, never sold — from OrderItem; ?category= narrows them).
-//   ?format=csv&table=days|accounts|items|categories|never → that table as CSV.
+//   ?format=xlsx → the whole report as one workbook (Summary + a sheet per table);
+//   ?format=csv&table=days|accounts|channels|categories|items|never → that table.
 //   (Per-person totals: the Employees report. Every sale: /api/admin/sales.)
 // Manager tier. Range: local days (BUSINESS_TZ), up to 366, default today.
-const CSV_TABLES = ['days', 'accounts', 'items', 'categories', 'never'] as const;
-type CsvTable = (typeof CSV_TABLES)[number];
 
 export async function getSalesReport(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'reports', 'view');
@@ -29,28 +31,15 @@ export async function getSalesReport(req: Request, res: Response) {
   const filters = parseSalesFilters(req);
   if (!filters.ok) return res.status(400).json({ error: filters.error });
   const q = searchParams(req);
-  const csv = q.get('format') === 'csv';
-  const table = (q.get('table') || 'items') as CsvTable;
-  if (csv && !CSV_TABLES.includes(table)) return res.status(400).json({ error: `table must be one of: ${CSV_TABLES.join(', ')}` });
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
 
   try {
     const category = (q.get('category') || '').trim().slice(0, 80) || undefined;
     const r = await salesReport(prisma, range.value, filters.value, { category });
-    if (!csv) return res.json(r);
-
-    const name = `sales-${table}_${r.from}_${r.to}.csv`;
-    switch (table) {
-      case 'days':
-        return sendCsv(res, name, ['Date', 'Orders', 'Sales'], r.byDay.map((d) => [d.day, d.orders, d.total.toFixed(2)]));
-      case 'accounts':
-        return sendCsv(res, name, ['Account', 'Orders', 'Sales'], r.byAccount.map((a) => [a.label, a.orders, a.total.toFixed(2)]));
-      case 'categories':
-        return sendCsv(res, name, ['Category', 'Dishes', 'Qty', 'Menu value', 'Share %'], r.items.categories.map((c) => [c.category, c.dishes, c.quantity, c.revenue.toFixed(2), c.share]));
-      case 'never':
-        return sendCsv(res, name, ['Dish', 'Category'], r.items.neverSold.map((d) => [d.name, d.category]));
-      default:
-        return sendCsv(res, name, ['Dish', 'Category', 'Qty sold', 'Menu value', 'Share %'], r.items.items.map((i) => [i.name, i.category, i.quantity, i.revenue.toFixed(2), i.share]));
-    }
+    if (!format) return res.json(r);
+    const words = await describeSalesFilters(prisma, filters.value);
+    return await sendReport(req, res, format, salesReportExport(r, category ? [...words, ['Category', category]] : words));
   } catch (err) {
     console.error('GET /api/admin/reports/sales:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -60,7 +49,7 @@ export async function getSalesReport(req: Request, res: Response) {
 // GET /api/admin/reports/inventory?from&to&itemId&type
 //   JSON: stock on hand + value, low/out of stock, per-item movement totals in
 //   the range, purchases by supplier.
-//   ?format=csv&table=stock|suppliers → that table as CSV.
+//   ?format=xlsx → Summary + Stock + Suppliers; ?format=csv&table=stock|suppliers.
 // Manager tier.
 export function parseInventoryFilters(q: URLSearchParams): { value?: InventoryFilters; error?: string } {
   const out: InventoryFilters = {};
@@ -87,20 +76,13 @@ export async function getInventoryReport(req: Request, res: Response) {
   const q = searchParams(req);
   const filters = parseInventoryFilters(q);
   if (filters.error) return res.status(400).json({ error: filters.error });
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
 
   try {
     const r = await inventoryReport(prisma, range.value, filters.value!);
-    if (q.get('format') !== 'csv') return res.json(r);
-    if (q.get('table') === 'suppliers') {
-      return sendCsv(res, `inventory-suppliers_${r.from}_${r.to}.csv`, ['Supplier', 'Items bought', 'Purchase cost'],
-        r.bySupplier.map((s) => [s.supplier, s.items, s.cost.toFixed(2)]));
-    }
-    return sendCsv(res, `inventory-stock_${r.from}_${r.to}.csv`,
-      ['Item', 'Unit', 'On hand', 'Reorder level', 'Status', 'Unit cost', 'Stock value', 'Bought', 'Purchase cost', 'Used', 'Wasted', 'Adjusted', 'Supplier'],
-      r.items.map((i) => [
-        i.name, i.unit, i.quantity, i.reorderLevel ?? '', i.status, i.unitCost?.toFixed(2) ?? '', i.value?.toFixed(2) ?? '',
-        i.purchasedQty, i.purchaseCost.toFixed(2), i.usedQty, i.wastedQty, i.adjustedQty, i.supplier ?? '',
-      ]));
+    if (!format) return res.json(r);
+    return await sendReport(req, res, format, inventoryReportExport(r, await inventoryFilterWords(filters.value!)));
   } catch (err) {
     console.error('GET /api/admin/reports/inventory:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -110,9 +92,20 @@ export async function getInventoryReport(req: Request, res: Response) {
 // GET /api/admin/reports/inventory/movements?from&to&itemId&type — the stock
 // movement ledger (who bought/used/wasted what, when, at what cost).
 //   JSON: cursor-paginated (?cursor=<id>&limit=50, max 200), newest first.
-//   ?format=csv → every matching movement.
+//   ?format=xlsx|csv → every matching movement.
 // Manager tier.
 const BATCH = 1000;
+
+/** "Item Flour, Type Waste" for an export's filter line. */
+async function inventoryFilterWords(f: InventoryFilters): Promise<[string, string][]> {
+  const out: [string, string][] = [];
+  if (f.itemId) {
+    const it = await prisma.inventoryItem.findUnique({ where: { id: f.itemId }, select: { name: true } });
+    out.push(['Item', it?.name ?? `#${f.itemId}`]);
+  }
+  if (f.type) out.push(['Type', MOVEMENT_LABEL[f.type] ?? f.type]);
+  return out;
+}
 
 export async function getInventoryMovementsReport(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'reports', 'view');
@@ -124,6 +117,8 @@ export async function getInventoryMovementsReport(req: Request, res: Response) {
   const filters = parseInventoryFilters(q);
   if (filters.error) return res.status(400).json({ error: filters.error });
   const f = filters.value!;
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
   const where: Prisma.StockMovementWhereInput = {
     createdAt: { gte: range.value.from, lt: range.value.to },
     ...(f.itemId ? { inventoryItemId: f.itemId } : {}),
@@ -131,7 +126,7 @@ export async function getInventoryMovementsReport(req: Request, res: Response) {
   };
 
   try {
-    if (q.get('format') === 'csv') {
+    if (format) {
       const rows: ReturnType<typeof movementRow>[] = [];
       let cursor: number | undefined;
       for (;;) {
@@ -143,9 +138,8 @@ export async function getInventoryMovementsReport(req: Request, res: Response) {
         if (batch.length < BATCH) break;
         cursor = batch[batch.length - 1].id;
       }
-      return sendCsv(res, `inventory-movements_${range.value.fromKey}_${range.value.toKey}.csv`,
-        ['When (local)', 'Item', 'Type', 'Quantity', 'Unit', 'Total cost', 'Recorded by', 'Note'],
-        rows.map((m) => [localStamp(m.createdAt, env.BUSINESS_TZ), m.item, m.type, m.quantity, m.unit, m.totalCost?.toFixed(2) ?? '', m.staff ?? '', m.note ?? '']));
+      return await sendReport(req, res, format,
+        movementsExport(rows, { from: range.value.fromKey, to: range.value.toKey }, await inventoryFilterWords(f)));
     }
 
     const limit = Math.min(Math.max(parseInt(q.get('limit') ?? '50', 10) || 50, 1), 200);
@@ -166,9 +160,9 @@ export async function getInventoryMovementsReport(req: Request, res: Response) {
 // GET /api/admin/reports/financial?from&to
 //   JSON: profit & loss (net profit is the last line), sales vs expenses by day,
 //   and `lossDays` — only the days that lost money.
-//   ?format=csv&table=pnl|days → that table as CSV.
+//   ?format=xlsx → Summary + Profit & loss + By day + Loss days;
+//   ?format=csv&table=pnl|byday|days → that table.
 // Manager tier. Default range: the last 30 days.
-const money = (n: number) => n.toFixed(2);
 
 export async function getFinancialReport(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'reports', 'view');
@@ -176,29 +170,13 @@ export async function getFinancialReport(req: Request, res: Response) {
 
   const range = parseRange(req, 30);
   if (!range.ok) return res.status(400).json({ error: range.error });
-  const q = searchParams(req);
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
 
   try {
     const r = await financialReport(prisma, range.value);
-    if (q.get('format') !== 'csv') return res.json(r);
-    const tag = `${r.from}_${r.to}`;
-    switch (q.get('table')) {
-      case 'days':
-        return sendCsv(res, `financial-loss-days_${tag}.csv`, ['Date', 'Sales', 'Expenses', 'Net'],
-          r.lossDays.map((d) => [d.day, money(d.sales), money(d.expenses), money(d.net)]));
-      default:
-        return sendCsv(res, `financial-pnl_${tag}.csv`, ['Line', 'Amount'], [
-          ['Sales paid (till + online)', money(r.pnl.paidSales)],
-          ['Sales billed on account', money(r.pnl.billedOnAccount)],
-          ['Total sales', money(r.pnl.totalSales)],
-          ...(r.pnl.taxRate > 0 ? [[`Tax included in sales (${r.pnl.taxRate}%)`, money(r.pnl.includedTax)]] : []),
-          ['Stock purchases', money(-r.pnl.expensesByKind.stock_purchase)],
-          ['Operating expenses', money(-r.pnl.expensesByKind.operating)],
-          ['Payroll', money(-r.pnl.expensesByKind.payroll)],
-          ['Expenses', money(-r.pnl.expenses)],
-          ['Net profit', money(r.pnl.netProfit)],
-        ]);
-    }
+    if (!format) return res.json(r);
+    return await sendReport(req, res, format, financialExport(r));
   } catch (err) {
     console.error('GET /api/admin/reports/financial:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -208,7 +186,7 @@ export async function getFinancialReport(req: Request, res: Response) {
 // GET /api/admin/reports/employees?from&to&role
 //   JSON: per staff member — sales taken (cashier), sales served (waiter),
 //   discounts, voids, edits and invoice money collected.
-//   ?format=csv → the per-staff table.
+//   ?format=xlsx|csv → the per-staff table.
 // Manager tier.
 export async function getEmployeesReport(req: Request, res: Response) {
   const auth = await requirePage(prisma, req, 'reports', 'view');
@@ -222,16 +200,13 @@ export async function getEmployeesReport(req: Request, res: Response) {
     return res.status(400).json({ error: `role must be one of: ${STAFF_REPORT_ROLES.join(', ')}` });
   }
 
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
+
   try {
     const r = await employeesReport(prisma, range.value, role);
-    if (q.get('format') !== 'csv') return res.json(r);
-    return sendCsv(res, `employees_${r.from}_${r.to}.csv`,
-      ['Name', 'Role', 'Active', 'Orders taken', 'Sales taken', 'Avg ticket', 'Orders served', 'Sales served', 'Discounts given', 'Voids', 'Voided value', 'Edits', 'Invoice money collected'],
-      r.rows.map((e) => [
-        e.name, e.role, e.isActive ? 'yes' : 'no', e.taken.orders, e.taken.total.toFixed(2), e.taken.avgTicket.toFixed(2),
-        e.served.orders, e.served.total.toFixed(2), e.discounts.toFixed(2), e.voids.count, e.voids.total.toFixed(2),
-        e.edits, e.invoiceCollected.toFixed(2),
-      ]));
+    if (!format) return res.json(r);
+    return await sendReport(req, res, format, employeesExport(r, role));
   } catch (err) {
     console.error('GET /api/admin/reports/employees:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -265,7 +240,7 @@ export async function getEmployeeReport(req: Request<{ id: string }>, res: Respo
 //   JSON: quantity + revenue per dish and per category, and the active dishes
 //   that never sold in the range.
 //   ?category=<name> limits everything to one menu category.
-//   ?format=csv&table=items|categories|never → that table as CSV.
+//   ?format=xlsx → Categories + Dishes + Never sold; ?format=csv&table=categories|items|never.
 // Manager tier. Default range: the last 30 days.
 
 export async function getMenuReport(req: Request, res: Response) {
@@ -276,21 +251,14 @@ export async function getMenuReport(req: Request, res: Response) {
   if (!range.ok) return res.status(400).json({ error: range.error });
   const q = searchParams(req);
 
+  const format = exportFormat(req);
+  if (format === 'invalid') return res.status(400).json({ error: FORMAT_ERROR });
+
   try {
     const category = (q.get('category') || '').trim().slice(0, 80) || undefined;
     const r = await menuReport(prisma, range.value, { category });
-    if (q.get('format') !== 'csv') return res.json(r);
-    const tag = `${r.from}_${r.to}`;
-    switch (q.get('table')) {
-      case 'categories':
-        return sendCsv(res, `menu-categories_${tag}.csv`, ['Category', 'Dishes', 'Qty', 'Revenue', 'Share %'],
-          r.categories.map((c) => [c.category, c.dishes, c.quantity, money(c.revenue), c.share]));
-      case 'never':
-        return sendCsv(res, `menu-never-sold_${tag}.csv`, ['Dish', 'Category'], r.neverSold.map((d) => [d.name, d.category]));
-      default:
-        return sendCsv(res, `menu-dishes_${tag}.csv`, ['Dish', 'Category', 'Qty', 'Revenue', 'Share %'],
-          r.items.map((d) => [d.name, d.category, d.quantity, money(d.revenue), d.share]));
-    }
+    if (!format) return res.json(r);
+    return await sendReport(req, res, format, menuReportExport(r, category));
   } catch (err) {
     console.error('GET /api/admin/reports/menu:', err);
     return res.status(500).json({ error: 'Internal server error' });

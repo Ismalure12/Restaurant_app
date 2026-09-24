@@ -35,10 +35,14 @@ export default function FinancialReportPage() {
   const vs = compareLabel(preset);
   const oneDay = range.from === range.to;
   const csv = (table) => `${API}?${query}&format=csv&table=${table}`;
-  const exports = [
-    { label: 'Profit & loss', href: csv('pnl') },
-    { label: 'Days at a loss', href: csv('days') },
-  ];
+  const exportLinks = {
+    excel: `${API}?${query}&format=xlsx`,
+    csv: [
+      { label: 'Profit & loss', href: csv('pnl') },
+      { label: 'Sales and expenses by day', href: csv('byday') },
+      { label: 'Days at a loss', href: csv('days') },
+    ],
+  };
   const kind = (x, k) => x?.expensesByKind?.[k] ?? 0;
 
   return (
@@ -47,7 +51,7 @@ export default function FinancialReportPage() {
         <PeriodPicker preset={preset} range={range} set={set} />
         <span className="flex-1" />
         <RangeNote preset={preset} range={range} />
-        <ExportBar exports={exports} />
+        <ExportBar {...exportLinks} />
       </div>
       <PrintHead title="Financial report" range={range} preset={preset} />
       {isError && <ErrorNote error={error} />}

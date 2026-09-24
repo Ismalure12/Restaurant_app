@@ -8,6 +8,7 @@ import { notify } from '@/lib/notify';
 import useConfirm from '@/hooks/useConfirm';
 import useAccess from '@/hooks/useAccess';
 import Field from '@/components/admin/Field';
+import ImageUploadField from '@/components/admin/ImageUploadField';
 import { useFormValidation, zodFieldErrors } from '@/lib/formValidation';
 import { reportSaveError } from '@/lib/saveError';
 import { groupTitleSchema, menuItemSchema, optionSchema } from '@/lib/schemas/menu';
@@ -240,9 +241,8 @@ const itemGroups = (item) => (item?.optionGroups || []).map((g) => ({
 function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
   const qc = useQueryClient();
   const { confirm, dialog } = useConfirm();
-  const [editingId, setEditingId] = useState(item?.id ?? null);
+  const editingId = item?.id ?? null;
   const [form, setForm] = useState(() => itemForm(item, defaultCategoryId));
-  const [imagePreview, setImagePreview] = useState(item?.imageUrl ?? null);
   const [uploading, setUploading] = useState(false);
   const [groups, setGroups] = useState(() => itemGroups(item));
   const [extras, setExtras] = useState(() => (item?.extras || []).map((e) => optionRow(e)));
@@ -260,11 +260,12 @@ function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
     mutationFn: (payload) => fetchJson(editingId ? `/api/menu-items/${editingId}` : '/api/menu-items', {
       method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     }),
-    onSuccess: (saved) => {
-      notify.success(editingId ? 'Dish updated' : 'Dish added — now add its options and extras', { title: 'Could not save the dish' });
+    // Saving closes the form. Option groups and extras need the dish to exist,
+    // so a new dish gets them by opening it again from the list.
+    onSuccess: () => {
+      notify.success(editingId ? 'Dish updated' : 'Dish added — open it to add options and extras');
       refresh();
-      // A new dish stays open so its option groups and extras can be added.
-      if (!editingId) setEditingId(saved.id);
+      onClose();
     },
     onError: (e) => reportSaveError(e, { form: v, setBanner, title: 'Could not save the dish' }),
   });
@@ -274,21 +275,6 @@ function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
     onSuccess: () => { notify.success('Dish deleted'); refresh(); onClose(); },
     onError: (e) => notify.error(e, { title: 'Could not delete the dish' }),
   });
-
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    setImagePreview(URL.createObjectURL(file));
-    const fd = new FormData();
-    fd.append('file', file);
-    try {
-      const data = await fetchJson('/api/upload', { method: 'POST', body: fd });
-      if (data.url) { set({ imageUrl: data.url }); notify.success('Image uploaded'); }
-      else throw new Error('The upload did not return an image. Please try again.');
-    } catch (err) { notify.error(err, { title: 'Could not upload the image' }); setImagePreview(form.imageUrl || null); }
-    finally { setUploading(false); }
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -448,17 +434,7 @@ function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
           <input className={inputCls({ size: 'lg' })} type="text" placeholder="Champagne" value={form.pairing} onChange={(e) => set({ pairing: e.target.value })} />
         </Field>
 
-        <label className={cx('sm:col-span-2 flex items-center gap-3 rounded-[10px] border border-dashed border-mq-line-2 bg-mq-cream px-3.5 py-3 transition-colors', uploading ? 'cursor-wait' : 'cursor-pointer hover:border-mq-focus hover:bg-mq-soft')}>
-          {imagePreview
-            // eslint-disable-next-line @next/next/no-img-element -- local preview / uploaded blob URL
-            ? <img src={imagePreview} alt="" className="w-10 h-10 rounded-[10px] object-cover border border-mq-line flex-none" />
-            : <span className="grid place-items-center w-10 h-10 rounded-[10px] bg-white border border-mq-line text-mq-cta flex-none"><Icon name="upload" size={18} stroke={1.9} /></span>}
-          <span className="flex flex-col gap-0.5 min-w-0">
-            <span className="text-[13.5px] font-semibold text-mq-ink">{uploading ? 'Uploading…' : imagePreview ? 'Change image' : 'Upload image'}</span>
-            <span className="text-xs text-mq-on-tint">JPG, PNG or WebP</span>
-          </span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleImageUpload} disabled={uploading} />
-        </label>
+        <ImageUploadField className="sm:col-span-2" value={form.imageUrl} onChange={(url) => set({ imageUrl: url })} onBusyChange={setUploading} />
 
         <div className="sm:col-span-2 flex flex-col gap-[7px]">
           <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">Tags</span>
@@ -490,7 +466,7 @@ function DishModal({ item, categories, tags, defaultCategoryId, onClose }) {
       </form>
 
       {!editingId ? (
-        <p className="m-0 mt-4 text-xs text-mq-muted">Add the dish first, then its option groups (Size, Bread…) and extras.</p>
+        <p className="m-0 mt-4 text-xs text-mq-muted">Option groups (Size, Bread…) and extras: add the dish, then open it from the list.</p>
       ) : (
         <div className="flex flex-col gap-5 mt-5 pt-4 border-t border-mq-chip">
           <section className="flex flex-col gap-2.5">
