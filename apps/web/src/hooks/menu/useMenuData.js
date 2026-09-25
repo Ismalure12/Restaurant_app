@@ -1,6 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { preconnect } from 'react-dom';
+import { imageOriginOf } from '@/lib/menu/imageSrc';
+
+// The image server's origin from the last visit: connecting to it while the
+// menu JSON is still loading saves the DNS + TLS handshake before the first
+// picture. Storage can be missing (private mode) — it is only a head start.
+const ORIGIN_KEY = 'mq-img-origin';
+function rememberedOrigin() {
+  try { return localStorage.getItem(ORIGIN_KEY); } catch { return null; }
+}
+function rememberOrigin(origin) {
+  try { localStorage.setItem(ORIGIN_KEY, origin); } catch { /* storage blocked: just no head start next visit */ }
+}
 
 // The public menu (and, for a `?ref=` confirmation link, that order) loaded
 // from the API. The web app has no database access — the menu comes from
@@ -13,6 +26,8 @@ export default function useMenuData(ref) {
 
   useEffect(() => {
     let cancelled = false;
+    const known = rememberedOrigin();
+    if (known) preconnect(known);
 
     // One quiet retry: a 5xx right after the database wakes up is usually gone
     // a second later, so the customer shouldn't see the error screen for it.
@@ -34,6 +49,11 @@ export default function useMenuData(ref) {
 
     Promise.all([loadMenu, loadOrder])
       .then(([menu, order]) => {
+        const origin = imageOriginOf(menu);
+        if (origin) {
+          if (origin !== known) preconnect(origin);
+          rememberOrigin(origin);
+        }
         if (!cancelled) setState({ status: 'ready', menu, order });
       })
       .catch((err) => {

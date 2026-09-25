@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useMenu } from '../MenuContext';
 import Crest from '../components/Crest';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 import { FMT, CARRIERS } from '@/lib/menu/format';
 
 // Checkout overlay: order review + dine-in/delivery form + payment number.
@@ -67,7 +68,7 @@ export default function CheckoutScreen() {
                     const sub = [c.optionName, ...(c.extras || []).map((e) => e.name), c.notes].filter(Boolean).join(' · ');
                     return (
                       <div className="co-item" key={c.uid}>
-                        <ImgWithFallback src={c.imageUrl} alt="" />
+                        <ImgWithFallback src={c.imageUrl} alt="" sizes={SIZES.thumb} />
                         <div className="ci-body">
                           <p className="ci-name">
                             {c.name}

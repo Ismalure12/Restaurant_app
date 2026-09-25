@@ -88,8 +88,8 @@ export type PrismaMock = ReturnType<typeof createPrismaMock>;
 /** Business money accounts in every test (ids are what the tests send). */
 export const ACCOUNTS = [
   { id: 1, kind: 'cash', label: 'Cash', number: null, isActive: true, sortOrder: 0, openingBalance: 0 },
-  { id: 2, kind: 'wallet', label: 'A/C', number: '521436', isActive: true, sortOrder: 11, openingBalance: 0 },
-  { id: 3, kind: 'wallet', label: 'E/d', number: '748079', isActive: true, sortOrder: 12, openingBalance: 0 },
+  { id: 2, kind: 'wallet', label: 'A/C', number: '521436', isActive: true, staffNumbers: true, sortOrder: 11, openingBalance: 0 },
+  { id: 3, kind: 'wallet', label: 'E/d', number: '748079', isActive: true, staffNumbers: false, sortOrder: 12, openingBalance: 0 },
   { id: 4, kind: 'wallet', label: 'Old wallet', number: null, isActive: false, sortOrder: 13, openingBalance: 0 },
   { id: 5, kind: 'card', label: 'Mastercard', number: null, isActive: true, sortOrder: 50, openingBalance: 0 },
   { id: 6, kind: 'gateway', label: 'Sifalo (online)', number: null, isActive: true, sortOrder: 60, openingBalance: 0 },

@@ -28,6 +28,8 @@ export async function listCollections(req: Request, res: Response) {
 // GET/PUT /api/admin/staff/:id/accounts — one waiter's/cashier's own number
 // for each business wallet (their A/C, E/d, My Cash…). Printed on the bill so
 // customers know where to send money; the money counts in the business wallet.
+// Only wallets switched on for staff (Settings › Money "Show in staff
+// accounts") are listed or may get a number; clearing works on any wallet.
 // Manager tier; audited.
 const schema = z.object({
   numbers: z.array(z.object({
@@ -38,7 +40,7 @@ const schema = z.object({
 
 async function load(staffId: number) {
   const [wallets, mine] = await Promise.all([
-    prisma.moneyAccount.findMany({ where: { kind: 'wallet', isActive: true }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, label: true } }),
+    prisma.moneyAccount.findMany({ where: { kind: 'wallet', isActive: true, staffNumbers: true }, orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }], select: { id: true, label: true } }),
     prisma.staffAccount.findMany({ where: { staffId }, select: { accountId: true, number: true } }),
   ]);
   const byId = new Map(mine.map((m) => [m.accountId, m.number]));
@@ -83,6 +85,10 @@ export async function updateStaffAccounts(req: Request<{ id: string }>, res: Res
     if (wallets !== ids.length) return res.status(400).json({ error: 'Numbers can only be set for mobile wallets' });
     const set = numbers.filter((n) => n.number);
     const clear = numbers.filter((n) => !n.number).map((n) => n.accountId);
+    const setIds = set.map((n) => n.accountId);
+    if (setIds.length && (await prisma.moneyAccount.count({ where: { id: { in: setIds }, staffNumbers: true } })) !== setIds.length) {
+      return res.status(400).json({ error: 'That account is not switched on for staff numbers (Settings › Money)' });
+    }
     await prisma.$transaction(async (tx) => {
       if (clear.length) await tx.staffAccount.deleteMany({ where: { staffId, accountId: { in: clear } } });
       // Bounded by the number of wallets (a handful).

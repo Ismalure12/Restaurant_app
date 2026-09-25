@@ -513,6 +513,9 @@ model MoneyAccount {
   // The business's own number (printed on receipts for wallets).
   number         String?
   isActive       Boolean  @default(true) @map("is_active")
+  // Wallets only: staff may add their own number for it (Staff › Team) and it
+  // prints on their bills. Off → hidden there; saved numbers are kept.
+  staffNumbers   Boolean  @default(false) @map("staff_numbers")
   sortOrder      Int      @default(0) @map("sort_order")
   // Counted/statement balance on the opening date (Setting opening_date).
   openingBalance Decimal  @default(0) @map("opening_balance") @db.Decimal(12, 2)

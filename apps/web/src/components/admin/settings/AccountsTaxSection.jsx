@@ -34,7 +34,8 @@ export function useRefreshAccounts() {
 /**
  * Settings › Money: the business accounts (Cash, wallets, Mastercard, bank,
  * Sifalo) — every one, active or not. Balances live on Cash & accounts; here
- * each shows its opening balance. Staff wallet numbers are in Staff › Team.
+ * each shows its opening balance. A wallet switched to "Show in staff
+ * accounts" lets waiters/cashiers add their own number for it (Staff › Team).
  * An account is a record, so it saves from its own dialog.
  */
 export default function AccountsSection({ disabled }) {
@@ -43,14 +44,14 @@ export default function AccountsSection({ disabled }) {
   const accounts = acctData?.accounts || [];
 
   const [acctModal, setAcctModal] = useState(null); // {} = new, {id,...} = edit
-  const [acctForm, setAcctForm] = useState({ kind: 'wallet', label: '', number: '', isActive: true });
+  const [acctForm, setAcctForm] = useState({ kind: 'wallet', label: '', number: '', isActive: true, staffNumbers: false });
   const [acctBanner, setAcctBanner] = useState('');
   const acctV = useFormValidation(accountSchema, { label: acctForm.label, number: acctForm.number });
-  const openAcct = (a) => { acctV.reset(); setAcctBanner(''); setAcctForm({ kind: a?.kind || 'wallet', label: a?.label || '', number: a?.number || '', isActive: a ? a.isActive : true }); setAcctModal(a || {}); };
+  const openAcct = (a) => { acctV.reset(); setAcctBanner(''); setAcctForm({ kind: a?.kind || 'wallet', label: a?.label || '', number: a?.number || '', isActive: a ? a.isActive : true, staffNumbers: Boolean(a?.staffNumbers) }); setAcctModal(a || {}); };
   const saveAcct = useMutation({
     mutationFn: ({ id, ...f }) => id
-      ? fetchJson(`/api/admin/accounts/${id}`, { method: 'PUT', headers: JSON_H, body: JSON.stringify({ label: f.label, number: f.number || null, isActive: f.isActive }) })
-      : fetchJson('/api/admin/accounts', { method: 'POST', headers: JSON_H, body: JSON.stringify({ kind: f.kind, label: f.label, number: f.number || null }) }),
+      ? fetchJson(`/api/admin/accounts/${id}`, { method: 'PUT', headers: JSON_H, body: JSON.stringify({ label: f.label, number: f.number || null, isActive: f.isActive, ...(f.kind === 'wallet' ? { staffNumbers: f.staffNumbers } : {}) }) })
+      : fetchJson('/api/admin/accounts', { method: 'POST', headers: JSON_H, body: JSON.stringify({ kind: f.kind, label: f.label, number: f.number || null, staffNumbers: f.kind === 'wallet' && f.staffNumbers }) }),
     onSuccess: () => { notify.success(acctModal?.id ? 'Account updated' : 'Account added', { title: 'Could not save the account' }); refreshAccounts(); setAcctModal(null); },
     onError: (e) => reportSaveError(e, { form: acctV, setBanner: setAcctBanner, title: 'Could not save the account', guess: { label: /name|already/i } }),
   });
@@ -58,7 +59,7 @@ export default function AccountsSection({ disabled }) {
     e?.preventDefault();
     setAcctBanner(''); acctV.setServerErrors({});
     if (!acctV.check()) return;
-    saveAcct.mutate({ id: acctModal.id, kind: acctForm.kind, label: acctForm.label.trim(), number: acctForm.number.trim(), isActive: acctForm.isActive });
+    saveAcct.mutate({ id: acctModal.id, kind: acctForm.kind, label: acctForm.label.trim(), number: acctForm.number.trim(), isActive: acctForm.isActive, staffNumbers: acctForm.staffNumbers });
   };
 
   return (
@@ -76,7 +77,7 @@ export default function AccountsSection({ disabled }) {
               {!acctData ? <EmptyRow cols={5}>Loading…</EmptyRow> : accounts.length === 0 ? <EmptyRow cols={5}>No accounts yet — add Cash and your wallets.</EmptyRow> : accounts.map((a) => (
                 <Tr key={a.id} dim={!a.isActive} className="hover:bg-mq-cream">
                   <Td className="font-medium text-mq-ink">
-                    <span className="inline-flex items-center gap-2 flex-wrap">{accountName(a)}{!a.isActive && <Chip small tone="off" dot={false}>Inactive</Chip>}</span>
+                    <span className="inline-flex items-center gap-2 flex-wrap">{accountName(a)}{a.kind === 'wallet' && a.staffNumbers && <Chip small tone="info" dot={false} title="Shown in staff accounts">Staff</Chip>}{!a.isActive && <Chip small tone="off" dot={false}>Inactive</Chip>}</span>
                   </Td>
                   <Td className="text-mq-on-tint">{KIND_LABEL[a.kind] || a.kind}</Td>
                   <Td className="text-mq-on-tint">{a.number || '—'}</Td>
@@ -115,6 +116,7 @@ export default function AccountsSection({ disabled }) {
               </div>
               {acctModal.id && <span className="text-xs text-mq-muted">The kind is fixed once an account exists.</span>}
             </div>
+            {acctForm.kind === 'wallet' && <ToggleRow title="Show in staff accounts" desc="Waiters and cashiers can add their own number for it — it prints on their bills" checked={acctForm.staffNumbers} onChange={(v) => setAcctForm({ ...acctForm, staffNumbers: v })} />}
             {acctModal.id && <ToggleRow title="Active" desc="Shown when taking payment" checked={acctForm.isActive} onChange={(v) => setAcctForm({ ...acctForm, isActive: v })} />}
             {acctBanner && <Alert tone="danger">{acctBanner}</Alert>}
             <button type="submit" hidden aria-hidden="true" tabIndex={-1} />

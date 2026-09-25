@@ -1,11 +1,12 @@
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 
 // Compact card used in the home mini-grid and category "selected for you" row.
-export default function MiniCard({ item, onClick, onAdd }) {
+export default function MiniCard({ item, onClick, onAdd, priority }) {
   return (
     <article className="mini-card" onClick={onClick}>
       <div className="thumb">
-        <ImgWithFallback src={item.imageUrl} alt={item.name} />
+        <ImgWithFallback src={item.imageUrl} alt={item.name} sizes={SIZES.mini} priority={priority} />
         <button className="add-mini" aria-label="Add" onClick={(e) => { e.stopPropagation(); onAdd(item, e.currentTarget); }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
         </button>

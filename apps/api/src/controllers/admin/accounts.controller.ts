@@ -24,7 +24,10 @@ import { formatOrderCode, getOrderPrefix } from '../../lib/orders/orderCode.js';
 export const accountFields = {
   label: z.string().trim().min(1, 'Give the account a name').max(30, 'Account name is too long (max 30)'),
   number: z.string().trim().max(40, 'Account number is too long').nullable().optional(),
+  // Staff can add their own number for this wallet (Staff › Team).
+  staffNumbers: z.boolean().optional(),
 };
+const STAFF_WALLETS_ONLY = 'Only mobile wallets can have staff numbers';
 const createSchema = z.object({
   // One Sifalo account exists already; online money is never added by hand.
   kind: z.enum(['cash', 'wallet', 'card', 'bank'], { error: 'Kind must be cash, wallet, card or bank' }),
@@ -44,7 +47,7 @@ export async function listAccounts(req: Request, res: Response) {
   try {
     if (!wantBalances) {
       const rows = await activeAccounts(prisma);
-      return res.json(rows.map((a) => ({ id: a.id, kind: a.kind, label: a.label, number: a.number })));
+      return res.json(rows.map((a) => ({ id: a.id, kind: a.kind, label: a.label, number: a.number, staffNumbers: a.staffNumbers })));
     }
     const calendar = await readCalendar(prisma);
     const today = dayKey(new Date());
@@ -63,15 +66,17 @@ export async function createAccount(req: Request, res: Response) {
   const parsed = createSchema.safeParse(body ?? {});
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues?.[0]?.message || 'Invalid input' });
   const { kind, label, number, sortOrder } = parsed.data;
+  const staffNumbers = parsed.data.staffNumbers ?? false;
+  if (staffNumbers && kind !== 'wallet') return res.status(400).json({ error: STAFF_WALLETS_ONLY });
   try {
     const account = await prisma.$transaction(async (tx) => {
       const created = await tx.moneyAccount.create({
-        data: { kind, label, number: number || null, sortOrder: sortOrder ?? (kind === 'wallet' ? 20 : kind === 'bank' ? 55 : 40) },
+        data: { kind, label, number: number || null, staffNumbers, sortOrder: sortOrder ?? (kind === 'wallet' ? 20 : kind === 'bank' ? 55 : 40) },
       });
-      await audit(tx, auth.session.userId, 'account.create', 'MoneyAccount', created.id, { kind, label, number: number || null });
+      await audit(tx, auth.session.userId, 'account.create', 'MoneyAccount', created.id, { kind, label, number: number || null, staffNumbers });
       return created;
     });
-    return res.status(201).json({ id: account.id, kind: account.kind, label: account.label, number: account.number, isActive: account.isActive });
+    return res.status(201).json({ id: account.id, kind: account.kind, label: account.label, number: account.number, isActive: account.isActive, staffNumbers: account.staffNumbers });
   } catch (err) {
     if (errCode(err) === 'P2002') return res.status(409).json({ error: 'An account with that name already exists' });
     console.error('POST /api/admin/accounts:', err);
@@ -245,15 +250,16 @@ export async function updateAccount(req: Request<{ id: string }>, res: Response)
   try {
     const existing = await prisma.moneyAccount.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Account not found' });
+    if (data.staffNumbers && existing.kind !== 'wallet') return res.status(400).json({ error: STAFF_WALLETS_ONLY });
     const updated = await prisma.$transaction(async (tx) => {
       const row = await tx.moneyAccount.update({ where: { id }, data });
       await audit(tx, auth.session.userId, 'account.update', 'MoneyAccount', id, {
-        before: { label: existing.label, number: existing.number, isActive: existing.isActive, sortOrder: existing.sortOrder },
+        before: { label: existing.label, number: existing.number, isActive: existing.isActive, staffNumbers: existing.staffNumbers, sortOrder: existing.sortOrder },
         after: data,
       });
       return row;
     });
-    return res.json({ id: updated.id, kind: updated.kind, label: updated.label, number: updated.number, isActive: updated.isActive, sortOrder: updated.sortOrder });
+    return res.json({ id: updated.id, kind: updated.kind, label: updated.label, number: updated.number, isActive: updated.isActive, staffNumbers: updated.staffNumbers, sortOrder: updated.sortOrder });
   } catch (err) {
     if (errCode(err) === 'P2002') return res.status(409).json({ error: 'An account with that name already exists' });
     console.error(`PUT /api/admin/accounts/${id}:`, err);

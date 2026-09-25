@@ -4,12 +4,13 @@
 // the sale took; transfers net to zero.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
-import { createPrismaMock, tokenFor, type PrismaMock } from './helpers.js';
+import { ACCOUNTS, createPrismaMock, tokenFor, type PrismaMock } from './helpers.js';
 
 const db: PrismaMock = vi.hoisted(() => ({}) as PrismaMock);
 vi.mock('../src/lib/db/prisma.js', () => ({ default: db }));
 
 const { createApp } = await import('../src/app.js');
+const { payToOf } = await import('../src/lib/orders/orderSerialize.js');
 const app = createApp();
 
 // Burger 5.00 → 2 × 5.00 = 10.00 (no options/extras).
@@ -235,5 +236,50 @@ describe('who may read the money', () => {
       .send({ numbers: [{ accountId: 1, number: '123' }] });
     expect(res.status).toBe(400);
     expect(db.staffAccount.upsert).not.toHaveBeenCalled();
+  });
+  // Fixtures: A/C (2) is switched on for staff numbers, E/d (3) is not.
+  it('staff numbers: only wallets switched on in Settings are listed or may get a number; any can be cleared', async () => {
+    db.adminUser.findUnique.mockResolvedValue({ id: 7 });
+    db.staffAccount.findMany.mockResolvedValue([{ accountId: 2, number: '61 111' }, { accountId: 3, number: '61 222' }]);
+    const mgr = await tokenFor('manager', 2);
+    const list = await request(app).get('/api/admin/staff/7/accounts').set('Cookie', mgr);
+    expect(list.status).toBe(200);
+    expect(list.body).toEqual([{ accountId: 2, label: 'A/C', number: '61 111' }]);
+
+    const off = await request(app).put('/api/admin/staff/7/accounts').set('Cookie', mgr).send({ numbers: [{ accountId: 3, number: '61 333' }] });
+    expect(off.status).toBe(400);
+    expect(db.staffAccount.upsert).not.toHaveBeenCalled();
+
+    const clear = await request(app).put('/api/admin/staff/7/accounts').set('Cookie', mgr).send({ numbers: [{ accountId: 3, number: null }] });
+    expect(clear.status).toBe(200);
+    expect(db.staffAccount.deleteMany).toHaveBeenCalledWith({ where: { staffId: 7, accountId: { in: [3] } } });
+  });
+
+  it('the staff-numbers switch is for wallets only', async () => {
+    const mgr = await tokenFor('manager', 2);
+    const created = await request(app).post('/api/admin/accounts').set('Cookie', mgr).send({ kind: 'cash', label: 'Till 2', staffNumbers: true });
+    expect(created.status).toBe(400);
+    expect(db.moneyAccount.create).not.toHaveBeenCalled();
+    const cash = await request(app).put('/api/admin/accounts/1').set('Cookie', mgr).send({ staffNumbers: true });
+    expect(cash.status).toBe(400);
+    expect(db.moneyAccount.update).not.toHaveBeenCalled();
+
+    db.moneyAccount.update.mockResolvedValue({ ...ACCOUNTS[2], staffNumbers: true });
+    const wallet = await request(app).put('/api/admin/accounts/3').set('Cookie', mgr).send({ staffNumbers: true });
+    expect(wallet.status).toBe(200);
+    expect(wallet.body.staffNumbers).toBe(true);
+    expect(db.moneyAccount.update).toHaveBeenCalledWith({ where: { id: 3 }, data: { staffNumbers: true } });
+  });
+
+  it('a bill prints a staff number only for wallets switched on for staff', () => {
+    const acct = (id: number, staffNumbers: boolean) => ({ label: `W${id}`, isActive: true, staffNumbers, sortOrder: id });
+    const payTo = payToOf({
+      orderType: 'dine_in',
+      waiter: { name: 'Ali', email: 'a@x', isActive: true, staffAccounts: [
+        { accountId: 2, number: '111', account: acct(2, true) },
+        { accountId: 3, number: '222', account: acct(3, false) },
+      ] },
+    });
+    expect(payTo).toEqual({ name: 'Ali', numbers: [{ accountId: 2, label: 'W2', number: '111' }] });
   });
 });

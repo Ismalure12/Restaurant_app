@@ -8,7 +8,7 @@ export const MONEY_ACCOUNTS_KEY = ['money-accounts'];
 /**
  * The ACTIVE business money accounts (GET /api/admin/accounts) — Cash, the
  * wallets A/C · E/d · My Cash…, the Mastercard, the bank, Sifalo — always as
- * an array of { id, kind, label, number }. One key, one shape: balances live
+ * an array of { id, kind, label, number, staffNumbers }. One key, one shape: balances live
  * under a different key (['account-balances']).
  */
 export default function useMoneyAccounts({ enabled = true } = {}) {

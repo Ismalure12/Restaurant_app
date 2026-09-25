@@ -2,6 +2,7 @@
 
 import { useMenu } from '../MenuContext';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 import { SOCIAL_ICONS } from '../socialIcons';
 import { FMT } from '@/lib/menu/format';
 
@@ -15,7 +16,7 @@ export default function DetailOverlay() {
         <>
           <div className="detail">
             <div className="detail-hero">
-              <ImgWithFallback src={detailItem.imageUrl} alt={detailItem.name} />
+              <ImgWithFallback src={detailItem.imageUrl} alt={detailItem.name} sizes={SIZES.hero} priority="high" />
               <div className="detail-top">
                 <button className="icon-btn" aria-label="Back" onClick={goBack}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>

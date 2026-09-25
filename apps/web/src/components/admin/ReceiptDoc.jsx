@@ -17,7 +17,7 @@ import { useIsClient, useBusiness, includedTax, printDate, printTime } from './p
  *   kind="bill"     — the check for an unpaid order, before payment: same layout,
  *     no receipt # (it's assigned when the tab is paid) and "NOT PAID".
  *   Both print ONE "Pay to:" block listing every business wallet, 2–3 per
- *   line, using the collector's own number where they have one — but never
+ *   line on the right like the other values, using the collector's own number where they have one — but never
  *   whose number it is, and no "Account:" row (owner, 2026-09-22).
  *   kind="kitchen"  — the kitchen ticket: service, order ID, time, table,
  *     server, then big "2x Item" lines with options/notes. No prices. When
@@ -80,12 +80,30 @@ export function payToAccounts(wallets, payTo) {
 }
 
 /**
- * The "Pay to:" block for a .rc-kv grid, spanning both columns: the accounts
- * flow inline ("A/C 521436  E/d 748079  My Cash 937875"), each label+number
- * kept together, so 2–3 fit on a line; the rest wrap to the next line and
- * start under the FIRST account, not under "Pay to:":
- *   Pay to:  A/C 5555555   E/d 333333333
- *            My Cash 525525525
+ * Accounts packed into printed lines. The receipt face is monospace (~38
+ * characters across 80mm), so a line is counted in characters: after
+ * "Pay to:" about 28 are left. Two spaces between accounts; an account is
+ * never split (a very long one simply gets a line of its own).
+ */
+export const PAY_TO_WIDTH = 28;
+export function payToLines(accounts, width = PAY_TO_WIDTH) {
+  const lines = [];
+  for (const a of accounts) {
+    const text = `${a.label} ${a.number}`;
+    const last = lines[lines.length - 1];
+    if (last && last.length + 2 + text.length <= width) lines[lines.length - 1] = `${last}  ${text}`;
+    else lines.push(text);
+  }
+  return lines;
+}
+
+/**
+ * The "Pay to:" row for a .rc-kv grid, spanning both columns. Like every
+ * other value (Served by, Date) the accounts sit on the right; wrapped lines
+ * start under the first account:
+ *   Served by:             Ali
+ *   Pay to:    A/C 5555  E/d 3333
+ *              My Cash 5255
  */
 export function PayToRow({ accounts }) {
   if (!accounts.length) return null;
@@ -93,7 +111,7 @@ export function PayToRow({ accounts }) {
     <div className="rc-payto">
       <span className="k">Pay to:</span>
       <span className="rc-accs">
-        {accounts.map((a, i) => <span className="rc-acc" key={i}>{a.label} {a.number}</span>)}
+        {payToLines(accounts).map((line, i) => <span className="rc-acc" key={i}>{line}</span>)}
       </span>
     </div>
   );

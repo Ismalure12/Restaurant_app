@@ -2,6 +2,7 @@
 
 import { useMenu } from '../MenuContext';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 import { FMT } from '@/lib/menu/format';
 
 // Basket sheet: line items with qty controls, totals, and proceed-to-checkout.
@@ -39,7 +40,7 @@ export default function CartOverlay() {
             const summary = [c.optionName, ...(c.extras || []).map((e) => e.name), c.notes].filter(Boolean).join(' · ');
             return (
               <div className="cart-item" key={c.uid}>
-                {c.imageUrl ? <ImgWithFallback src={c.imageUrl} alt="" /> : <div className="ci-img-fallback" />}
+                {c.imageUrl ? <ImgWithFallback src={c.imageUrl} alt="" sizes={SIZES.thumb} /> : <div className="ci-img-fallback" />}
                 <div className="ci-body">
                   <h5 className="ci-name">{c.name}</h5>
                   <div className="ci-opts">{summary || ' '}</div>

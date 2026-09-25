@@ -46,6 +46,7 @@ export async function accountBalances(db: Db, openingDate: string | null, today:
     label: a.label,
     number: a.number,
     isActive: a.isActive,
+    staffNumbers: a.staffNumbers,
     sortOrder: a.sortOrder,
     openingBalance: round2(num(a.openingBalance)),
     balance: openingDate ? round2(num(a.openingBalance) + (sum.get(a.id) ?? 0)) : null,

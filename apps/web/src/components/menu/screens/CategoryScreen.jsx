@@ -5,6 +5,7 @@ import FeaturedCard from '../cards/FeaturedCard';
 import MiniCard from '../cards/MiniCard';
 import WideCard from '../cards/WideCard';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 
 // Full category view: hero, sticky tab bar, and the dish list.
 export default function CategoryScreen() {
@@ -23,7 +24,7 @@ export default function CategoryScreen() {
         return (
           <>
             <div className="cat-hero">
-              <ImgWithFallback src={c.coverUrl} alt={c.name} />
+              <ImgWithFallback src={c.coverUrl} alt={c.name} sizes={SIZES.hero} priority="high" />
               <button className="icon-btn" style={{ position: 'absolute', top: 18, left: 18, zIndex: 3 }} onClick={goBack} aria-label="Back">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></svg>
               </button>
@@ -59,7 +60,7 @@ export default function CategoryScreen() {
                 <div className="cat-empty">No dishes yet.</div>
               ) : (
                 <>
-                  <div className="reveal"><FeaturedCard item={items[0]} onClick={() => openDetail(items[0])} onAdd={quickAdd} /></div>
+                  <div className="reveal"><FeaturedCard item={items[0]} onClick={() => openDetail(items[0])} onAdd={quickAdd} priority="eager" /></div>
                   {items[1] && items[2] && (
                     <>
                       <div className="cat-divider reveal">Selected for you</div>

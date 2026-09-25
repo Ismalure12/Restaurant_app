@@ -65,17 +65,27 @@ describe('POST /api/upload', () => {
     expect(s3.send).not.toHaveBeenCalled();
   });
 
-  it('a real image is re-encoded to webp and stored in S3', async () => {
+  it('a real image is stored in S3 as three webp widths; the 1200 URL is returned', async () => {
     s3.send.mockResolvedValue({});
     const res = await request(app).post('/api/upload').set('Cookie', await tokenFor('cashier'))
       .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
     expect(res.status).toBe(200);
-    const { input } = s3.send.mock.calls[0][0];
-    expect(input.Bucket).toBe('test-bucket');
-    expect(input.Key).toMatch(/^menu\/\d+-[0-9a-f]{8}\.webp$/);
-    expect(input.ContentType).toBe('image/webp');
-    expect((await sharp(input.Body).metadata()).format).toBe('webp');
-    expect(res.body.url).toBe(`https://test-bucket.s3.ap-south-1.amazonaws.com/${input.Key}`);
+    const inputs = s3.send.mock.calls.map((c) => c[0].input);
+    expect(inputs.map((i) => i.Key.replace(/^menu\/\d+-[0-9a-f]{8}\//, ''))).toEqual(['320.webp', '640.webp', '1200.webp']);
+    const base = inputs[0].Key.slice(0, inputs[0].Key.lastIndexOf('/'));
+    expect(inputs.every((i) => i.Key.startsWith(`${base}/`) && i.Bucket === 'test-bucket' && i.ContentType === 'image/webp')).toBe(true);
+    expect((await sharp(inputs[0].Body).metadata()).format).toBe('webp');
+    expect(res.body.url).toBe(`https://test-bucket.s3.ap-south-1.amazonaws.com/${base}/1200.webp`);
+  });
+
+  it('makeVariants: 320/640/1200 wide, never enlarged', async () => {
+    const { makeVariants } = await import('../src/lib/storage/imageVariants.js');
+    const big = await sharp({ create: { width: 1600, height: 1000, channels: 3, background: '#850D33' } }).jpeg().toBuffer();
+    const widths = await Promise.all((await makeVariants(big)).map(async (v) => (await sharp(v.body).metadata()).width));
+    expect(widths).toEqual([320, 640, 1200]);
+    const small = await sharp({ create: { width: 500, height: 300, channels: 3, background: '#850D33' } }).png().toBuffer();
+    const smallWidths = await Promise.all((await makeVariants(small)).map(async (v) => (await sharp(v.body).metadata()).width));
+    expect(smallWidths).toEqual([320, 500, 500]);
   });
 
   it('S3_PUBLIC_URL (a CDN) replaces the bucket URL', async () => {
@@ -83,7 +93,7 @@ describe('POST /api/upload', () => {
     s3.send.mockResolvedValue({});
     const res = await request(app).post('/api/upload').set('Cookie', await tokenFor('cashier'))
       .attach('file', await png(), { filename: 'a.png', contentType: 'image/png' });
-    expect(res.body.url).toMatch(/^https:\/\/cdn\.example\.com\/menu\/\d+-[0-9a-f]{8}\.webp$/);
+    expect(res.body.url).toMatch(/^https:\/\/cdn\.example\.com\/menu\/\d+-[0-9a-f]{8}\/1200\.webp$/);
   });
 
   it('an S3 failure → 500 with no internals', async () => {

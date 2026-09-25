@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import multer from 'multer';
 import { checkPublicRead, isStorageUnreachable, uploadPublicImage } from '../lib/storage/s3.js';
-import sharp from 'sharp';
+import { makeVariants, newImageBase, variantKey } from '../lib/storage/imageVariants.js';
 import prisma from '../lib/db/prisma.js';
 import { requirePage } from '../lib/auth/auth.js';
 import { errCode } from '../utils/errors.js';
@@ -77,12 +77,9 @@ export async function uploadImage(req: Request, res: Response) {
 
     const raw = file.buffer;
 
-    let optimized;
+    let variants;
     try {
-      optimized = await sharp(raw)
-        .resize({ width: 1200, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toBuffer();
+      variants = await makeVariants(raw);
     } catch (sharpErr) {
       // sharp failing to decode means this isn't a real image (the client-declared
       // file.type can't be trusted). Reject rather than persist unvalidated bytes.
@@ -90,10 +87,13 @@ export async function uploadImage(req: Request, res: Response) {
       return res.status(400).json({ error: 'Invalid image file' });
     }
 
-    const name = `menu/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.webp`;
+    // 320/640/1200 widths side by side; the menu picks one per card (srcset).
+    // The 1200 URL is the one stored and returned.
+    const base = newImageBase();
     let url;
     try {
-      url = await uploadPublicImage(name, optimized, 'image/webp');
+      const urls = await Promise.all(variants.map((v) => uploadPublicImage(variantKey(base, v.width), v.body, 'image/webp')));
+      url = urls[urls.length - 1];
     } catch (err) {
       if (!isStorageUnreachable(err)) throw err;
       console.error('Upload: image storage unreachable:', err);

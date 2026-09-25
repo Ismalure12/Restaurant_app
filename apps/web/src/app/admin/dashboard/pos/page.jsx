@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { flushSync } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { srcSetFor } from '@/lib/menu/imageSrc';
 import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import { useFormValidation } from '@/lib/formValidation';
@@ -41,7 +42,7 @@ function CardImage({ src, cat }) {
   const [ok, setOk] = useState(Boolean(src));
   // Plain <img>: menu images come from any host and fall back to the placeholder on error.
   // eslint-disable-next-line @next/next/no-img-element
-  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} className="w-full h-full object-cover" />;
+  if (ok) return <img src={src} srcSet={srcSetFor(src)} sizes="280px" alt="" loading="lazy" decoding="async" onError={() => setOk(false)} className="w-full h-full object-cover" />;
   return (
     <span className="w-full h-full grid place-items-center px-2 text-center bg-mq-chip [background-image:repeating-linear-gradient(135deg,transparent_0_11px,rgba(26,26,24,.045)_11px_12px)] text-mq-chip-ink font-mq-mono text-[10.5px] tracking-[.04em] truncate">
       {cat || 'Menu'}

@@ -6,6 +6,7 @@ import FeaturedCard from '../cards/FeaturedCard';
 import MiniCard from '../cards/MiniCard';
 import WideCard from '../cards/WideCard';
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 import { SOCIAL_ICONS, SOCIAL_LABELS } from '../socialIcons';
 
 // Home overview: topbar, search, category nav, and curated sections.
@@ -60,9 +61,9 @@ export default function HomeScreen() {
               <span className="meta">{categories.length} categories</span>
             </div>
             <div className="rail" ref={catnavHomeRef}>
-              {ordered.filter((c) => c.items.length).map((c) => (
+              {ordered.filter((c) => c.items.length).map((c, i) => (
                 <button className="cat-tile" key={c.slug} onClick={() => openCategory(c.slug)}>
-                  <ImgWithFallback src={c.coverUrl} alt="" />
+                  <ImgWithFallback src={c.coverUrl} alt="" sizes={SIZES.tile} priority={i < 3 ? 'eager' : undefined} />
                   <div className="info">
                     <div>
                       <div className="nm">{c.name}</div>
@@ -78,7 +79,9 @@ export default function HomeScreen() {
           </div>
 
           <div id="homeSections" ref={homeSectionsRef}>
-            {ordered.filter((c) => c.items.length).map((c) => {
+            {ordered.filter((c) => c.items.length).map((c, i) => {
+              // The first section is on the first screen: load it straight away.
+              const first = i === 0;
               const featured = c.items[0];
               const minis = c.items.slice(1, 5);
               return (
@@ -94,11 +97,11 @@ export default function HomeScreen() {
                   </div>
 
                   <div className="home-grid">
-                    <div className="reveal"><FeaturedCard item={featured} onClick={() => openDetail(featured)} onAdd={quickAdd} /></div>
+                    <div className="reveal"><FeaturedCard item={featured} onClick={() => openDetail(featured)} onAdd={quickAdd} priority={first ? 'high' : undefined} /></div>
 
                     {minis.length > 0 && (
                       <div className="mini-grid reveal">
-                        {minis.map((m) => <MiniCard key={m.id} item={m} onClick={() => openDetail(m)} onAdd={quickAdd} />)}
+                        {minis.map((m) => <MiniCard key={m.id} item={m} onClick={() => openDetail(m)} onAdd={quickAdd} priority={first ? 'eager' : undefined} />)}
                       </div>
                     )}
                   </div>

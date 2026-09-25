@@ -70,10 +70,11 @@ function StaffPage() {
   const countOf = (k) => (k === 'all' ? logins.length : logins.filter((r) => r.role === k || (k === 'manager' && r.role === 'admin')).length);
 
   // Payment numbers: the staff member's own number for each business wallet
-  // (A/C, E/d…), printed on the bills they serve. Waiters and cashiers only.
+  // (A/C, E/d…), printed on the bills they serve. Waiters and cashiers only;
+  // only wallets switched to "Show in staff accounts" in Settings › Money.
   const takesPayments = form.role === 'waiter' || form.role === 'cashier';
   const { accounts: allAccounts } = useMoneyAccounts({ enabled: showForm && takesPayments });
-  const wallets = allAccounts.filter((a) => a.kind === 'wallet');
+  const wallets = allAccounts.filter((a) => a.kind === 'wallet' && a.staffNumbers);
   const { data: savedNumbers } = useQuery({
     queryKey: ['staff-accounts', editing?.id],
     queryFn: () => fetchJson(`/api/admin/staff/${editing.id}/accounts`),
@@ -267,7 +268,7 @@ function StaffPage() {
             {takesPayments && (
               <div className="flex flex-col gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[.09em] text-mq-muted">Payment numbers</span>
-                {wallets.length === 0 ? <span className="text-xs text-mq-muted">No mobile wallets yet — add them in Settings › Money.</span> : wallets.map((w) => (
+                {wallets.length === 0 ? <span className="text-xs text-mq-muted">No accounts are open to staff yet — turn on “Show in staff accounts” in Settings › Money.</span> : wallets.map((w) => (
                   <div key={w.id} className="grid grid-cols-[90px_minmax(0,1fr)] gap-2.5 items-start">
                     <label htmlFor={`st-num-${w.id}`} className="leading-[42px] text-[13.5px] font-medium text-mq-body truncate">{w.label}</label>
                     <Field htmlFor={`st-num-${w.id}`} {...v.fieldProps(`num_${w.id}`)}><input className={inputCls({ size: 'lg', mono: true })} type="tel" inputMode="tel" maxLength={40} value={numberOf(w.id)} onChange={(e) => setNumDraft({ ...numDraft, [w.id]: e.target.value })} placeholder="e.g. 61 000 0000" /></Field>

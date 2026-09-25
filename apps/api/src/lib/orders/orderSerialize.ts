@@ -6,7 +6,7 @@ import { formatReceiptNo } from './receiptNo.js';
 
 // A staff member's own wallet numbers (their A/C, E/d, My Cash…) — printed on
 // the bill so the customer knows where to send the money.
-const NUMBERS = { select: { number: true, accountId: true, account: { select: { label: true, isActive: true, sortOrder: true } } } } as const;
+const NUMBERS = { select: { number: true, accountId: true, account: { select: { label: true, isActive: true, staffNumbers: true, sortOrder: true } } } } as const;
 const PERSON = { select: { id: true, name: true, email: true, isActive: true, staffAccounts: NUMBERS } } as const;
 
 export const PAY_TO_PEOPLE = { staff: PERSON, waiter: PERSON, collectedBy: PERSON } as const;
@@ -29,10 +29,11 @@ type Person = { name: string | null; email: string } | null | undefined;
 
 const who = (u: Person) => (u ? (u.name || u.email) : null);
 
-type Numbered = { name: string | null; email: string; isActive?: boolean; staffAccounts?: { number: string; accountId: number; account: { label: string; isActive: boolean; sortOrder: number } }[] } | null | undefined;
+type Numbered = { name: string | null; email: string; isActive?: boolean; staffAccounts?: { number: string; accountId: number; account: { label: string; isActive: boolean; staffNumbers: boolean; sortOrder: number } }[] } | null | undefined;
 // Someone who has left never gets money sent to their personal wallet: no numbers (the print falls back to the business ones).
 const numbersOf = (u: Numbered) => (u && u.isActive === false ? [] : (u?.staffAccounts ?? []))
-  .filter((s) => s.account.isActive)
+  // Only wallets switched on for staff numbers (Settings › Money); the rest print the business number.
+  .filter((s) => s.account.isActive && s.account.staffNumbers)
   .sort((a, b) => a.account.sortOrder - b.account.sortOrder)
   .map((s) => ({ accountId: s.accountId, label: s.account.label, number: s.number }));
 

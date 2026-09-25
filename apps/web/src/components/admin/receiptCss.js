@@ -24,13 +24,13 @@ export const RECEIPT_CSS = `
 .rc-kv { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; }
 .rc-kv > .k { white-space: nowrap; }
 .rc-kv > .v { text-align: right; overflow-wrap: anywhere; }
-/* Pay to: spans the whole width; each label+number never splits, so 2–3
-   accounts sit on a line and the rest wrap — aligned under the first
-   account (a hanging column), not back under "Pay to:". */
-.rc-payto { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; column-gap: 1.6ch; align-items: start; }
+/* Pay to: spans the whole width. The accounts come as pre-packed lines
+   (payToLines); the block is pushed right like every other value and is as
+   wide as its longest line, so wrapped lines start under the first account. */
+.rc-payto { grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: start; }
 .rc-payto > .k { white-space: nowrap; }
-.rc-accs { display: flex; flex-wrap: wrap; column-gap: 1.6ch; min-width: 0; }
-.rc-acc { white-space: nowrap; }
+.rc-accs { justify-self: end; display: flex; flex-direction: column; min-width: 0; max-width: 100%; text-align: left; }
+.rc-acc { white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Two papers in one print job (e.g. kitchen ticket + bill): a new page each. */
 .rc-pagebreak { break-before: page; page-break-before: always; height: 0; }
 .rc-rule { border-top: 1px dashed #000; margin: 5px 0; }

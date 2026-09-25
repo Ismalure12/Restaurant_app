@@ -3,6 +3,7 @@
 import { useState, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { srcSetFor } from '@/lib/menu/imageSrc';
 import { fetchJson } from '@/lib/apiError';
 import { notify } from '@/lib/notify';
 import useConfirm from '@/hooks/useConfirm';
@@ -41,7 +42,7 @@ const optionCount = (it) => (it.optionGroups || []).reduce((n, g) => n + (g.opti
 function DishImage({ src, label }) {
   const [ok, setOk] = useState(Boolean(src));
   // eslint-disable-next-line @next/next/no-img-element -- uploaded blob URLs of any size; the menu uses a plain <img> with a fallback too
-  if (ok) return <img src={src} alt="" loading="lazy" onError={() => setOk(false)} className="block w-full h-full object-cover" />;
+  if (ok) return <img src={src} srcSet={srcSetFor(src)} sizes="320px" alt="" loading="lazy" decoding="async" onError={() => setOk(false)} className="block w-full h-full object-cover" />;
   return (
     <span className="grid place-items-center w-full h-full bg-mq-chip bg-[repeating-linear-gradient(135deg,transparent_0_11px,rgba(26,26,24,.045)_11px_12px)] font-mq-mono text-[10.5px] tracking-[.04em] uppercase text-mq-on-tint px-3 text-center">
       {label}

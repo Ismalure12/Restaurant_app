@@ -238,7 +238,19 @@ bash scripts/backup-db.sh && tail -3 backups/backup.log   # "S3 copy ok: backups
 
 1. **Push to `main`** and wait for the **Build images** workflow to go green
    (GitHub → Actions). Note the short sha — it is the image tag `sha-<sha>`.
-2. **On the server:**
+2. **If the release contains a migration** (a new folder in `apps/api/prisma/migrations`),
+   apply it FIRST — with the new image, while the old containers keep serving:
+
+   ```bash
+   cd /srv/maqaaxi
+   docker compose pull api
+   docker compose run --rm api npm run db:deploy
+   ```
+
+   Only backward-compatible migrations (new tables, new columns with a default, indexes) go
+   to the live database, so the running (old) build never notices them — and the new build
+   may already read them, which is why this comes before the restart.
+3. **On the server:**
 
    ```bash
    cd /srv/maqaaxi && bash deploy/pull-and-restart.sh
@@ -246,14 +258,6 @@ bash scripts/backup-db.sh && tail -3 backups/backup.log   # "S3 copy ok: backups
 
    It pulls `:latest`, restarts, waits until the API is healthy (prints its logs and fails
    if not), prunes old images and shows which image each service runs.
-3. **If the release contains a migration** (a new folder in `apps/api/prisma/migrations`):
-
-   ```bash
-   docker compose run --rm api npm run db:deploy
-   ```
-
-   Only backward-compatible migrations (new tables, nullable columns, indexes) go to the
-   live database, so running it right after the restart is safe.
 4. **If the commit changed** `docker-compose.yml`, `.env.example`, `deploy/*` or `scripts/*`,
    `scp` the changed file up (A.2) before step 2 — and add any new `.env` variable by hand.
 
@@ -363,3 +367,12 @@ free -h && df -h /
   usage against each limit.
 - **GHCR packages are private.** Keep the `read:packages` token on the server only; the
   workflow pushes with the repo's own `GITHUB_TOKEN`.
+- **Menu images come in three widths** (320/640/1200 under `menu/<base>/`, the database keeps
+  the 1200 URL; the menu picks one per card with `srcset`). Images uploaded before that are
+  one flat file and still load as before. To convert them once (safe to re-run, old files
+  are never deleted):
+
+  ```bash
+  docker compose run --rm -T --no-deps api node dist/cli/resizeImages.js           # dry run: lists them
+  docker compose run --rm -T --no-deps api node dist/cli/resizeImages.js --apply   # converts + repoints rows
+  ```

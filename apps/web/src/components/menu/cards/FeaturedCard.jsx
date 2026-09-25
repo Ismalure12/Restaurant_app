@@ -1,13 +1,14 @@
 import ImgWithFallback from '@/components/ui/ImgWithFallback';
+import { SIZES } from '@/lib/menu/imageSrc';
 
 // Large hero card used at the top of each home section / category list.
-export default function FeaturedCard({ item, onClick, onAdd }) {
+export default function FeaturedCard({ item, onClick, onAdd, priority }) {
   const firstTag = item.tags && item.tags[0];
   return (
     <article className="item featured" onClick={onClick}>
       <div className="thumb">
         {firstTag && <div className="stamp">{firstTag.label}</div>}
-        <ImgWithFallback src={item.imageUrl} alt={item.name} />
+        <ImgWithFallback src={item.imageUrl} alt={item.name} sizes={SIZES.featured} priority={priority} />
       </div>
       <div className="body">
         <h3 className="name">{item.name}</h3>
