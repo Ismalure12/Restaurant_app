@@ -127,10 +127,10 @@ describe('reports — manager tier only', () => {
     expect(days.getCell('A5').value).toEqual(new Date(Date.UTC(2026, 8, 1)));
   });
 
-  it('export: unknown format → 400; a waiter or cashier cannot export', async () => {
+  it('export: unknown format → 400; a waiter cannot export a report; Sales history exports for everyone on it', async () => {
     expect((await request(app).get('/api/admin/reports/sales?format=pdf').set('Cookie', await tokenFor('manager'))).status).toBe(400);
     expect((await request(app).get('/api/admin/reports/sales?format=xlsx').set('Cookie', await tokenFor('waiter'))).status).toBe(403);
-    expect((await request(app).get('/api/admin/sales?format=xlsx').set('Cookie', await tokenFor('cashier'))).status).toBe(403);
+    expect((await request(app).get('/api/admin/sales?format=xlsx').set('Cookie', await tokenFor('cashier'))).status).toBe(200);
   });
 
   it('employee detail of an unknown id → 404', async () => {

@@ -62,11 +62,13 @@ describe('GET /api/admin/sales — manager summary + status=all', () => {
     expect(db.order.findMany).toHaveBeenCalledTimes(1);
   });
 
-  it('cashiers and waiters never get the summary; cursor pages skip it', async () => {
+  it('cashiers and waiters get the summary too; cursor pages skip it', async () => {
     for (const role of ['cashier', 'waiter']) {
       const res = await request(app).get('/api/admin/sales').set('Cookie', await tokenFor(role, 7));
-      expect(res.body).not.toHaveProperty('summary');
+      expect(res.body).toHaveProperty('summary');
     }
+    db.order.aggregate.mockClear();
+    db.orderItem.groupBy.mockClear();
     const next = await request(app).get('/api/admin/sales?cursor=5').set('Cookie', await tokenFor('manager'));
     expect(next.body).not.toHaveProperty('summary');
     expect(db.order.aggregate).not.toHaveBeenCalled();

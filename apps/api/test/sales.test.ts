@@ -32,19 +32,24 @@ describe('GET /api/admin/sales — POS › Sales history', () => {
     const cookie = await tokenFor('waiter', 7);
     const res = await request(app).get('/api/admin/sales?waiterId=99').set('Cookie', cookie);
     expect(res.status).toBe(200);
-    expect(res.body).not.toHaveProperty('summary');
-    expect(whereOf().AND).toContainEqual({ OR: [{ waiterId: 7 }, { staffId: 7 }] });
-    expect((await request(app).get('/api/admin/sales?format=csv').set('Cookie', cookie)).status).toBe(403);
+    const own = { OR: [{ waiterId: 7 }, { staffId: 7 }] };
+    expect(whereOf().AND).toContainEqual(own);
+    // Their totals are their own too: every summary aggregate carries the same filter.
+    expect(res.body).toHaveProperty('summary');
+    for (const [arg] of db.order.aggregate.mock.calls) expect(JSON.stringify(arg.where)).toContain(JSON.stringify(own));
+    // And so is their export.
+    db.order.findMany.mockClear();
+    expect((await request(app).get('/api/admin/sales?format=csv').set('Cookie', cookie)).status).toBe(200);
+    expect(JSON.stringify(db.order.findMany.mock.calls[0][0].where)).toContain(JSON.stringify(own));
   });
 
-  it('a cashier sees every sale but no money totals, and cannot export', async () => {
+  it('a cashier gets the manager view: every sale, the totals and exports', async () => {
     const cookie = await tokenFor('cashier');
     const res = await request(app).get('/api/admin/sales').set('Cookie', cookie);
     expect(res.status).toBe(200);
-    expect(res.body).not.toHaveProperty('summary');
-    expect(db.order.aggregate).not.toHaveBeenCalled();
+    expect(res.body.summary).toMatchObject({ count: 3, total: 42.5 });
     expect(whereOf().AND[1]).toEqual({}); // no hidden "own sales only" filter
-    expect((await request(app).get('/api/admin/sales?format=csv').set('Cookie', cookie)).status).toBe(403);
+    expect((await request(app).get('/api/admin/sales?format=csv').set('Cookie', cookie)).status).toBe(200);
   });
 
   it('a manager gets count/total on the first page only', async () => {
