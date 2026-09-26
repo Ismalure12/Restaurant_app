@@ -46,6 +46,12 @@ export const RECEIPT_CSS = `
 .rc-total { display: flex; justify-content: space-between; gap: 8px; font-size: 17px; font-weight: 800; padding: 1mm 0; }
 .rc-center { text-align: center; margin-top: 2mm; }
 .rc-status { text-align: center; font-weight: 800; letter-spacing: .06em; margin-top: 3px; }
+/* Customer papers (receipt, bill, invoice): a little air between lines. */
+.rc-airy { line-height: 1.4; }
+.rc-airy .rc-item + .rc-item { margin-top: 3px; }
+.rc-airy .rc-sum { margin: 1px 0; }
+/* The developer's credit under the footer. */
+.rc-credit { text-align: center; font-size: 9.5px; margin-top: 2mm; }
 /* Kitchen ticket */
 .kt-band { border: 2px solid #000; text-align: center; font-weight: 800; font-size: 15px; letter-spacing: .08em; padding: 2px 0; margin-bottom: 4px; }
 .kt-meta { font-size: 12px; }

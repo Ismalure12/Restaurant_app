@@ -134,6 +134,15 @@ function TicketLine({ line, onQty }) {
   );
 }
 
+// Same dish with the same option, extras and note → one line, higher quantity.
+const lineKey = (l) => JSON.stringify([l.itemId, l.optionName || '', (l.extras || []).map((e) => e.name).sort(), (l.notes || '').trim()]);
+function addToCart(prev, line) {
+  const key = lineKey(line);
+  const i = prev.findIndex((l) => lineKey(l) === key);
+  if (i < 0) return [...prev, line];
+  return prev.map((l, j) => (j === i ? { ...l, quantity: Math.min(99, l.quantity + line.quantity) } : l));
+}
+
 /** Read ?table= / ?customer= once (the Tables and Customers pages link here). */
 function readPrefill() {
   try {
@@ -285,12 +294,6 @@ export default function PosPage() {
   });
   const firstIssue = Object.values(form.errors)[0];
 
-  const openItem = (item) => {
-    if (placed) return;
-    if (!needsChoices(item)) { setCart((prev) => [...prev, buildLine(item)]); return; }
-    setCustomizing(item);
-  };
-
   // Minus on the last one removes the line.
   const changeQty = (lineUid, delta) => setCart((prev) => prev
     .map((l) => (l.uid === lineUid ? { ...l, quantity: Math.min(99, l.quantity + delta) } : l))
@@ -302,6 +305,13 @@ export default function PosPage() {
     pay.reset(); setInvoiceCustomer({ customerId: null, customer: null }); setInvoiceDueDate('');
     setPlaced(null); setReceipt(null); form.reset();
   };
+  // After a sale, tapping a dish starts the next order (same as New order).
+  const openItem = (item) => {
+    if (placed) resetOrder();
+    if (!needsChoices(item)) { setCart((prev) => addToCart(prev, buildLine(item))); return; }
+    setCustomizing(item);
+  };
+
   // Print right away: flush the receipt into the DOM first, then print it.
   const printNow = (order, kind) => {
     flushSync(() => setReceipt(receiptFromOrder(order)));
@@ -600,7 +610,7 @@ export default function PosPage() {
           item={customizing}
           eyebrow={catName[customizing.categoryId] || 'Item'}
           onClose={() => setCustomizing(null)}
-          onAdd={(line) => { setCart((prev) => [...prev, line]); setCustomizing(null); }}
+          onAdd={(line) => { setCart((prev) => addToCart(prev, line)); setCustomizing(null); }}
         />
       )}
 

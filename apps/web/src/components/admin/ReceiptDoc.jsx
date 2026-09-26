@@ -10,7 +10,7 @@ import { useIsClient, useBusiness, includedTax, printDate, printTime } from './p
  *
  *   kind="customer" — the customer's receipt (the owner's sample layout):
  *     SHOP NAME → Served by · Order ID · Receipt # · Pay to · Date
- *     → Qty / Item / Price → TOTAL → Thank you!
+ *     → Qty / Item / Price → TOTAL → Thank you! → © Goodir Technology
  *     A Subtotal line appears ONLY when something sits between it and the
  *     total (discount, delivery fee, included tax) — otherwise it would just
  *     repeat the total.
@@ -187,7 +187,7 @@ function CustomerReceipt({ order, biz, wallets, bill }) {
   const invoicePaid = isInvoice && (order.invoiceStatus === 'paid' || (order.invoiceStatus !== 'void' && order.invoiceBalance != null && Number(order.invoiceBalance) <= 0));
 
   return (
-    <div className="rcpt">
+    <div className="rcpt rc-airy">
       <div className="rc-name">{biz.name}</div>
       <div className="rc-rule" />
       <div className="rc-kv">
@@ -235,6 +235,7 @@ function CustomerReceipt({ order, biz, wallets, bill }) {
       {voided && <div className="rc-status">*** VOID ***</div>}
       {!voided && isInvoice && <div className="rc-status">{invoicePaid ? `INVOICE #${order.invoiceId} · PAID` : `BALANCE DUE · INVOICE #${order.invoiceId}`}</div>}
       <div className="rc-center">{biz.footer || 'Thank you!'}</div>
+      <div className="rc-credit">© Goodir Technology</div>
     </div>
   );
 }
@@ -299,7 +300,7 @@ function InvoiceReceipt({ invoice, biz, wallets }) {
   const payAccounts = payToAccounts(wallets, payTo);
 
   return (
-    <div className="rcpt">
+    <div className="rcpt rc-airy">
       <div className="rc-name">{biz.name}</div>
       <div className="rc-status">INVOICE</div>
       <div className="rc-rule" />
@@ -355,6 +356,7 @@ function InvoiceReceipt({ invoice, biz, wallets }) {
         </>
       )}
       <div className="rc-center">{biz.footer || 'Thank you!'}</div>
+      <div className="rc-credit">© Goodir Technology</div>
     </div>
   );
 }

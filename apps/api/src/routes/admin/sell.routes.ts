@@ -8,7 +8,7 @@ import { createPosOrder } from '../../controllers/admin/pos.controller.js';
 import { listOnlinePayments, recheckOnlinePayment, dismissOnlinePayment } from '../../controllers/admin/onlinePayments.controller.js';
 import { streamEvents } from '../../controllers/admin/events.controller.js';
 import { listTables, createTable, updateTable, deleteTable } from '../../controllers/admin/tables.controller.js';
-import { listSales, listSoldItems } from '../../controllers/admin/sales.controller.js';
+import { listSaleCashiers, listSales, listSoldItems } from '../../controllers/admin/sales.controller.js';
 
 const router = Router();
 
@@ -29,5 +29,6 @@ defineRoute(router, '/tables', { GET: listTables, POST: createTable });
 defineRoute(router, '/tables/:id', { PUT: updateTable, DELETE: deleteTable });
 defineRoute(router, '/sales', { GET: listSales });
 defineRoute(router, '/sales/items', { GET: listSoldItems });
+defineRoute(router, '/sales/cashiers', { GET: listSaleCashiers });
 
 export default router;

@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/apiError';
-import useStaffList from '@/hooks/useStaffList';
 import SaleDrawer from '@/components/admin/orders/SaleDrawer';
 import { payPill } from '@/components/admin/orders/orderUi';
 import {
@@ -18,7 +17,6 @@ import {
 
 const API = '/api/admin/sales';
 const FILTERS = ['q', 'status', 'staffId', 'waiterId', 'account', 'channel', 'view'];
-const MANAGER = ['admin', 'manager'];
 const COLS = 8;
 const when = (d) => (d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 const whereOf = (o) => (o.tableNumber ? `Table ${o.tableNumber}` : o.customer || (o.orderType === 'delivery' ? 'Delivery' : 'Walk-in'));
@@ -31,8 +29,9 @@ const STATUSES = [{ value: 'all', label: 'All' }, { value: 'completed', label: '
  * Money › Sales history — every closed sale, searchable by order ID, receipt #,
  * customer or table, with the report filters, and the items sold across the
  * same sales (?view=items). Cashiers use it to find and reprint any sale (the
- * drawer); waiters see only their own sales (the API enforces it) and can't
- * open one; managers also get the KPI strip, the total in view and CSV.
+ * drawer). Everyone allowed on the page gets the same view — KPI strip, total
+ * in view, filters and exports; a waiter's view is only their own sales (the
+ * API enforces it) and opening one follows the Orders permission.
  * Filters live in the URL, so a view can be shared and the full sale page
  * (?back=) returns to it. Cursor paging (Load more), never numbered pages.
  */
@@ -40,7 +39,6 @@ function SalesHistory() {
   const sp = useSearchParams();
   const { preset, range, filters, set, query } = useReportParams('today', FILTERS);
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => fetchJson('/api/auth/me'), staleTime: 5 * 60 * 1000 });
-  const isManager = MANAGER.includes(me?.role);
   const isWaiter = me?.role === 'waiter';
   const itemsView = filters.view === 'items';
   const status = filters.status || 'completed';
@@ -53,22 +51,22 @@ function SalesHistory() {
     return () => clearTimeout(t);
   }, [term, filters.q, set]);
 
-  const { staff } = useStaffList({ enabled: isManager });
-  const { data: waiterList = [] } = useQuery({ queryKey: ['pos-waiters'], queryFn: () => fetchJson('/api/admin/waiters?active=1'), enabled: !!me && !isManager && !isWaiter });
+  const { data: cashierList = [] } = useQuery({ queryKey: ['sales-cashiers'], queryFn: () => fetchJson(`${API}/cashiers`), enabled: !!me, staleTime: 60 * 1000 });
+  const { data: waiterList = [] } = useQuery({ queryKey: ['pos-waiters'], queryFn: () => fetchJson('/api/admin/waiters?active=1'), enabled: !!me && !isWaiter });
   const accounts = useAccountOptions();
   const opt = (u) => ({ value: String(u.id), label: u.name || u.email });
-  const cashiers = staff.filter((u) => u.role !== 'waiter' && u.role !== 'user').map(opt);
-  const waiters = isManager ? staff.filter((u) => u.role === 'waiter').map(opt) : waiterList.map(opt);
+  const cashiers = cashierList.map(opt);
+  const waiters = waiterList.map(opt);
 
   // The API query: everything but the view switch.
   const apiQuery = (() => { const p = new URLSearchParams(query); p.delete('view'); return p.toString(); })();
-  // The list runs in both views for managers (it carries the KPI summary).
+  // The list runs in both views (it carries the KPI summary).
   const list = useInfiniteQuery({
     queryKey: ['sales', apiQuery],
     queryFn: ({ pageParam }) => fetchJson(`${API}?${apiQuery}&limit=50${pageParam ? `&cursor=${pageParam}` : ''}`),
     initialPageParam: null,
     getNextPageParam: (last) => last.nextCursor,
-    enabled: !!me && (!itemsView || isManager),
+    enabled: !!me,
   });
   const sold = useQuery({
     queryKey: ['sales-items', apiQuery],
@@ -80,7 +78,7 @@ function SalesHistory() {
   const back = sp.toString() ? `?back=${encodeURIComponent(`?${sp.toString()}`)}` : '';
   const saleHref = (id) => `/admin/dashboard/sales/${id}${back}`;
   const exportBase = itemsView ? `${API}/items?${apiQuery}` : `${API}?${apiQuery}`;
-  const exportLinks = !isManager ? {} : {
+  const exportLinks = {
     excel: `${exportBase}&format=xlsx`,
     csv: [{ label: itemsView ? 'Items sold' : 'Every sale in view', href: `${exportBase}&format=csv` }],
   };
@@ -101,7 +99,7 @@ function SalesHistory() {
   return (
     <Page>
       <ReportPrintCss />
-      {isManager && (list.isLoading || !summary ? (list.isError ? null : <KpiSkeletons count={4} min={210} />) : (
+      {(list.isLoading || !summary ? (list.isError ? null : <KpiSkeletons count={4} min={210} />) : (
         <KpiGrid min={210}>
           <Kpi label="Sales in view" value={money(summary.sales.total)} foot={`${plural(summary.sales.count, 'sale')} · ${num(summary.voided.count)} voided`} />
           <Kpi label="On account" value={money(summary.onAccount.total)} foot={`${plural(summary.onAccount.count, 'sale')} owed by customers`} />
@@ -129,7 +127,7 @@ function SalesHistory() {
           maxLength={80}
         />
         <FiltersButton active={active.length} onClear={clearFilters}>
-          {isManager && <FilterSelect label="Cashier" value={filters.staffId} options={cashiers} onChange={(v) => set({ staffId: v })} />}
+          <FilterSelect label="Cashier" value={filters.staffId} options={cashiers} onChange={(v) => set({ staffId: v })} />
           {!isWaiter && <FilterSelect label="Served by" value={filters.waiterId} options={waiters} onChange={(v) => set({ waiterId: v })} />}
           <FilterSelect label="Account" value={filters.account} options={accounts} onChange={(v) => set({ account: v })} />
           <ChannelSelect value={filters.channel} onChange={(v) => set({ channel: v })} />
