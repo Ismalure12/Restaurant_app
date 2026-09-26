@@ -85,6 +85,7 @@ Always run the `01-ai-review.md` five-question check on every diff before markin
 - Diff behavior between main and your changes when relevant.
 - Ask yourself: "Would a staff engineer approve this?"
 - Run tests, check logs, demonstrate correctness.
+- **Before any commit/push that touches `apps/api`: run `npx vitest run` in `apps/api` and `npm run typecheck` from the root** — CI (`build-images.yml`) runs both and builds no images if either fails. An intended rule change means updating the tests that pin the old rule in the same commit (`grep` `apps/api/test` for the endpoint first).
 - Run `npx eslint <changed files>` after each meaningful change. (Next 16 removed the `next lint` subcommand; the `npm run lint` script still points at the old command and fails — use `eslint` directly.)
 - **Design-change loop:** After any UI/CSS change, launch the dev server and open the browser to manually test the affected pages. Check for bugs, responsiveness (mobile / tablet / desktop / in-between widths), missing design, and inconsistency. Iterate (fix → retest) until the result is 100% accurate before marking the task done.
 
